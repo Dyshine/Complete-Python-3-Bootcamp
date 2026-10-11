@@ -50,7 +50,9 @@ button:focus-visible,.padfocus{outline:3px solid var(--toxic)!important;outline-
 .bar{height:8px;background:rgba(255,255,255,.08);border-radius:1px;overflow:hidden;position:relative}
 .bar i{position:absolute;inset:0 auto 0 0;width:100%;background:var(--bone);transition:width .15s}
 #wallBar{background:var(--epic)}
-#gateLine,#weatherLine{font-size:14px;color:var(--mute)}
+#gateLine,#weatherLine,#zoneLine,#hordeLine{font-size:14px;color:var(--mute)}
+#hordeLine b{color:var(--epic)}
+#hordeLine b.warn{color:var(--blood)}
 #weatherLine b{color:var(--bone)}
 #weatherLine span{color:var(--rare)}
 #gateLine b{color:var(--toxic)}
@@ -202,6 +204,8 @@ kbd.pl{border-radius:3px;width:auto;padding:0 6px;background:var(--bone)}
     <div class="wallrow"><span class="label">Walls</span><div class="bar"><i id="wallBar"></i></div><b id="wallPct">100%</b></div>
     <div id="gateLine">Gates: <b>all shut</b></div>
     <div id="weatherLine">Weather: <b>Clear</b></div>
+    <div id="zoneLine">Farmland · at the farmstead</div>
+    <div id="hordeLine">Horde: <span>none in range</span></div>
     <div id="phaseHint">Space: start the night early</div>
   </div>
   <div class="tc">
@@ -210,7 +214,7 @@ kbd.pl{border-radius:3px;width:auto;padding:0 6px;background:var(--bone)}
   </div>
   <div class="tr panel">
     <canvas id="minimap" width="340" height="340"></canvas>
-    <div class="mapkey"><span><b style="background:#f2a516"></b>You</span><span><b style="background:#e8e2d0"></b>Crate</span><span><b style="background:#d6432f"></b>Infected</span></div>
+    <div class="mapkey"><span><b style="background:#f2a516"></b>You</span><span><b style="background:#e8e2d0"></b>Crate</span><span><b style="background:#d6432f"></b>Infected</span><span><b style="background:#e9c46a"></b>Base</span></div>
     <div id="padBadge" hidden>Controller active</div>
   </div>
   <div class="bl panel">
@@ -358,11 +362,13 @@ kbd.pl{border-radius:3px;width:auto;padding:0 6px;background:var(--bone)}
 'use strict';
 const $=id=>document.getElementById(id);
 const V3=THREE.Vector3;
-const rand=(a,b)=>a+Math.random()*(b-a);
-const randi=(a,b)=>Math.floor(a+Math.random()*(b-a+1));
+let RNG=Math.random; // swapped for a seeded generator while a world chunk is built
+const rand=(a,b)=>a+RNG()*(b-a);
+const randi=(a,b)=>Math.floor(a+RNG()*(b-a+1));
+function mulberry(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 const lerp=(a,b,t)=>a+(b-a)*t;
-const pick=a=>a[Math.floor(Math.random()*a.length)];
+const pick=a=>a[Math.floor(RNG()*a.length)];
 const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v);}catch(e){return d;}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}};
 
 const MAP=105, BR=14, GRAV=22;
@@ -541,10 +547,10 @@ const texMatCache={};
 function TM(name,rx,ry,fallback,tint){const k=[name,rx,ry,fallback,tint].join('|');if(texMatCache[k])return texMatCache[k];
   const m=new THREE.MeshToonMaterial({color:fallback,gradientMap:TOON_GRAD});
   onTex(name,()=>{m.map=texRep(name,rx,ry);m.color.setHex(tint==null?0xffffff:tint);m.needsUpdate=true;});return texMatCache[k]=m;}
-const INK=new THREE.MeshBasicMaterial({color:0x0b0a09,side:THREE.BackSide}),inkHulls=[];
+const INK=new THREE.MeshBasicMaterial({color:0x0b0a09,side:THREE.BackSide}),inkHulls=new Set();
 function ink(mesh,t){const g=mesh.geometry;if(!g.boundingBox)g.computeBoundingBox();const sz=new THREE.Vector3();g.boundingBox.getSize(sz);t=t||.06;
   const o=new THREE.Mesh(g,INK);o.scale.set(1+t/Math.max(sz.x,.05),1+t/Math.max(sz.y,.05),1+t/Math.max(sz.z,.05));o.position.copy(g.boundingBox.getCenter(new THREE.Vector3()).multiplyScalar(-(o.scale.x-1)));
-  o.castShadow=o.receiveShadow=false;o.visible=GFX==='high';mesh.add(o);inkHulls.push(o);return mesh;}
+  o.castShadow=o.receiveShadow=false;o.visible=GFX==='high';mesh.add(o);inkHulls.add(o);if(typeof CUR!=='undefined'&&CUR)CUR.inks.push(o);return mesh;}
 const lighten=(c,f)=>new THREE.Color(c).lerp(new THREE.Color(0xffffff),f).getHex();
 function BOX(w,h,d){const k='b'+w+','+h+','+d;return geoCache[k]||(geoCache[k]=new THREE.BoxGeometry(w,h,d));}
 function CYL(a,b,h,s){const k='c'+a+','+b+','+h+','+s;return geoCache[k]||(geoCache[k]=new THREE.CylinderGeometry(a,b,h,s));}
@@ -559,81 +565,107 @@ function groundTexture(){
   for(let i=0;i<2800;i++){const v=Math.random();g.fillStyle=v<.4?'#3f4730':v<.7?'#56603e':v<.86?'#5d5238':'#6b6a45';g.globalAlpha=rand(.3,.8);g.fillRect(Math.random()*256,Math.random()*256,rand(1,4),rand(1,4));}
   g.globalAlpha=1;const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(34,34);return t;
 }
-const ground=new THREE.Mesh(new THREE.PlaneGeometry(MAP*2+80,MAP*2+80),new THREE.MeshStandardMaterial({map:groundTexture(),roughness:1}));
+/* ---------- endless ground and highways: big planes that follow the player, snapped to whole texture tiles ---------- */
+const WSNAP=42; // multiple of the 7-unit ground/road texture tile and the 6-unit lane-dash spacing
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(420,420),new THREE.MeshStandardMaterial({map:groundTexture(),roughness:1}));
+ground.material.map.repeat.set(60,60);
 ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
-onTex('grass',()=>{ground.material.map=texRep('grass',44,44);ground.material.needsUpdate=true;});
-
+onTex('grass',()=>{ground.material.map=texRep('grass',60,60);ground.material.needsUpdate=true;});
 const roadM=new THREE.MeshStandardMaterial({color:0x2d302c,roughness:1}),roadM2=new THREE.MeshStandardMaterial({color:0x2d302c,roughness:1}),roadMats=[roadM,roadM2];
 const dashM=new THREE.MeshBasicMaterial({color:0x8e7f48});
-[[7,MAP*2+40,roadM],[MAP*2+40,7,roadM2]].forEach(([w,h,m])=>{const r=new THREE.Mesh(new THREE.PlaneGeometry(w,h),m);r.rotation.x=-Math.PI/2;r.position.y=.02;r.receiveShadow=true;scene.add(r);});
-onTex('asphalt',()=>{roadM.map=texRep('asphalt',1,36);roadM2.map=texRep('asphalt',36,1);for(const m of roadMats)m.needsUpdate=true;});
-for(let t=-MAP;t<MAP;t+=6){if(Math.abs(t)<BR+3)continue;
-  const a=new THREE.Mesh(new THREE.PlaneGeometry(.25,2.2),dashM);a.rotation.x=-Math.PI/2;a.position.set(0,.03,t);scene.add(a);
-  const b=new THREE.Mesh(new THREE.PlaneGeometry(2.2,.25),dashM);b.rotation.x=-Math.PI/2;b.position.set(t,.03,0);scene.add(b);}
+const roadV=new THREE.Mesh(new THREE.PlaneGeometry(7,420),roadM),roadH=new THREE.Mesh(new THREE.PlaneGeometry(420,7),roadM2);
+for(const r of [roadV,roadH]){r.rotation.x=-Math.PI/2;r.position.y=.02;r.receiveShadow=true;scene.add(r);}
+onTex('asphalt',()=>{roadM.map=texRep('asphalt',1,60);roadM2.map=texRep('asphalt',60,1);for(const m of roadMats)m.needsUpdate=true;});
+const dashV=new THREE.Group(),dashH=new THREE.Group();scene.add(dashV,dashH);
+for(let t=-210;t<210;t+=6){
+  const a=new THREE.Mesh(new THREE.PlaneGeometry(.25,2.2),dashM);a.rotation.x=-Math.PI/2;a.position.set(0,.03,t);dashV.add(a);
+  const b=new THREE.Mesh(new THREE.PlaneGeometry(2.2,.25),dashM);b.rotation.x=-Math.PI/2;b.position.set(t,.03,0);dashH.add(b);}
+let lastSnap='';
+function updateGroundWindow(){
+  const sx=Math.round(player.x/WSNAP)*WSNAP,sz=Math.round(player.z/WSNAP)*WSNAP,k=sx+','+sz;if(k===lastSnap)return;lastSnap=k;
+  ground.position.set(sx,0,sz);roadV.position.z=sz;roadH.position.x=sx;dashV.position.z=sz;dashH.position.x=sx;
+  for(const d of dashV.children)d.visible=Math.abs(d.position.z+sz)>BR+3;
+  for(const d of dashH.children)d.visible=Math.abs(d.position.x+sx)>BR+3;
+}
 
-const obstacles=[];
-function blockedSpot(x,z,r){if(Math.max(Math.abs(x),Math.abs(z))<BR+9)return true;for(const o of obstacles){if(o.r<=0)continue;const dx=o.x-x,dz=o.z-z;if(dx*dx+dz*dz<(o.r+r)*(o.r+r))return true;}return false;}
-function freeSpot(r,minDist,onRoadOK){for(let i=0;i<300;i++){const x=rand(-MAP+4,MAP-4),z=rand(-MAP+4,MAP-4);if(Math.hypot(x,z)<(minDist||0))continue;if(!onRoadOK&&(Math.abs(x)<5||Math.abs(z)<5))continue;if(!blockedSpot(x,z,r))return{x,z};}return null;}
+/* ---------- obstacle spatial grid (collision, bullets and placement only look at nearby cells) ---------- */
+const OGC=4,OG=new Map();
+const ogk=(ix,iz)=>(ix+50000)*100000+(iz+50000);
+function addOb(o){o.k=ogk(Math.floor(o.x/OGC),Math.floor(o.z/OGC));let a=OG.get(o.k);if(!a)OG.set(o.k,a=[]);a.push(o);if(CUR)CUR.obs.push(o);return o;}
+function addObs(...os){for(const o of os)addOb(o);}
+function delOb(o){const a=OG.get(o.k);if(!a)return;const i=a.indexOf(o);if(i>=0)a.splice(i,1);if(!a.length)OG.delete(o.k);}
+function nearObs(x,z,r,fn){const R=r+1.8;const x0=Math.floor((x-R)/OGC),x1=Math.floor((x+R)/OGC),z0=Math.floor((z-R)/OGC),z1=Math.floor((z+R)/OGC);
+  for(let i=x0;i<=x1;i++)for(let j=z0;j<=z1;j++){const a=OG.get(ogk(i,j));if(a)for(const o of a)if(o.r>0)fn(o);}}
+function blockedSpot(x,z,r){if(Math.max(Math.abs(x),Math.abs(z))<BR+9)return true;let hit=false;
+  nearObs(x,z,r,o=>{if(hit)return;const dx=o.x-x,dz=o.z-z;if(dx*dx+dz*dz<(o.r+r)*(o.r+r))hit=true;});return hit;}
 function l2w(x,z,rot,lx,lz){const c=Math.cos(rot),s=Math.sin(rot);return{x:x+lx*c+lz*s,z:z-lx*s+lz*c};}
 
-/* swinging physics doors in houses */
-const sdoors=[];
+/* ---------- streamed world chunks ---------- */
+const CH=48,CH_LOAD=2,CH_KEEP=3,chunks=new Map(),chunkMem=new Map(),chunkQueue=[];
+let CUR=null,WORLD_SEED=1,lastPC='';
+function track(o){scene.add(o);if(CUR)CUR.objs.push(o);return o;}
+const sdoors=[],houses=[],carSpots=[],trees=[],barrels=[];
 const doorM=TM('wood',1,1,0x5e4632,0xb8a890);
 function addSwingDoor(px,pz,a0,len){
   const g=new THREE.Group();g.position.set(px,0,pz);g.rotation.y=-a0;
   g.add(mki(BOX(len,2.3,.12),doorM,len/2,1.15,0,.05));
   g.add(mk(BOX(.12,.12,.25),M(0xb89a4a,{metalness:.5}),len-.35,1.1,0,false));
-  scene.add(g);const d={g,px,pz,a0,len,ang:rand(-.3,.3),angV:0,home:0};d.home=d.ang;sdoors.push(d);return d;
+  track(g);const d={g,px,pz,a0,len,ang:rand(-.3,.3),angV:0,home:0};d.home=d.ang;sdoors.push(d);if(CUR)CUR.doors.push(d);return d;
 }
-const houses=[];
 function addHouse(x,z,rot){
-  const g=new THREE.Group();g.position.set(x,0,z);g.rotation.y=rot;scene.add(g);
+  const g=new THREE.Group();g.position.set(x,0,z);g.rotation.y=rot;track(g);
   const wallM=TM('plaster',2,1,pick([0x8a7f6c,0x7d7466,0x8f7a62]),pick([0xffffff,0xf0e8dc,0xe4e8e0])),trim=TM('wood',2,1,0x4a3f33,0x8a7a68);
   const fl=mk(BOX(8,.2,8),TM('wood',3,3,0x5b4a39,0xa89880),0,.1,0);fl.castShadow=false;g.add(fl);
   const pieces=[[0,-4,8,.3,2.8],[-4,0,.3,8,2.8],[4,-1.8,.3,4.4,2.8],[4,2.6,.3,2.8,1.1],[-2.6,4,2.8,.3,2.8],[2.9,4,2.2,.3,1.6]];
   for(const [lx,lz,w,d,h] of pieces){
     g.add(mki(BOX(w,h,d),wallM,lx,h/2,lz,.08));
     const len=Math.max(w,d),horiz=w>d,n=Math.ceil(len);
-    for(let i=0;i<=n;i++){const t=-len/2+i*len/n;const p=l2w(x,z,rot,lx+(horiz?t:0),lz+(horiz?0:t));obstacles.push({x:p.x,z:p.z,r:.55});}
+    for(let i=0;i<=n;i++){const t=-len/2+i*len/n;const p=l2w(x,z,rot,lx+(horiz?t:0),lz+(horiz?0:t));addOb({x:p.x,z:p.z,r:.55});}
   }
-  const beam=mki(BOX(8.4,.25,.4),trim,0,2.9,-1.5,.05);g.add(beam);
+  g.add(mki(BOX(8.4,.25,.4),trim,0,2.9,-1.5,.05));
   const beam2=mki(BOX(.4,.25,6.5),trim,-1.2,2.75,.4,.05);beam2.rotation.z=.12;g.add(beam2);
   g.add(mki(BOX(1.6,.8,1),TM('wood',1,1,0x5a4430,0x9a8870),-2.2,.5,-2.6,.05));
   const hinge=l2w(x,z,rot,-1.15,4);
   addSwingDoor(hinge.x,hinge.z,Math.atan2(-Math.sin(rot),Math.cos(rot)),2.85);
-  houses.push({x,z,rot});
+  const h={x,z,rot};houses.push(h);if(CUR)CUR.houses.push(h);
 }
-for(let i=0;i<9;i++){
-  for(let k=0;k<200;k++){const p=freeSpot(6.5,34);if(!p)break;if(houses.some(h=>Math.hypot(h.x-p.x,h.z-p.z)<22))continue;addHouse(p.x,p.z,randi(0,3)*Math.PI/2);break;}
-}
-
-const carSpots=[];
 function addCar(x,z,rot){
-  const g=new THREE.Group();g.position.set(x,0,z);g.rotation.y=rot;g.rotation.z=rand(-.05,.05);scene.add(g);
+  const g=new THREE.Group();g.position.set(x,0,z);g.rotation.y=rot;g.rotation.z=rand(-.05,.05);track(g);
   const col=pick([0x6b3a2e,0x3e5566,0x7a7468,0x4e5b3c,0x8a6a3a,0x5a2f35]);
   const body=TM('metal',1,2,col,lighten(col,.45));
   g.add(mki(BOX(2,.8,4.2),body,0,.75,0,.08));
   g.add(mki(BOX(1.8,.7,2.2),M(0x262b2e),0,1.5,-.2,.06));
   g.add(mk(BOX(1.84,.08,2.24),body,0,1.88,-.2));
   for(const [wx,wz] of [[-1,1.4],[1,1.4],[-1,-1.4],[1,-1.4]]){const w=mki(CYL(.38,.38,.3,10),M(0x1d1d1b),wx,.38,wz,.05);w.rotation.z=Math.PI/2;g.add(w);}
-  for(const lz of [-1.1,1.1]){const p=l2w(x,z,rot,0,lz);obstacles.push({x:p.x,z:p.z,r:1.25});}
-  carSpots.push({x,z,rot});
+  for(const lz of [-1.1,1.1]){const p=l2w(x,z,rot,0,lz);addOb({x:p.x,z:p.z,r:1.25});}
+  const c={x,z,rot};carSpots.push(c);if(CUR)CUR.cars.push(c);
 }
-for(let i=0;i<10;i++){const onX=Math.random()<.5;const t=rand(BR+10,MAP-6)*(Math.random()<.5?-1:1);const off=rand(-2.2,2.2);
-  const x=onX?t:off,z=onX?off:t;if(!blockedSpot(x,z,2.4))addCar(x,z,(onX?Math.PI/2:0)+rand(-.5,.5));}
-for(let i=0;i<10;i++){const p=freeSpot(2.6,26);if(p)addCar(p.x,p.z,rand(0,Math.PI*2));}
-
 const PINE=[0x2f4a32,0x3a5236,0x2a3f2e,0x46573a];
-const trees=[];
-for(let i=0;i<95;i++){
-  const p=freeSpot(1.2,22);if(!p)continue;const s=rand(.8,1.45);const g=new THREE.Group();g.position.set(p.x,0,p.z);g.scale.setScalar(s);g.rotation.y=rand(0,6.28);
-  const dead=Math.random()<.35;
+const CONE_A=new THREE.ConeGeometry(1.6,3.2,7),CONE_B=new THREE.ConeGeometry(1.1,2.4,7),ROCK_G=new THREE.DodecahedronGeometry(1,0);
+const TREE_MODEL={};
+function treeBody(g,dead){
+  const tm=TREE_MODEL[dead?'dead':'pine'];
+  if(tm){const inst=tm.root.clone(true);g.add(inst);inst.traverse(o=>{if(o.isMesh&&o.material!==INK)ink(o,.05/tm.s);});return;}
   g.add(mki(CYL(.16,.3,dead?3.4:1.8,6),dead?TM('bark',1,2,0x4b4136,0xb0a89a):TM('bark',1,1,0x4a3a2a,0xffffff),0,dead?1.7:.9,0,.07));
-  if(!dead){const c=pick(PINE);const fm=TM('pine',2,1,c,lighten(c,.62));g.add(mki(new THREE.ConeGeometry(1.6,3.2,7),fm,0,2.9,0,.1));g.add(mki(new THREE.ConeGeometry(1.1,2.4,7),fm,0,4.2,0,.1));}
+  if(!dead){const c=pick(PINE);const fm=TM('pine',2,1,c,lighten(c,.62));g.add(mki(CONE_A,fm,0,2.9,0,.1));g.add(mki(CONE_B,fm,0,4.2,0,.1));}
   else{for(let b=0;b<3;b++){const br=mki(BOX(.12,1.4,.12),TM('bark',1,2,0x4b4136,0xb0a89a),0,rand(1.8,3),0,.05);br.rotation.z=rand(-.9,.9);br.rotation.y=rand(0,6.28);br.position.x=Math.sin(br.rotation.z)*-.5;g.add(br);}}
-  scene.add(g);obstacles.push({x:p.x,z:p.z,r:.55*s});trees.push({g,ph:rand(0,6.28),k:dead?.6:1/s,kind:dead?'dead':'pine'});
 }
-// model trees: once a Higgsfield tree loads, every procedural tree of that kind is rebuilt from it
+function addTree(x,z,s,dead){
+  const g=new THREE.Group();g.position.set(x,0,z);g.scale.setScalar(s);g.rotation.y=rand(0,6.28);
+  treeBody(g,dead);track(g);addOb({x,z,r:.55*s});
+  const t={g,ph:rand(0,6.28),k:dead?.6:1/s,kind:dead?'dead':'pine'};trees.push(t);if(CUR)CUR.trees.push(t);
+}
+function addRock(x,z,s){
+  const r=mki(ROCK_G,TM('concrete',1,1,0x6d6a60,pick([0xb8b4a8,0xa8a498,0xc4bfb2])),x,.35*s,z,.07);r.scale.set(s*rand(.9,1.4),s*rand(.5,.9),s);r.rotation.set(rand(0,3),rand(0,3),0);
+  track(r);addOb({x,z,r:1.05*s});
+}
+const barrelM=M(0x8a2e22),bandM=new THREE.MeshStandardMaterial({color:0xf2a516,roughness:.7,emissive:0x3a2200});
+function addBarrel(x,z){
+  const g=new THREE.Group();g.position.set(x,0,z);
+  g.add(mki(CYL(.45,.45,1.1,10),barrelM,0,.55,0,.06));g.add(mk(CYL(.46,.46,.16,10),bandM,0,.7,0));track(g);
+  const ob=addOb({x,z,r:.55});const b={x,z,g,ob,hp:25,alive:true,fuse:-1};barrels.push(b);if(CUR)CUR.barrels.push(b);
+}
+// model trees: once a Higgsfield tree loads, it replaces the procedural trees of that kind (loaded now and generated later)
 const TREE_FILES={pine:['models/trees/pine.gltf.json',5.4],dead:['models/trees/dead.gltf.json',4.8]};
 function swapTrees(kind,gltf,h){
   const root=gltf.scene;root.updateMatrixWorld(true);
@@ -642,21 +674,119 @@ function swapTrees(kind,gltf,h){
     o.material=new THREE.MeshToonMaterial({map:old&&old.map||null,color:old&&old.map?0xffffff:(old&&old.color?old.color.getHex():0x6b5a48),gradientMap:TOON_GRAD});
     o.castShadow=true;o.receiveShadow=true;});
   root.scale.setScalar(s);root.position.set(-c.x*s,-b.min.y*s,-c.z*s);
-  for(const t of trees){if(t.kind!==kind)continue;t.g.clear();const inst=root.clone(true);t.g.add(inst);
-    inst.traverse(o=>{if(o.isMesh&&o.material!==INK)ink(o,.05/s);});}
+  TREE_MODEL[kind]={root,s};
+  for(const t of trees){if(t.kind!==kind)continue;t.g.traverse(o=>{if(inkHulls.has(o))inkHulls.delete(o);});t.g.clear();treeBody(t.g,kind==='dead');}
 }
 if(THREE.GLTFLoader){const L=new THREE.GLTFLoader();for(const [k,[u,h]] of Object.entries(TREE_FILES))L.load(u,g=>{try{swapTrees(k,g,h);}catch(e){console.warn('Tree model '+k+' failed; keeping procedural trees.',e);}},undefined,()=>{});}
-for(let i=0;i<34;i++){
-  const p=freeSpot(1.6,20,false);if(!p)continue;const s=rand(.6,1.5);
-  const r=mki(new THREE.DodecahedronGeometry(1,0),TM('concrete',1,1,0x6d6a60,pick([0xb8b4a8,0xa8a498,0xc4bfb2])),p.x,.35*s,p.z,.07);r.scale.set(s*rand(.9,1.4),s*rand(.5,.9),s);r.rotation.set(rand(0,3),rand(0,3),0);
-  scene.add(r);obstacles.push({x:p.x,z:p.z,r:1.05*s});
+
+function vnoise(x,z){
+  const xi=Math.floor(x),zi=Math.floor(z),xf=x-xi,zf=z-zi;
+  const h=(a,b)=>{let n=(a*374761393+b*668265263+WORLD_SEED*982451653)|0;n=Math.imul(n^(n>>>13),1274126177);return((n^(n>>>16))>>>0)/4294967296;};
+  const sm=t=>t*t*(3-2*t),u=sm(xf),v=sm(zf);return lerp(lerp(h(xi,zi),h(xi+1,zi),u),lerp(h(xi,zi+1),h(xi+1,zi+1),u),v);
 }
-const barrels=[];
-const barrelM=M(0x8a2e22),bandM=new THREE.MeshStandardMaterial({color:0xf2a516,roughness:.7,emissive:0x3a2200});
-for(let i=0;i<16;i++){
-  const p=freeSpot(1,18,true);if(!p)continue;const g=new THREE.Group();g.position.set(p.x,0,p.z);
-  g.add(mki(CYL(.45,.45,1.1,10),barrelM,0,.55,0,.06));g.add(mk(CYL(.46,.46,.16,10),bandM,0,.7,0));scene.add(g);
-  const ob={x:p.x,z:p.z,r:.55};obstacles.push(ob);barrels.push({x:p.x,z:p.z,g,ob,hp:25,alive:true,fuse:-1});
+function biomeAt(cx,cz){
+  if(Math.abs(cx)<=1&&Math.abs(cz)<=1)return'farm';
+  if(vnoise(cx*.5+40,cz*.5-17)>.7)return'town';
+  return vnoise(cx*.3,cz*.3)<.4?'forest':'farm';
+}
+const BIOME_NAME={farm:'Farmland',forest:'Pine forest',town:'Abandoned town'};
+const streetM=new THREE.MeshStandardMaterial({color:0x34362f,roughness:1}),streetMH=new THREE.MeshStandardMaterial({color:0x34362f,roughness:1});
+const STREET_V=new THREE.PlaneGeometry(5,CH),STREET_H=new THREE.PlaneGeometry(CH,5);
+onTex('asphalt',()=>{streetM.map=texRep('asphalt',1,7);streetMH.map=texRep('asphalt',7,1);for(const m of [streetM,streetMH]){m.color.setHex(0xc8c8c4);m.needsUpdate=true;}});
+function genChunk(cx,cz){
+  const key=cx+','+cz;if(chunks.has(key))return;
+  const ch={cx,cz,key,biome:biomeAt(cx,cz),objs:[],obs:[],inks:[],houses:[],cars:[],trees:[],barrels:[],props:[],doors:[]};
+  chunks.set(key,ch);CUR=ch;RNG=mulberry((Math.imul(WORLD_SEED,1000003)^Math.imul(cx,73856093)^Math.imul(cz,19349663))|0);
+  const x0=cx*CH,z0=cz*CH,road=(x,z)=>Math.abs(x)<5||Math.abs(z)<5;
+  const spot=(r,m,roadOK)=>{for(let i=0;i<40;i++){const x=x0+rand(m,CH-m),z=z0+rand(m,CH-m);if(!roadOK&&road(x,z))continue;if(!blockedSpot(x,z,r))return{x,z};}return null;};
+  const kinds=['crate','carton','carton','tire','cone','cone','can'];
+  try{
+    const b=ch.biome;
+    if(b==='town'){
+      // a side street through the middle with houses facing it from both sides
+      const horiz=RNG()<.5,sx=x0+CH/2,sz=z0+CH/2;
+      if(!(horiz?Math.abs(sz)<9:Math.abs(sx)<9)){
+        const st=new THREE.Mesh(horiz?STREET_H:STREET_V,horiz?streetMH:streetM);st.rotation.x=-Math.PI/2;st.position.set(sx,.015,sz);st.receiveShadow=true;track(st);
+      }
+      for(const off of [-15,0,15])for(const side of [-1,1]){
+        if(RNG()>.78)continue;
+        const hx=horiz?sx+off:sx+side*9,hz=horiz?sz+side*9:sz+off;
+        const rot=horiz?(side>0?Math.PI:0):(side>0?-Math.PI/2:Math.PI/2);
+        if(!road(hx,hz)&&!blockedSpot(hx,hz,6))addHouse(hx,hz,rot);
+      }
+      for(let i=randi(1,3);i>0;i--){const t=rand(-18,18),o=rand(-1.4,1.4);const x=horiz?sx+t:sx+o,z=horiz?sz+o:sz+t;if(!blockedSpot(x,z,2.4))addCar(x,z,(horiz?Math.PI/2:0)+rand(-.4,.4));}
+      for(let i=randi(2,3);i>0;i--){const p=spot(.8,3,true);if(p)addBarrel(p.x,p.z);}
+      for(let i=6;i>0;i--){const p=spot(.6,3,true);if(p)addProp(pick(kinds),p.x,p.z);}
+      for(let i=randi(2,4);i>0;i--){const p=spot(1.2,3);if(p)addTree(p.x,p.z,rand(.8,1.3),RNG()<.5);}
+    }else if(b==='forest'){
+      for(let i=randi(20,28);i>0;i--){const p=spot(1.2,1.5);if(p)addTree(p.x,p.z,rand(.85,1.5),RNG()<.22);}
+      for(let i=randi(3,6);i>0;i--){const p=spot(1.6,2);if(p)addRock(p.x,p.z,rand(.6,1.5));}
+      if(RNG()<.5){const p=spot(.8,3,true);if(p)addBarrel(p.x,p.z);}
+      if(RNG()<.6){const p=spot(.6,3,true);if(p)addProp(pick(['crate','tire','can']),p.x,p.z);}
+    }else{
+      if(RNG()<.5){const p=spot(6.5,8);if(p)addHouse(p.x,p.z,randi(0,3)*Math.PI/2);}
+      for(let i=randi(4,8);i>0;i--){const p=spot(1.2,2);if(p)addTree(p.x,p.z,rand(.8,1.45),RNG()<.4);}
+      for(let i=randi(2,4);i>0;i--){const p=spot(1.6,2);if(p)addRock(p.x,p.z,rand(.6,1.5));}
+      if(RNG()<.5){const p=spot(.8,3,true);if(p)addBarrel(p.x,p.z);}
+      for(let i=randi(1,3);i>0;i--){const p=spot(.6,3,true);if(p)addProp(pick(kinds),p.x,p.z);}
+      if(RNG()<.3){const p=spot(2.6,4);if(p)addCar(p.x,p.z,rand(0,6.28));}
+    }
+    // wrecks along the two highways
+    for(const axis of ['x','z']){
+      const on=axis==='x'?(z0<=0&&z0+CH>0):(x0<=0&&x0+CH>0);if(!on)continue;
+      for(let i=randi(0,2);i>0;i--){const t=(axis==='x'?x0:z0)+rand(4,CH-4);if(Math.abs(t)<BR+12)continue;const off=rand(-2.2,2.2);
+        const x=axis==='x'?t:off,z=axis==='x'?off:t;if(!blockedSpot(x,z,2.4))addCar(x,z,(axis==='x'?Math.PI/2:0)+rand(-.5,.5));
+        if(RNG()<.5)addProp('cone',x+rand(-3,3),z+rand(-3,3));}
+    }
+  }finally{RNG=Math.random;CUR=null;}
+  chunkLoot(ch);
+}
+function unloadChunk(ch){
+  for(const o of ch.objs){scene.remove(o);}
+  for(const o of ch.inks)inkHulls.delete(o);
+  for(const o of ch.obs)delOb(o);
+  const drop=(arr,list)=>{for(const x of list){const i=arr.indexOf(x);if(i>=0)arr.splice(i,1);}};
+  drop(houses,ch.houses);drop(carSpots,ch.cars);drop(trees,ch.trees);drop(barrels,ch.barrels);drop(sdoors,ch.doors);
+  for(let i=props.length-1;i>=0;i--){const p=props[i];if(p.chunk===ch){scene.remove(p.g);props.splice(i,1);}}
+  const mem=chunkMem.get(ch.key);if(mem)mem.saved=[];
+  for(let i=crates.length-1;i>=0;i--){const c=crates[i];if(c.chunk!==ch)continue;if(!c.opened&&mem)mem.saved.push({x:c.x,z:c.z,rar:c.rar});scene.remove(c.g);crates.splice(i,1);}
+  chunks.delete(ch.key);
+}
+// loot restocks every dawn; unopened crates are remembered while a chunk is unloaded
+function chunkLoot(ch){
+  let mem=chunkMem.get(ch.key);if(!mem)chunkMem.set(ch.key,mem={day:-1,saved:[]});
+  if(mem.day===S.wave){for(const c of mem.saved){const cr=spawnCrate(c.x,c.z,c.rar);cr.chunk=ch;}mem.saved=[];return;}
+  mem.day=S.wave;mem.saved=[];
+  let n=ch.biome==='town'?randi(2,4):ch.biome==='forest'?(Math.random()<.35?1:0):(ch.houses.length?randi(1,2):(Math.random()<.4?1:0));
+  if(base.radar&&Math.random()<.5)n++;
+  if(Math.abs(ch.cx)<=1&&Math.abs(ch.cz)<=1)n=Math.max(n,1);
+  for(let i=0;i<n;i++){
+    let p=null;
+    if(ch.houses.length&&Math.random()<.7){const h=pick(ch.houses);p=l2w(h.x,h.z,h.rot,rand(-2.5,2.5),rand(-2.2,2.4));}
+    else if(ch.cars.length&&Math.random()<.5){const c=pick(ch.cars);const a=rand(0,6.28);p={x:c.x+Math.cos(a)*3,z:c.z+Math.sin(a)*3};if(blockedSpot(p.x,p.z,.8))p=null;}
+    if(!p){for(let k=0;k<20&&!p;k++){const x=ch.cx*CH+rand(3,CH-3),z=ch.cz*CH+rand(3,CH-3);if(!blockedSpot(x,z,1))p={x,z};}}
+    if(!p||crates.some(c=>!c.opened&&Math.hypot(c.x-p.x,c.z-p.z)<3))continue;
+    const roll=Math.random(),cr=spawnCrate(p.x,p.z,roll<.08?'epic':roll<.32?'rare':'common');cr.chunk=ch;
+  }
+}
+function refreshLoot(){for(const ch of chunks.values())chunkLoot(ch);}
+function updateChunks(force){
+  const pcx=Math.floor(player.x/CH),pcz=Math.floor(player.z/CH),k=pcx+','+pcz;
+  if(force||k!==lastPC){lastPC=k;
+    chunkQueue.length=0;
+    for(let i=-CH_LOAD;i<=CH_LOAD;i++)for(let j=-CH_LOAD;j<=CH_LOAD;j++){if(!chunks.has((pcx+i)+','+(pcz+j)))chunkQueue.push([pcx+i,pcz+j,i*i+j*j]);}
+    chunkQueue.sort((a,b)=>b[2]-a[2]);
+    for(const ch of [...chunks.values()])if(Math.abs(ch.cx-pcx)>CH_KEEP||Math.abs(ch.cz-pcz)>CH_KEEP)unloadChunk(ch);
+  }
+  // build the nearest missing chunk each frame (all at once when forced) so crossing a border never hitches
+  if(force)while(chunkQueue.length){const c=chunkQueue.pop();genChunk(c[0],c[1]);}
+  else if(chunkQueue.length){const c=chunkQueue.pop();genChunk(c[0],c[1]);}
+}
+function resetWorld(){
+  for(const ch of [...chunks.values()])unloadChunk(ch);
+  chunkMem.clear();chunkQueue.length=0;lastPC='';lastSnap='';
+  for(let i=props.length-1;i>=0;i--){scene.remove(props[i].g);props.splice(i,1);}
+  WORLD_SEED=(Math.random()*1e9)|0;
 }
 
 /* ================= GRASS (instanced, wind-swayed in the vertex shader) ================= */
@@ -671,35 +801,36 @@ function swayMaterial(mat,amp){
       #else
         vec2 ip=vec2(0.);
       #endif
+      vec2 wp=(modelMatrix*vec4(ip.x,0.,ip.y,1.)).xz;
+      if((abs(wp.x)<`+(BR+2).toFixed(1)+`&&abs(wp.y)<`+(BR+2).toFixed(1)+`)||abs(wp.x)<4.||abs(wp.y)<4.)transformed*=0.;
+      ip=wp;
       float sw=sin(uTime*(1.6+uWind)+ip.x*.35+ip.y*.27)*.5+.5;
       float h=max(position.y,0.)*${amp.toFixed(2)};
       transformed.xz+=uWdir*h*uWind*(.35+sw*.65)+vec2(sin(uTime*3.1+ip.y),cos(uTime*2.7+ip.x))*h*.04;`);
   };
   return mat;
 }
-let grass=null;
+let grass=null;const GTILE=64;
 (function buildGrass(){
-  const N=7000;
+  const N=2600;
   const geo=new THREE.ConeGeometry(.09,.55,3,1,true);geo.translate(0,.27,0);
   const mat=swayMaterial(new THREE.MeshStandardMaterial({color:0xffffff,roughness:1,flatShading:true,side:THREE.DoubleSide}),1);
-  grass=new THREE.InstancedMesh(geo,mat,N);grass.receiveShadow=true;grass.castShadow=false;
+  const tmpl=new THREE.InstancedMesh(geo,mat,N);
   const m4=new THREE.Matrix4(),q=new THREE.Quaternion(),sc=new V3(),pos=new V3(),col=new THREE.Color();
   const tints=[0x5d6b3c,0x6e7444,0x4f5e35,0x7a7346,0x65703f];
-  let n=0,guard=0;
-  while(n<N&&guard<N*6){guard++;
-    const cx=rand(-MAP+2,MAP-2),cz=rand(-MAP+2,MAP-2);
-    if(Math.max(Math.abs(cx),Math.abs(cz))<BR+2||Math.abs(cx)<4.2||Math.abs(cz)<4.2)continue;
-    if(houses.some(h=>Math.abs(h.x-cx)<4.6&&Math.abs(h.z-cz)<4.6))continue;
-    const clump=randi(6,16);
-    for(let k=0;k<clump&&n<N;k++){
-      const x=cx+rand(-1.4,1.4),z=cz+rand(-1.4,1.4);if(Math.abs(x)<4||Math.abs(z)<4)continue;
+  let n=0;
+  while(n<N){const cx=rand(0,GTILE),cz=rand(0,GTILE),clump=randi(6,16);
+    for(let k=0;k<clump&&n<N;k++){const x=((cx+rand(-1.4,1.4))%GTILE+GTILE)%GTILE,z=((cz+rand(-1.4,1.4))%GTILE+GTILE)%GTILE;
       pos.set(x,0,z);q.setFromAxisAngle(new V3(0,1,0),rand(0,6.28));const s=rand(.6,1.5);sc.set(s,s*rand(.7,1.4),s);
-      m4.compose(pos,q,sc);grass.setMatrixAt(n,m4);col.setHex(pick(tints)).multiplyScalar(rand(.85,1.15));grass.setColorAt(n,col);n++;
-    }
-  }
-  grass.count=n;grass.instanceMatrix.needsUpdate=true;if(grass.instanceColor)grass.instanceColor.needsUpdate=true;
+      m4.compose(pos,q,sc);tmpl.setMatrixAt(n,m4);col.setHex(pick(tints)).multiplyScalar(rand(.85,1.15));tmpl.setColorAt(n,col);n++;}}
+  grass=new THREE.Group();
+  for(let i=0;i<9;i++){const t=new THREE.InstancedMesh(geo,mat,N);t.instanceMatrix=tmpl.instanceMatrix;t.instanceColor=tmpl.instanceColor;t.frustumCulled=false;t.receiveShadow=true;grass.add(t);}
   scene.add(grass);
 })();
+function updateGrass(){
+  const bx=Math.floor(player.x/GTILE),bz=Math.floor(player.z/GTILE);let i=0;
+  for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++)grass.children[i++].position.set((bx+a)*GTILE,0,(bz+b)*GTILE);
+}
 
 /* ================= DECALS (blood, acid, scorch) ================= */
 function splatTexture(){
@@ -728,15 +859,15 @@ onTex('concrete',()=>{baseFloor.material.map=texRep('concrete',6,6);baseFloor.ma
 baseFloor.rotation.x=-Math.PI/2;baseFloor.position.y=.04;baseFloor.receiveShadow=true;scene.add(baseFloor);
 const WB={x:0,z:-3};
 (function buildCamp(){
-  scene.add(mki(BOX(3,.9,1.4),TM('wood',2,1,0x6a4f35,0xc0a888),WB.x,.45,WB.z,.06));obstacles.push({x:WB.x-.8,z:WB.z,r:.75},{x:WB.x+.8,z:WB.z,r:.75});
+  scene.add(mki(BOX(3,.9,1.4),TM('wood',2,1,0x6a4f35,0xc0a888),WB.x,.45,WB.z,.06));addObs({x:WB.x-.8,z:WB.z,r:.75},{x:WB.x+.8,z:WB.z,r:.75});
   scene.add(mk(BOX(.8,.35,.5),M(0xa23b2a),WB.x-.8,1.07,WB.z));
   scene.add(mk(BOX(.5,.2,.8),M(0x3d4a52),WB.x+.6,1,WB.z+.1));
   const lamp=new THREE.Mesh(BOX(.25,.35,.25),new THREE.MeshBasicMaterial({color:0xffd28a}));lamp.position.set(WB.x+1.2,1.1,WB.z-.4);scene.add(lamp);
-  scene.add(mki(BOX(1.6,1.1,1),TM('metal',1,1,0x55603f,0x9aa888),5,.55,4,.06));scene.add(mk(CYL(.12,.12,1,6),M(0x2a2a28),5.5,1.5,4));obstacles.push({x:5,z:4,r:.85});
-  const tent=mki(new THREE.ConeGeometry(2.4,2.4,4),M(0x5c6748),-5,1.2,4,.08);tent.rotation.y=Math.PI/4;scene.add(tent);obstacles.push({x:-5,z:4,r:1.5});
+  scene.add(mki(BOX(1.6,1.1,1),TM('metal',1,1,0x55603f,0x9aa888),5,.55,4,.06));scene.add(mk(CYL(.12,.12,1,6),M(0x2a2a28),5.5,1.5,4));addObs({x:5,z:4,r:.85});
+  const tent=mki(new THREE.ConeGeometry(2.4,2.4,4),M(0x5c6748),-5,1.2,4,.08);tent.rotation.y=Math.PI/4;scene.add(tent);addObs({x:-5,z:4,r:1.5});
   for(let i=0;i<5;i++)scene.add(mki(BOX(.9,.9,.9),TM('wood',1,1,0x5a4632,pick([0xc8b090,0xa8b890])),-8+i*.95,.45,-8,.05));
   scene.add(mki(BOX(.9,.9,.9),TM('wood',1,1,0x5a4632,0xc8b090),-7.5,1.35,-8,.05));
-  for(let i=0;i<5;i++)obstacles.push({x:-8+i*.95,z:-8,r:.5});
+  for(let i=0;i<5;i++)addObs({x:-8+i*.95,z:-8,r:.5});
 })();
 
 const SEGN=5,SEGL=BR*2/SEGN;
@@ -805,17 +936,10 @@ const props=[];
 function addProp(kind,x,z,o){
   o=o||{};const k=PK[kind];const g=new THREE.Group();const m=new THREE.Mesh(k.geo,o.mat||M(k.col));m.castShadow=true;m.receiveShadow=true;if(k.rot)m.rotation.set(k.rot[0],k.rot[1],k.rot[2]);g.add(m);
   g.position.set(x,k.h,z);g.rotation.y=rand(0,6.28);scene.add(g);
-  const p={g,kind,x,y:k.h,z,vx:o.vx||0,vy:o.vy||0,vz:o.vz||0,r:k.r,h:k.h,mass:k.mass,spin:o.spin||0,tx:o.tx||0,tz:o.tz||0,hx:x,hz:z,temp:o.life||0,ground:false};
-  props.push(p);return p;
+  const p={g,kind,x,y:k.h,z,vx:o.vx||0,vy:o.vy||0,vz:o.vz||0,r:k.r,h:k.h,mass:k.mass,spin:o.spin||0,tx:o.tx||0,tz:o.tz||0,hx:x,hz:z,temp:o.life||0,ground:false,chunk:CUR};
+  props.push(p);if(CUR)CUR.props.push(p);return p;
 }
-function seedProps(){
-  const kinds=['crate','carton','carton','tire','cone','cone','can'];
-  for(const h of houses){for(let i=0;i<3;i++){const p=l2w(h.x,h.z,h.rot,rand(-5.5,5.5),rand(5,7));if(!blockedSpot(p.x,p.z,.6))addProp(pick(kinds),p.x,p.z);}}
-  for(const c of carSpots){if(Math.random()<.6){const a=rand(0,6.28);const x=c.x+Math.cos(a)*3.2,z=c.z+Math.sin(a)*3.2;if(!blockedSpot(x,z,.6))addProp(pick(['tire','cone','can']),x,z);}}
-  for(let i=0;i<16;i++){const p=freeSpot(.8,22,true);if(p)addProp(pick(kinds),p.x,p.z);}
-  for(const [x,z] of [[-10,5],[-9.2,6],[9,-9],[8,8.5]])addProp(pick(['carton','crate']),x,z);
-}
-seedProps();
+function seedYardProps(){for(const [x,z] of [[-10,5],[-9.2,6],[9,-9],[8,8.5]])addProp(pick(['carton','crate']),x,z);}
 function solidSeg(s){return s.alive&&!(s.door&&s.open);}
 function updateProps(dt){
   for(let i=props.length-1;i>=0;i--){
@@ -837,7 +961,6 @@ function updateProps(dt){
     for(const z of zombies){if(z.dying)continue;const dx=p.x-z.x,dz=p.z-z.z,rr=p.r+z.def.r;if(Math.abs(dx)>rr||Math.abs(dz)>rr)continue;const d2=dx*dx+dz*dz;
       if(d2<rr*rr&&d2>1e-6){const d=Math.sqrt(d2),nx=dx/d,nz=dz/d,pen=rr-d;const zm=z.def.scale*z.def.scale*1.5;const w=zm/(zm+p.mass);
         p.x+=nx*pen*w;p.z+=nz*pen*w;z.x-=nx*pen*(1-w);z.z-=nz*pen*(1-w);p.vx+=nx*pen*10*w;p.vz+=nz*pen*10*w;}}
-    p.x=clamp(p.x,-MAP,MAP);p.z=clamp(p.z,-MAP,MAP);
   }
   for(let i=0;i<props.length;i++){const a=props[i];for(let j=i+1;j<props.length;j++){const b=props[j];const dx=b.x-a.x,dz=b.z-a.z,rr=a.r+b.r;if(Math.abs(dx)>rr||Math.abs(dz)>rr)continue;
     if(Math.abs(a.y-b.y)>(a.h+b.h)*1.4)continue;const d2=dx*dx+dz*dz;if(d2>=rr*rr||d2<1e-6)continue;const d=Math.sqrt(d2),nx=dx/d,nz=dz/d,pen=rr-d,wa=b.mass/(a.mass+b.mass);
@@ -1214,9 +1337,10 @@ function spawnZombie(type,x,z){
   return z0;
 }
 function edgeSpawn(){
-  for(let i=0;i<30;i++){const a=rand(0,Math.PI*2),r=rand(60,MAP-4);const x=clamp(Math.cos(a)*r,-MAP+3,MAP-3),z=clamp(Math.sin(a)*r,-MAP+3,MAP-3);
-    if(Math.hypot(x-player.x,z-player.z)<34)continue;if(blockedSpot(x,z,1.2)&&Math.max(Math.abs(x),Math.abs(z))>=BR+9)continue;return{x,z};}
-  return{x:-MAP+5,z:-MAP+5};
+  const home=Math.hypot(player.x,player.z)<45,cx=home?0:player.x,cz=home?0:player.z;
+  for(let i=0;i<30;i++){const a=rand(0,Math.PI*2),r=home?rand(55,78):rand(42,66);const x=cx+Math.cos(a)*r,z=cz+Math.sin(a)*r;
+    if(Math.hypot(x-player.x,z-player.z)<34)continue;if(blockedSpot(x,z,1.2))continue;return{x,z};}
+  return{x:cx+60,z:cz+60};
 }
 function buildWave(n){
   const list=[],total=8+n*5;
@@ -1230,7 +1354,7 @@ function buildWave(n){
 }
 const inBase=(x,z)=>Math.abs(x)<BR&&Math.abs(z)<BR;
 function nearestBreach(x,z){let best=null,bd=1e9;for(const s of segs){if(solidSeg(s))continue;const d=Math.hypot(s.cx-x,s.cz-z);if(d<bd){bd=d;best=s;}}return best?{s:best,d:bd}:null;}
-function collideCircles(o,r){for(const ob of obstacles){if(ob.r<=0)continue;const dx=o.x-ob.x,dz=o.z-ob.z,rr=ob.r+r;if(Math.abs(dx)>rr||Math.abs(dz)>rr)continue;const d2=dx*dx+dz*dz;if(d2<rr*rr&&d2>1e-6){const d=Math.sqrt(d2);o.x=ob.x+dx/d*rr;o.z=ob.z+dz/d*rr;}}}
+function collideCircles(o,r){nearObs(o.x,o.z,r,ob=>{const dx=o.x-ob.x,dz=o.z-ob.z,rr=ob.r+r;if(Math.abs(dx)>rr||Math.abs(dz)>rr)return;const d2=dx*dx+dz*dz;if(d2<rr*rr&&d2>1e-6){const d=Math.sqrt(d2);o.x=ob.x+dx/d*rr;o.z=ob.z+dz/d*rr;}});}
 function collideSeg(o,r,s){
   const px=clamp(o.x,s.x0,s.x1),pz=clamp(o.z,s.z0,s.z1);const dx=o.x-px,dz=o.z-pz,d2=dx*dx+dz*dz;
   if(d2>=r*r)return false;
@@ -1326,7 +1450,6 @@ function updateZombies(dt){
       if(base.spikeLv&&!z.blocked.door){damageZombie(z,SPIKE_DPS[base.spikeLv]*dt,0,0,true);z.spikeT-=dt;if(z.spikeT<=0){z.spikeT=.5;burst(z.x,.8,z.z,2,'blood',3);}}
       if(z.dying)continue;
     }
-    z.x=clamp(z.x,-MAP,MAP);z.z=clamp(z.z,-MAP,MAP);
     if(player.alive&&pd<d.r+.85&&z.atkCd<=0){z.atkCd=z.type==='runner'?.75:1.1;z.lunge=.25;zAttackAnim(z);hurtPlayer(d.dmg*(1+.04*(S.wave-1)));
       const kf=z.type==='brute'?(z.chargeT>0?20:9):z.type==='boss'?12:2.5;knockPlayer(pdx/(pd||1),pdz/(pd||1),kf);if(z.type==='brute')z.chargeT=0;}
     const fy=sp>0?Math.atan2(dx,dz):Math.atan2(pdx,pdz);
@@ -1353,6 +1476,143 @@ function updateZombies(dt){
     if(player.alive){const dx=a.x-player.x,dz=a.z-player.z,rr=a.def.r+.5,d2=dx*dx+dz*dz;if(d2<rr*rr&&d2>1e-6){const d=Math.sqrt(d2);a.x=player.x+dx/d*rr;a.z=player.z+dz/d*rr;}}
   }
   for(let i=zombies.length-1;i>=0;i--){const z=zombies[i];if(z.dying&&z.dieT>3){removeZombie(z);zombies.splice(i,1);}}
+}
+
+/* ================= HORDES (Days Gone-style swarms: instanced bodies, flocking, sight + noise) ================= */
+const HCAP=GFX==='high'?520:300;
+const hordes=[],agents=[];let hordeSeq=0,hordeGroanT=0;
+const compass=a=>['S','SE','E','NE','N','NW','W','SW'][((Math.round(a/(Math.PI/4))%8)+8)%8];
+function mergeGeos(list){const out=new THREE.BufferGeometry();
+  for(const name of ['position','normal','color','aPart']){const size=list[0].attributes[name].itemSize;const tot=list.reduce((a,g)=>a+g.attributes[name].array.length,0);const m=new Float32Array(tot);let o=0;
+    for(const g of list){m.set(g.attributes[name].array,o);o+=g.attributes[name].array.length;}out.setAttribute(name,new THREE.BufferAttribute(m,size));}
+  return out;}
+function hordeGeometry(){
+  const parts=[];
+  const add=(w,h,d,x,y,z,col,part,rot)=>{const g=new THREE.BoxGeometry(w,h,d).toNonIndexed();
+    if(rot){g.translate(0,-h/2,0);g.rotateX(rot);}g.translate(x,y,z);
+    const n=g.attributes.position.count,c=new THREE.Color(col),ca=new Float32Array(n*3),pa=new Float32Array(n).fill(part);
+    for(let i=0;i<n;i++){ca[i*3]=c.r;ca[i*3+1]=c.g;ca[i*3+2]=c.b;}
+    g.setAttribute('color',new THREE.BufferAttribute(ca,3));g.setAttribute('aPart',new THREE.BufferAttribute(pa,1));parts.push(g);};
+  add(.27,.8,.29,-.17,.4,0,0x3a3f42,1);add(.27,.8,.29,.17,.4,0,0x3a3f42,2);
+  add(.74,.85,.45,0,1.22,0,0xd0d0d0,0);
+  add(.45,.45,.45,0,1.88,.05,0x5e7a4e,0);
+  add(.08,.06,.04,-.11,1.92,.29,0xffd23f,0);add(.08,.06,.04,.11,1.92,.29,0xffd23f,0);
+  add(.21,.78,.21,-.49,1.58,0,0x5e7a4e,3,-1.4);add(.21,.78,.21,.49,1.58,0,0x5e7a4e,4,-1.4);
+  return mergeGeos(parts);
+}
+function hordeMat(outline){
+  const m=outline?new THREE.MeshBasicMaterial({color:0x0b0a09,side:THREE.BackSide}):new THREE.MeshToonMaterial({vertexColors:true,gradientMap:TOON_GRAD});
+  m.onBeforeCompile=sh=>{sh.vertexShader='attribute float aPart;attribute vec3 aAnim;\n'+sh.vertexShader.replace('#include <color_vertex>',`#ifdef USE_COLOR
+    vColor=color;
+    #ifdef USE_INSTANCING_COLOR
+    vColor*=color.b>.7?instanceColor*1.25:color.b<.3&&color.r<.3?mix(vec3(1.),instanceColor*2.,.35):mix(vec3(1.),instanceColor*1.6,.3)*.85;
+    #endif
+    #endif`).replace('#include <begin_vertex>',`#include <begin_vertex>
+    float ph=aAnim.x,amp=aAnim.y,fall=aAnim.z;
+    if(aPart>.5&&aPart<2.5){float s=(aPart<1.5?1.:-1.)*sin(ph)*.65*amp;vec3 p=transformed-vec3(0.,.8,0.);transformed=vec3(p.x,p.y*cos(s)-p.z*sin(s),p.y*sin(s)+p.z*cos(s))+vec3(0.,.8,0.);}
+    else if(aPart>2.5){float s=(aPart<3.5?1.:-1.)*sin(ph*.5)*.2;vec3 p=transformed-vec3(0.,1.58,0.);transformed=vec3(p.x,p.y*cos(s)-p.z*sin(s),p.y*sin(s)+p.z*cos(s))+vec3(0.,1.58,0.);}
+    transformed.y+=abs(cos(ph))*.07*amp;
+    if(fall>0.){float a=-1.5*fall;vec3 p=transformed;transformed=vec3(p.x,p.y*cos(a)-p.z*sin(a),p.y*sin(a)+p.z*cos(a));transformed.y+=.15*fall;}
+    ${outline?'transformed+=normal*.035;':''}`);};
+  m.customProgramCacheKey=()=>'horde'+(outline?1:0);
+  return m;
+}
+const hGeo=hordeGeometry(),hAnim=new THREE.InstancedBufferAttribute(new Float32Array(HCAP*3),3);
+hAnim.setUsage(THREE.DynamicDrawUsage);hGeo.setAttribute('aAnim',hAnim);
+const hMesh=new THREE.InstancedMesh(hGeo,hordeMat(false),HCAP);hMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+hMesh.setColorAt(0,new THREE.Color(1,1,1));hMesh.castShadow=true;hMesh.receiveShadow=true;hMesh.frustumCulled=false;hMesh.count=0;
+const hInk=new THREE.InstancedMesh(hGeo,hordeMat(true),HCAP);hInk.instanceMatrix=hMesh.instanceMatrix;hInk.frustumCulled=false;hInk.count=0;
+hInk.visible=GFX==='high';inkHulls.add(hInk);scene.add(hMesh,hInk);
+// spatial hash of live agents, rebuilt each frame
+const AH=new Map(),AHC=2,ahk=(ix,iz)=>(ix+50000)*100000+(iz+50000);
+function rebuildAH(){if(AH.size>5000)AH.clear();for(const l of AH.values())l.length=0;
+  for(const a of agents){if(a.dying)continue;const k=ahk(Math.floor(a.x/AHC),Math.floor(a.z/AHC));let l=AH.get(k);if(!l)AH.set(k,l=[]);l.push(a);}}
+function nearAgents(x,z,r,fn){const x0=Math.floor((x-r)/AHC),x1=Math.floor((x+r)/AHC),z0=Math.floor((z-r)/AHC),z1=Math.floor((z+r)/AHC);
+  for(let i=x0;i<=x1;i++)for(let j=z0;j<=z1;j++){const l=AH.get(ahk(i,j));if(l)for(const a of l)if(!a.dying)fn(a);}}
+function addAgents(h,k,cx,cz){
+  k=Math.min(k,HCAP-agents.length);
+  for(let i=0;i<k;i++){const a=rand(0,6.28),r=Math.sqrt(Math.random())*h.radius,ox=Math.cos(a)*r,oz=Math.sin(a)*r;
+    agents.push({h,x:cx+ox+rand(-.3,.3),z:cz+oz+rand(-.3,.3),vx:0,vz:0,ox,oz,hp:30+S.wave*4,ph:rand(0,6.28),amp:0,yaw:rand(0,6.28),s:rand(.86,1.14),
+      spd:rand(5.6,7.4),atk:rand(0,1),wallT:rand(0,1.3),dying:false,dieT:0,col:new THREE.Color().setHSL(pick([.02,.08,.11,.3,.55,.6,.95,Math.random()]),rand(.12,.45),rand(.2,.42))});}
+  h.alive+=k;h.total+=k;h.radius=Math.sqrt(h.alive)*.9+2;
+}
+function spawnHorde(size){
+  let cx=150,cz=0;
+  for(let i=0;i<30;i++){const a=rand(0,6.28),r=rand(140,220);cx=Math.cos(a)*r;cz=Math.sin(a)*r;if(Math.hypot(cx-player.x,cz-player.z)>100)break;}
+  const h={id:++hordeSeq,cx,cz,tx:cx,tz:cz,state:'roam',alertT:0,wpT:rand(8,20),total:0,alive:0,radius:2,siege:false,known:false,sx:0,sz:0,n:0};
+  hordes.push(h);addAgents(h,size,cx,cz);return h;
+}
+function resetHordes(){hordes.length=0;agents.length=0;hMesh.count=hInk.count=0;AH.clear();}
+function alertHorde(h,why){
+  if(h.alive<=0)return;const was=h.state==='hunt';h.state='hunt';h.alertT=why==='noise'?16:12;h.known=true;
+  if(!was&&S.running){Sound.play('roar',.8);rumble(.5,.4,400);banner('HORDE',`${h.alive} infected ${why==='noise'?'heard you':'spotted you'}. Run, or find a choke point.`,'night');}
+}
+function makeNoise(x,z,r){for(const h of hordes)if(h.alive>0&&Math.hypot(h.cx-x,h.cz-z)<r+h.radius)alertHorde(h,'noise');}
+function hitAgent(a,dmg,kx,kz){
+  if(a.dying)return;a.hp-=dmg;a.vx+=(kx||0)*.6;a.vz+=(kz||0)*.6;burst(a.x,1.2,a.z,2,'blood',4);Sound.play('hit',.5);
+  if(a.h.state!=='hunt')alertHorde(a.h,'noise');if(a.hp<=0)killAgent(a);
+}
+function killAgent(a){
+  a.dying=true;a.dieT=0;S.kills++;const h=a.h;h.alive--;h.radius=Math.sqrt(Math.max(1,h.alive))*.9+2;
+  decal(a.x,a.z,rand(1,1.6),0x4a0a08,.8);burst(a.x,1,a.z,6,'gore',4);
+  if(Math.random()<.12)spawnPickup('scrap',a.x,a.z,randi(1,3));
+  if(h.alive<=0)hordeDestroyed(h);
+}
+function hordeDestroyed(h){
+  const sc=40+Math.round(h.total*.6),pa=2+Math.floor(h.total/25);player.scrap+=sc;player.parts+=pa;
+  banner('HORDE DESTROYED',`${h.total} infected put down. +${sc} scrap, +${pa} parts.`,'dawn');Sound.play('dawn');rumble(.6,.6,500);
+  const i=hordes.indexOf(h);if(i>=0)hordes.splice(i,1);
+}
+const _hm=new THREE.Matrix4(),_hq=new THREE.Quaternion(),_hpos=new V3(),_hs=new V3(),_up=new V3(0,1,0);
+function updateHordes(dt){
+  if(!agents.length&&!hordes.length)return;
+  rebuildAH();
+  const night=S.phase==='night',px=player.x,pz=player.z;let chorus=1e9;
+  for(const h of hordes){
+    if(h.n){h.cx=h.sx/h.n;h.cz=h.sz/h.n;}h.sx=h.sz=0;h.n=0;
+    const dP=Math.hypot(px-h.cx,pz-h.cz);
+    if(h.state!=='hunt'&&player.alive&&S.running&&dP<(night?20:28)*(1-.4*W.fog)+h.radius)alertHorde(h,'spotted');
+    if(h.state==='hunt'){h.alertT-=dt;if(player.alive&&dP<45)h.alertT=Math.max(h.alertT,3);chorus=Math.min(chorus,dP);
+      if(h.alertT<=0||!player.alive){h.state=h.siege?'siege':'roam';h.wpT=0;if(player.alive)toast('The horde lost your trail','good');}
+      else{h.tx=px;h.tz=pz;}}
+    else if(h.state==='siege'){h.tx=0;h.tz=0;chorus=Math.min(chorus,dP);if(!night){h.state='roam';h.siege=false;h.wpT=0;}}
+    else{h.wpT-=dt;if(h.wpT<=0||Math.hypot(h.tx-h.cx,h.tz-h.cz)<5){
+      for(let i=0;i<12;i++){const a=rand(0,6.28),r=rand(25,60),x=h.cx+Math.cos(a)*r,z=h.cz+Math.sin(a)*r;if(Math.hypot(x,z)<70)continue;h.tx=x;h.tz=z;break;}
+      h.wpT=rand(25,50);}}
+  }
+  for(const a of agents){
+    if(a.dying){a.dieT+=dt;continue;}
+    const h=a.h;h.sx+=a.x;h.sz+=a.z;h.n++;
+    const hunt=h.state==='hunt',siege=h.state==='siege',spread=hunt?.5:siege?.7:1;
+    let dx=h.tx+a.ox*spread-a.x,dz=h.tz+a.oz*spread-a.z;const dist=Math.hypot(dx,dz)||1;dx/=dist;dz/=dist;
+    let sp=hunt?a.spd*(night?1.08:1)*(1-.12*W.ash):siege?2.8:(dist>1.5?1.15:0);
+    const pd=Math.hypot(px-a.x,pz-a.z),near=pd<100;
+    let sx=0,sz=0;
+    if(near)nearAgents(a.x,a.z,.9,b=>{if(b===a)return;const ex=a.x-b.x,ez=a.z-b.z,d2=ex*ex+ez*ez;if(d2<.64&&d2>1e-6){const d=Math.sqrt(d2);sx+=ex/d*(.8-d);sz+=ez/d*(.8-d);}});
+    const k=Math.min(1,dt*3.5);a.vx+=(dx*sp-a.vx)*k+sx*dt*28;a.vz+=(dz*sp-a.vz)*k+sz*dt*28;
+    a.x+=a.vx*dt;a.z+=a.vz*dt;
+    if(near){
+      collideCircles(a,.38);
+      if(Math.abs(a.x)<BR+2&&Math.abs(a.z)<BR+2){let blk=null;
+        for(const sg of segs){if(!solidSeg(sg)||Math.abs(a.x-sg.cx)>4||Math.abs(a.z-sg.cz)>4)continue;if(collideSeg(a,.38,sg))blk=sg;}
+        if(blk){a.wallT-=dt;if(a.wallT<=0){a.wallT=1.3;damageSeg(blk,4+S.wave*.4);}}}
+      a.atk-=dt;
+      if(player.alive&&pd<.95&&a.atk<=0){a.atk=1.3;hurtPlayer(4+S.wave*.35);knockPlayer((px-a.x)/(pd||1),(pz-a.z)/(pd||1),1.6);}
+      if(pd<.85&&pd>1e-4){a.x=px-(px-a.x)/pd*.85;a.z=pz-(pz-a.z)/pd*.85;}
+    }
+    const v=Math.hypot(a.vx,a.vz);if(v>.3)a.yaw=Math.atan2(a.vx,a.vz);
+    a.ph+=dt*(v*2.2+.6);a.amp=Math.min(1,v/2);
+  }
+  let j=0;
+  for(const a of agents){
+    if(a.dying&&a.dieT>3.2)continue;
+    _hpos.set(a.x,a.dying?-Math.max(0,a.dieT-1.8)*.5:0,a.z);_hq.setFromAxisAngle(_up,a.yaw);_hs.setScalar(a.s);_hm.compose(_hpos,_hq,_hs);
+    hMesh.setMatrixAt(j,_hm);hMesh.setColorAt(j,a.col);hAnim.setXYZ(j,a.ph,a.dying?0:a.amp,a.dying?Math.min(1,a.dieT*2.2):0);
+    agents[j++]=a;
+  }
+  agents.length=j;hMesh.count=hInk.count=j;
+  hMesh.instanceMatrix.needsUpdate=true;hAnim.needsUpdate=true;if(hMesh.instanceColor)hMesh.instanceColor.needsUpdate=true;
+  if(chorus<60){hordeGroanT-=dt;if(hordeGroanT<=0){hordeGroanT=rand(.25,.6);Sound.play('groan',clamp(1-chorus/60,.25,1));}}
 }
 
 /* ================= WALLS & GATES ================= */
@@ -1414,22 +1674,26 @@ function tryFire(){
     ejectCasing(w.shell);}
   muzzleLight.position.set(mp.x,1.5,mp.z);muzzleLight.intensity=3;
   if(w.kick)knockPlayer(-Math.sin(player.yaw),-Math.cos(player.yaw),w.kick);
-  S.shake=Math.max(S.shake,w.shake);Sound.play(w.sfx);rumble(w.rum[0],w.rum[1],w.rum[2]);
+  S.shake=Math.max(S.shake,w.shake);Sound.play(w.sfx);makeNoise(player.x,player.z,{pistol:45,shotgun:70,rifle:60,sniper:85,launcher:65}[player.weapon]);rumble(w.rum[0],w.rum[1],w.rum[2]);
   player.recoil=.08;
   if(s.mag===0&&(w.infinite||s.res>0))startReload();
 }
 function hitscan(ox,oz,dx,dz,range,dmg,pierce,knock,color,fromTurret){
   let block=range;
-  for(const o of obstacles){if(o.r<=0)continue;const vx=o.x-ox,vz=o.z-oz,t=vx*dx+vz*dz;if(t<.5||t>block)continue;const px=vx-dx*t,pz=vz-dz*t;if(px*px+pz*pz<o.r*o.r*.6)block=t;}
+  const seenOb=new Set();
+  for(let st=0;st<=block;st+=OGC*.75){nearObs(ox+dx*st,oz+dz*st,0,o=>{if(seenOb.has(o))return;seenOb.add(o);const vx=o.x-ox,vz=o.z-oz,t=vx*dx+vz*dz;if(t<.5||t>block)return;const px=vx-dx*t,pz=vz-dz*t;if(px*px+pz*pz<o.r*o.r*.6)block=t;});}
   const hits=[];
   for(const z of zombies){if(z.dying)continue;const vx=z.x-ox,vz=z.z-oz,t=vx*dx+vz*dz;if(t<0||t>block)continue;const px=vx-dx*t,pz=vz-dz*t,r=z.def.r*1.05+.12;if(px*px+pz*pz<r*r)hits.push({z,t});}
   for(const b of barrels){if(!b.alive)continue;const vx=b.x-ox,vz=b.z-oz,t=vx*dx+vz*dz;if(t<0||t>block+.6)continue;const px=vx-dx*t,pz=vz-dz*t;if(px*px+pz*pz<.36)hits.push({b,t});}
   if(!fromTurret)for(const p of props){const vx=p.x-ox,vz=p.z-oz,t=vx*dx+vz*dz;if(t<.3||t>block)continue;const px=vx-dx*t,pz=vz-dz*t;if(px*px+pz*pz<p.r*p.r*.8)hits.push({p,t});}
+  const seenA=new Set();
+  for(let st=0;st<=block;st+=AHC*.8)nearAgents(ox+dx*st,oz+dz*st,.6,a=>{if(seenA.has(a))return;seenA.add(a);const vx=a.x-ox,vz=a.z-oz,t=vx*dx+vz*dz;if(t<0||t>block)return;const px=vx-dx*t,pz=vz-dz*t;if(px*px+pz*pz<.3)hits.push({a,t});});
   hits.sort((a,b)=>a.t-b.t);
   let end=block,n=0;
   for(const h of hits){
     if(h.b){h.b.hp-=dmg;if(h.b.hp<=0&&h.b.fuse<0)h.b.fuse=.05;end=h.t;n=pierce;break;}
     if(h.p){const f=(knock*.9+dmg*.04);impulseProp(h.p,dx*f,dz*f,f*.35);burst(ox+dx*h.t,h.p.y+.2,oz+dz*h.t,2,'debris',3);Sound.play('thud',.4);end=h.t;n=pierce;break;}
+    if(h.a){hitAgent(h.a,dmg,dx*knock,dz*knock);n++;end=h.t;if(!fromTurret)crossHit();if(n>=pierce)break;continue;}
     damageZombie(h.z,dmg,dx*knock,dz*knock);n++;end=h.t;if(!fromTurret)crossHit();if(n>=pierce)break;
   }
   if(n<pierce&&end===block&&block<range)burst(ox+dx*block,1.2,oz+dz*block,2,'spark',3);
@@ -1457,6 +1721,8 @@ function explode(x,z,r,dmg,o){
   o=o||{};
   for(const zb of zombies){if(zb.dying)continue;const d=Math.hypot(zb.x-x,zb.z-z);if(d<r+zb.def.r){const f=1-.5*Math.min(1,d/r);const ux=(zb.x-x)/(d||1),uz=(zb.z-z)/(d||1);damageZombie(zb,dmg*f,ux*11*f,uz*11*f,false,rand(6,10)*f);}}
   for(const b of barrels){if(b.alive&&b.fuse<0&&Math.hypot(b.x-x,b.z-z)<r)b.fuse=.18;}
+  nearAgents(x,z,r+.5,a=>{const d=Math.hypot(a.x-x,a.z-z);if(d<r+.4){const f=1-.5*Math.min(1,d/r);hitAgent(a,dmg*f,(a.x-x)/(d||1)*9*f,(a.z-z)/(d||1)*9*f);}});
+  makeNoise(x,z,85);
   for(const p of props){const d=Math.hypot(p.x-x,p.z-z);if(d<r*1.6){const f=(1-d/(r*1.6));const ux=(p.x-x)/(d||1),uz=(p.z-z)/(d||1);impulseProp(p,ux*14*f,uz*14*f,9*f);}}
   for(const dr of sdoors){const d=Math.hypot(dr.px-x,dr.pz-z);if(d<r*1.5)dr.angV+=rand(-1,1)*14*(1-d/(r*1.5));}
   if(player.alive){const d=Math.hypot(player.x-x,player.z-z);if(d<r*1.3){if(o.hurt&&d<r)hurtPlayer(o.hurt*(1-.5*d/r));knockPlayer((player.x-x)/(d||1),(player.z-z)/(d||1),14*(1-d/(r*1.3)));}}
@@ -1482,18 +1748,7 @@ function spawnCrate(x,z,rar){
   for(const sx of [-.4,.4]){const st=new THREE.Mesh(BOX(.1,.92,.94),strapM);st.position.set(sx,.46,0);g.add(st);}
   let beam=null;
   if(rar!=='common'){beam=new THREE.Mesh(new THREE.CylinderGeometry(.18,.18,rar==='drop'?30:14,6,1,true),new THREE.MeshBasicMaterial({color:R.strap,transparent:true,opacity:.28,blending:THREE.AdditiveBlending,depthWrite:false}));beam.position.y=rar==='drop'?15:7;g.add(beam);}
-  scene.add(g);const c={g,lid,beam,strapM,x,z,rar,opened:false,t:0,seen:false};crates.push(c);return c;
-}
-function spawnCrates(n){
-  for(let i=0;i<n;i++){
-    if(crates.filter(c=>!c.opened).length>=18)break;
-    let p=null;const r=Math.random();
-    if(r<.5&&houses.length){const h=pick(houses);p=l2w(h.x,h.z,h.rot,rand(-2.5,2.5),rand(-2.2,2.4));}
-    else if(r<.75&&carSpots.length){const c=pick(carSpots);const a=rand(0,6.28);p={x:c.x+Math.cos(a)*3,z:c.z+Math.sin(a)*3};if(blockedSpot(p.x,p.z,.8))p=null;}
-    if(!p)p=freeSpot(1,24,true);if(!p)continue;
-    if(crates.some(c=>!c.opened&&Math.hypot(c.x-p.x,c.z-p.z)<3))continue;
-    const roll=Math.random();spawnCrate(p.x,p.z,roll<.08?'epic':roll<.32?'rare':'common');
-  }
+  scene.add(g);const c={g,lid,beam,strapM,x,z,rar,opened:false,t:0,seen:false,chunk:null};crates.push(c);return c;
 }
 function grantAmmo(k,packs){inv[k].res+=Math.round(WEAP[k].pack*packs);}
 function openCrate(c){
@@ -1554,6 +1809,12 @@ function updateHUD(){
   $('wallBar').style.width=pct+'%';$('wallPct').textContent=pct+'%';
   const open=gates.filter(g=>g.alive&&g.open).map(g=>g.side),broken=gates.filter(g=>!g.alive).length;
   $('gateLine').innerHTML='Gates: '+(open.length?`<b class="${S.phase==='night'?'warn':''}">${open.join(', ')} open</b>`:'<b>all shut</b>')+(broken?` <b class="warn">· ${broken} smashed</b>`:'');
+  const bd=Math.hypot(player.x,player.z),ch=chunks.get(Math.floor(player.x/CH)+','+Math.floor(player.z/CH));
+  $('zoneLine').textContent=`${BIOME_NAME[ch?ch.biome:'farm']} · ${bd<BR+4?'at the farmstead':`base ${Math.round(bd)}m ${compass(Math.atan2(-player.x,-player.z))}`}`;
+  let hh=null,hd=1e9;for(const h of hordes){if(h.alive<=0)continue;const d=Math.hypot(h.cx-player.x,h.cz-player.z);if(d<hd){hd=d;hh=h;}}
+  if(hh&&(hd<110||base.radar||hh.known)){const st=hh.state==='hunt'?'hunting you':hh.state==='siege'?'marching on the farmstead':'roaming';
+    $('hordeLine').innerHTML=`Horde: <b class="${hh.state==='roam'?'':'warn'}">${hh.alive}</b> · ${Math.round(hd)}m ${compass(Math.atan2(hh.cx-player.x,hh.cz-player.z))} · ${st}`;}
+  else $('hordeLine').innerHTML='Horde: <span>none in range</span>';
   const wd=WEATHER[W.type];$('weatherLine').innerHTML=`Weather: <b>${wd.name}</b>${wd.note?` · <span>${wd.note}</span>`:''}`;
   const pl=$('phaseLabel');
   if(S.phase==='day'){pl.textContent=`DAY ${S.wave+1}`;pl.className='';$('phaseSub').textContent=`Nightfall in ${fmtT(S.dayT)}`;$('phaseHint').innerHTML=`${glyph('night')} start the night early`;$('phaseHint').hidden=false;}
@@ -1561,20 +1822,31 @@ function updateHUD(){
   $('lowhp').style.opacity=player.hp<35?(.5+.5*Math.sin(performance.now()/180))*(1-player.hp/35):0;
 }
 const mm=$('minimap'),mctx=mm.getContext('2d');
+const MMR=70;
 function drawMinimap(){
-  const W=mm.width,sc=W/(MAP*2),X=x=>(x+MAP)*sc,Z=z=>(z+MAP)*sc;
-  mctx.fillStyle='#1b2016';mctx.fillRect(0,0,W,W);
-  mctx.fillStyle='#2c302a';mctx.fillRect(X(-3.5),0,7*sc,W);mctx.fillRect(0,Z(-3.5),W,7*sc);
+  const MW=mm.width,sc=MW/(MMR*2),px=player.x,pz=player.z,X=x=>(x-px)*sc+MW/2,Z=z=>(z-pz)*sc+MW/2;
+  const edge=(x,z,pad)=>{const dx=x-px,dz=z-pz,m=Math.max(Math.abs(dx),Math.abs(dz))||1,k=Math.min(1,(MMR-(pad||5))/m);return[X(px+dx*k),Z(pz+dz*k),k<1];};
+  mctx.fillStyle='#1b2016';mctx.fillRect(0,0,MW,MW);
+  mctx.fillStyle='#2c302a';if(Math.abs(px)<MMR+4)mctx.fillRect(X(-3.5),0,7*sc,MW);if(Math.abs(pz)<MMR+4)mctx.fillRect(0,Z(-3.5),MW,7*sc);
   mctx.fillStyle='#3a3a30';for(const h of houses)mctx.fillRect(X(h.x)-4*sc,Z(h.z)-4*sc,8*sc,8*sc);
   mctx.fillStyle='#4a4840';mctx.fillRect(X(-BR),Z(-BR),BR*2*sc,BR*2*sc);
   mctx.lineWidth=3;for(const s of segs){
     if(s.door&&s.alive&&s.open)continue;
     mctx.strokeStyle=!s.alive?'#d6432f':s.door?'#9bd651':s.hp/s.maxHp<.4?'#f2a516':'#e9c46a';mctx.beginPath();
     if(s.horiz){mctx.moveTo(X(s.x0),Z(s.cz));mctx.lineTo(X(s.x1),Z(s.cz));}else{mctx.moveTo(X(s.cx),Z(s.z0));mctx.lineTo(X(s.cx),Z(s.z1));}mctx.stroke();}
-  for(const c of crates){if(c.opened)continue;const d=Math.hypot(c.x-player.x,c.z-player.z);if(d<32)c.seen=true;if(!(c.seen||base.radar||c.rar==='drop'))continue;
-    mctx.fillStyle=c.rar==='drop'?'#d6432f':c.rar==='epic'?'#e9c46a':c.rar==='rare'?'#5fa8d3':'#e8e2d0';const s=c.rar==='drop'?9:6;mctx.fillRect(X(c.x)-s/2,Z(c.z)-s/2,s,s);}
-  mctx.fillStyle='#d6432f';for(const z of zombies){if(z.dying)continue;if(!base.radar&&Math.hypot(z.x-player.x,z.z-player.z)>45*(1-.45*W.fog))continue;const r=z.type==='boss'?6:z.type==='brute'?4:2.6;mctx.beginPath();mctx.arc(X(z.x),Z(z.z),r,0,6.28);mctx.fill();}
-  mctx.save();mctx.translate(X(player.x),Z(player.z));mctx.rotate(-player.yaw+Math.PI);mctx.fillStyle='#f2a516';mctx.beginPath();mctx.moveTo(0,-8);mctx.lineTo(5.5,6);mctx.lineTo(-5.5,6);mctx.closePath();mctx.fill();mctx.restore();
+  for(const c of crates){if(c.opened)continue;const d=Math.hypot(c.x-px,c.z-pz);if(d<32)c.seen=true;if(!(c.seen||base.radar||c.rar==='drop'))continue;
+    const [cx,cz,off]=edge(c.x,c.z,4);if(off&&c.rar!=='drop')continue;
+    mctx.fillStyle=c.rar==='drop'?'#d6432f':c.rar==='epic'?'#e9c46a':c.rar==='rare'?'#5fa8d3':'#e8e2d0';const s=c.rar==='drop'?9:6;mctx.fillRect(cx-s/2,cz-s/2,s,s);}
+  const vis=MMR*(1-.45*W.fog);
+  mctx.fillStyle='#d6432f';for(const z of zombies){if(z.dying)continue;if(!base.radar&&Math.hypot(z.x-px,z.z-pz)>vis)continue;if(Math.abs(z.x-px)>MMR||Math.abs(z.z-pz)>MMR)continue;
+    const r=z.type==='boss'?6:z.type==='brute'?4:2.6;mctx.beginPath();mctx.arc(X(z.x),Z(z.z),r,0,6.28);mctx.fill();}
+  mctx.fillStyle='#ff4a33';
+  for(const a of agents){if(a.dying||Math.abs(a.x-px)>MMR||Math.abs(a.z-pz)>MMR)continue;if(!base.radar&&!a.h.known&&Math.hypot(a.x-px,a.z-pz)>vis*.8)continue;mctx.fillRect(X(a.x)-1.5,Z(a.z)-1.5,3,3);}
+  for(const h of hordes){if(h.alive<=0||!(h.known||base.radar))continue;const [hx,hz,off]=edge(h.cx,h.cz,7);if(!off)continue;
+    mctx.fillStyle=h.state==='roam'?'rgba(214,67,47,.6)':'#d6432f';mctx.beginPath();mctx.arc(hx,hz,6,0,6.28);mctx.fill();}
+  const [bx,bz,boff]=edge(0,0,7);
+  if(boff){mctx.fillStyle='#e9c46a';mctx.fillRect(bx-5,bz-5,10,10);mctx.fillStyle='#14170f';mctx.fillRect(bx-2,bz-2,4,4);}
+  mctx.save();mctx.translate(MW/2,MW/2);mctx.rotate(-player.yaw+Math.PI);mctx.fillStyle='#f2a516';mctx.beginPath();mctx.moveTo(0,-8);mctx.lineTo(5.5,6);mctx.lineTo(-5.5,6);mctx.closePath();mctx.fill();mctx.restore();
 }
 
 /* ================= BASE MENU ================= */
@@ -1652,6 +1924,8 @@ function startNight(early){
   S.wave++;S.phase='night';S.queue=buildWave(S.wave);S.spawnT=1;S.envT=1;
   setTimeout(()=>setWeather(rollWeather(true),true),2200);
   banner(`NIGHT ${S.wave}`,UNLOCK[S.wave]||`${S.queue.length} infected incoming. Hold the walls.`,'night');Sound.play('night');rumble(.5,.5,400);
+  if(S.wave>=2&&Math.random()<.5){let hh=null,hd=1e9;for(const h of hordes){if(h.alive>0&&h.state==='roam'){const d=Math.hypot(h.cx,h.cz);if(d<hd){hd=d;hh=h;}}}
+    if(hh){hh.state='siege';hh.siege=true;hh.known=true;setTimeout(()=>banner('HORDE INCOMING',`${hh.alive} infected are marching on the farmstead from the ${compass(Math.atan2(hh.cx,hh.cz))}.`,'night'),3400);}}
   const open=gates.filter(g=>g.alive&&g.open);if(open.length)setTimeout(()=>toast(`The ${open.map(g=>g.side).join(' and ')} gate${open.length>1?'s are':' is'} still open`,'bad'),800);
 }
 function endNight(){
@@ -1659,13 +1933,17 @@ function endNight(){
   const sc=20+S.wave*10,pa=1+Math.floor(S.wave/2);player.scrap+=sc;player.parts+=pa;
   banner('DAWN',`Night ${S.wave} survived. +${sc} scrap, +${pa} parts.`,'dawn');Sound.play('dawn');
   store.set('deadacre.best',Math.max(store.get('deadacre.best',0),S.wave));
-  spawnCrates(9+(base.radar?4:0));
+  refreshLoot();
+  for(const h of hordes)if(h.alive>0)addAgents(h,8+S.wave*2,h.cx,h.cz);
+  if(hordes.length<(S.wave>=3?3:2)){const h=spawnHorde(28+S.wave*12);setTimeout(()=>toast(`A new horde of ${h.alive} is roaming the ${compass(Math.atan2(h.cx,h.cz))}.`,'bad'),4200);}
   setTimeout(()=>setWeather(rollWeather(false),true),2400);
-  const p=freeSpot(2,55,true);if(p){spawnCrate(p.x,p.z,'drop');setTimeout(()=>toast('Airdrop spotted. Follow the red flare.','bad'),1500);}
+  for(let i=0;i<30;i++){const a=rand(0,6.28),r=rand(70,140),x=Math.cos(a)*r,z=Math.sin(a)*r;if(blockedSpot(x,z,2))continue;
+    spawnCrate(x,z,'drop');setTimeout(()=>toast(`Airdrop spotted ${Math.round(r)}m ${compass(Math.atan2(x-player.x,z-player.z))}. Follow the red flare.`,'bad'),1500);break;}
 }
 function updatePhase(dt){
   if(S.phase==='day'){
     S.dayT-=dt;if(S.dayT<=0)startNight(false);
+    for(let i=zombies.length-1;i>=0;i--){const z=zombies[i];if(!z.dying&&Math.hypot(z.x-player.x,z.z-player.z)>150){removeZombie(z);zombies.splice(i,1);}}
     S.daySpawnT-=dt;if(S.daySpawnT<=0){S.daySpawnT=rand(7,11);if(zombies.filter(z=>!z.dying).length<5){const p=edgeSpawn();spawnZombie(S.wave>=2&&Math.random()<.3?'runner':'walker',p.x,p.z);}}
   }else{
     S.spawnT-=dt;const alive=zombies.filter(z=>!z.dying).length;
@@ -1809,7 +2087,6 @@ function updatePlayer(dt){
   collideCircles(player,.5);
   for(const s of segs){if(!solidSeg(s))continue;if(Math.abs(player.x-s.cx)>4.5||Math.abs(player.z-s.cz)>4.5)continue;collideSeg(player,.5,s);}
   doorCollide(player,.5,1.2);
-  player.x=clamp(player.x,-MAP+1,MAP-1);player.z=clamp(player.z,-MAP+1,MAP-1);
   // aim
   if(pad.active){const rm=Math.hypot(pad.rx,pad.ry);if(rm>.25)aim.set(player.x+pad.rx/rm*12,1.2,player.z+pad.ry/rm*12);else if(moving)aim.set(player.x+mx/ml*12,1.2,player.z+mz/ml*12);else aim.set(player.x+Math.sin(player.yaw)*12,1.2,player.z+Math.cos(player.yaw)*12);}
   else if(isTouch){if(touch.am>.2){aim.set(player.x+touch.ax*12,1.2,player.z+touch.az*12);}else if(moving){aim.set(player.x+mx*12,1.2,player.z+mz*12);}}
@@ -1848,6 +2125,7 @@ function updateTurrets(dt){
   const lv=TUR[base.turretLv];const range=lv.range*(base.floods?1.3:1)*(1-.3*W.fog);
   for(let i=0;i<base.turrets;i++){const t=turrets[i];t.cd-=dt;
     let best=null,bd=range;for(const z of zombies){if(z.dying)continue;const d=Math.hypot(z.x-t.x,z.z-t.z);if(d<bd){bd=d;best=z;}}
+    if(!best)nearAgents(t.x,t.z,range,a=>{const d=Math.hypot(a.x-t.x,a.z-t.z);if(d<bd){bd=d;best=a;}});
     if(!best){t.head.rotation.y+=dt*.6;continue;}
     const ty=Math.atan2(best.x-t.x,best.z-t.z);let dy=ty-t.head.rotation.y;while(dy>Math.PI)dy-=Math.PI*2;while(dy<-Math.PI)dy+=Math.PI*2;t.head.rotation.y+=dy*Math.min(1,dt*12);
     if(t.cd<=0&&Math.abs(dy)<.3){t.cd=lv.rate;const a=t.head.rotation.y+rand(-.02,.02);hitscan(t.x+Math.sin(a)*1.4,t.z+Math.cos(a)*1.4,Math.sin(a),Math.cos(a),range,lv.dmg,1,.6,0x9fe0ff,true);
@@ -1884,6 +2162,7 @@ function updateWorld(dt){
   for(const b of barrels){if(!b.alive||b.fuse<0)continue;b.fuse-=dt;if(b.fuse<=0){b.alive=false;b.g.visible=false;b.ob.r=0;explode(b.x,b.z,5.5,140,{hurt:35,wall:60,color:0xff7a2a});}}
   for(let i=crates.length-1;i>=0;i--){const c=crates[i];if(c.beam){c.beam.material.opacity=.2+.12*Math.sin(performance.now()/300+i);}
     if(c.opened){c.t+=dt;c.lid.rotation.x=Math.max(-2,c.lid.rotation.x-dt*8);if(c.t>18){scene.remove(c.g);crates.splice(i,1);}}
+    else if(!c.chunk&&c.rar==='drop'&&S.running&&Math.hypot(c.x-player.x,c.z-player.z)>260){scene.remove(c.g);crates.splice(i,1);}
     else if(c.rar==='drop'&&Math.random()<dt*6)burst(c.x,1.5,c.z,1,'smoke',1);}
   S.groanT-=dt;if(S.groanT<=0){S.groanT=rand(1.2,3);let near=null,nd=30;for(const z of zombies){if(z.dying)continue;const d=Math.hypot(z.x-player.x,z.z-player.z);if(d<nd){nd=d;near=z;}}if(near)Sound.play('groan',1-nd/30);}
   S.breachMsgT-=dt;
@@ -1933,15 +2212,14 @@ function resetGame(){
   for(const p of pickups)scene.remove(p.m);pickups.length=0;
   for(const p of projs)scene.remove(p.m);projs.length=0;
   for(const a of acids)scene.remove(a.m);acids.length=0;
-  for(let i=props.length-1;i>=0;i--){const p=props[i];if(p.temp){scene.remove(p.g);props.splice(i,1);continue;}p.x=p.hx;p.z=p.hz;p.y=p.h;p.vx=p.vy=p.vz=p.spin=p.tx=p.tz=0;p.g.rotation.set(0,p.g.rotation.y,0);}
-  for(const d of sdoors){d.ang=d.home;d.angV=0;}
-  for(const b of barrels){b.alive=true;b.g.visible=true;b.ob.r=.55;b.hp=25;b.fuse=-1;}
+  resetWorld();resetHordes();
   Object.assign(base,{wallLv:1,turrets:0,turretLv:1,spikeLv:0,infLv:0,floods:0,radar:0});
   for(const s of segs){s.maxHp=WALL_HP[1];s.open=false;s.openAmt=0;}applyWalls(true);applyTurrets();applyFloods();
   Object.assign(player,{x:0,z:2,vx:0,vz:0,kx:0,kz:0,yaw:Math.PI,hp:100,maxHp:100,st:100,alive:true,scrap:40,parts:0,med:1,gren:0,weapon:'pistol',fireCd:0,reloadT:0,hurtT:0,acidT:0,recoil:0});
   resetInv();pl.rotation.x=0;heroReset();gunBody.scale.z=WEAP.pistol.len/.8;gunBody.position.z=WEAP.pistol.len/2-.2;
   Object.assign(S,{paused:false,menu:false,over:false,phase:'day',dayT:75,wave:0,queue:[],spawnT:0,daySpawnT:14,kills:0,looted:0,shake:0,env:0,envT:0});
-  spawnCrates(12);refreshSlots();toasts.innerHTML='';
+  updateGroundWindow();updateGrass();updateChunks(true);seedYardProps();spawnHorde(GFX==='high'?40:28);
+  refreshSlots();toasts.innerHTML='';
   setWeather('clear');W.rain=W.ash=W.fog=W.cloud=0;W.wet=0;W.flash=0;for(const d of decals)d.m.visible=false;
   camera.position.set(player.x+CAM_OFF.x,CAM_OFF.y,player.z+CAM_OFF.z);
 }
@@ -1978,12 +2256,13 @@ function frame(now){
   const dt=Math.min(.05,(now-last)/1000);last=now;
   pollPad(dt);
   if(S.running&&!S.paused&&!S.menu&&!S.over){
-    updatePhase(dt);updatePlayer(dt);updateZombies(dt);updateProps(dt);updateDoors(dt);updateTurrets(dt);updateWorld(dt);updateWeather(dt,player.x,player.z-2);updateEnv(dt);updateCamera(dt);
+    updateChunks(false);updateGroundWindow();updateGrass();
+    updatePhase(dt);updatePlayer(dt);updateZombies(dt);updateHordes(dt);updateProps(dt);updateDoors(dt);updateTurrets(dt);updateWorld(dt);updateWeather(dt,player.x,player.z-2);updateEnv(dt);updateCamera(dt);
     hudT-=dt;if(hudT<=0){hudT=.08;updateHUD();}
     mapT-=dt;if(mapT<=0){mapT=.12;drawMinimap();}
     $('vignette').style.opacity=player.hurtT>0?Math.min(1,player.hurtT*2.5):0;
     crossT-=dt;$('crosshair').classList.toggle('hit',crossT>0);
-  }else if(S.over){if(HERO.ready)HERO.mixer.update(dt);updateZombies(dt);updateProps(dt);updateDoors(dt);updateWorld(dt);updateWeather(dt,player.x,player.z-2);updateEnv(dt);}
+  }else if(S.over){if(HERO.ready)HERO.mixer.update(dt);updateZombies(dt);updateHordes(dt);updateProps(dt);updateDoors(dt);updateWorld(dt);updateWeather(dt,player.x,player.z-2);updateEnv(dt);}
   else if(!S.running){idleA+=dt*.05;camera.position.set(Math.sin(idleA)*34,22,Math.cos(idleA)*34);camera.lookAt(0,0,0);updateWorld(dt);updateDoors(dt);updateWeather(dt,0,0);updateEnv(dt);
     sun.position.set(22,40,12);sun.target.position.set(0,0,0);}
   else if(gradePass)gradePass.uniforms.time.value=now/1000;
