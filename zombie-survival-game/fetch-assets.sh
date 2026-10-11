@@ -15,3 +15,8 @@ get assets/anim/run.glb             hf_20261011_170718_6f45da2f-907a-4620-8b56-6
 get assets/anim/hit.glb             hf_20261011_170719_281734fc-bf97-4cc6-a56c-63afc147fcdb.glb  # Face_Punch_Reaction
 get assets/anim/death.glb           hf_20261011_170720_f6aa6cde-a2fb-4096-bc4c-31ffe5ce702b.glb  # Shot_and_Fall_Backward
 get assets/anim/idle.glb            hf_20261011_170715_f65a22aa-5c28-40af-b0e5-2cf722709df5.glb  # Idle
+mkdir -p assets/zombies/anim
+get assets/zombies/trucker.glb      hf_20261011_192258_4e790188-b9ee-4b5b-8af6-58af35690278.glb  # boomer, Slow_Orc_Walk
+get assets/zombies/hulk.glb         hf_20261011_192300_2d73ef70-59e6-4a3d-bbf8-cf442b8a8879.glb  # brute, Monster_Walk
+get assets/zombies/grandma.glb      hf_20261011_192301_bcf453af-edd6-4b5f-aff6-f89e3513651a.glb  # walker/runner, Elderly_Shaky_Walk
+# office worker (walker/runner) was rejected by Higgsfield's content filter; shared attack/death clips not generated yet
