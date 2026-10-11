@@ -351,6 +351,7 @@ kbd.pl{border-radius:3px;width:auto;padding:0 6px;background:var(--bone)}
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <script>
 (function(){
 'use strict';
@@ -839,6 +840,38 @@ pl.add(mk(BOX(.6,.65,.3),M(0x4a4436),0,1.3,-.38));
 [-1,1].forEach(s=>{const p=new THREE.Group();p.position.set(s*.48,1.62,0);p.add(mk(BOX(.2,.7,.2),M(0x5d6b4a),0,-.33,0));p.rotation.x=-1.35;p.rotation.z=s*.25;pl.add(p);});
 const gun=new THREE.Group();gun.position.set(0,1.38,.62);pl.add(gun);
 const gunBody=mk(BOX(.12,.16,.8),M(0x1c1e1c,{metalness:.4,roughness:.5}),0,0,.2);gun.add(gunBody);
+
+/* hero model: loads hero.glb (rigged character) if it ships with the page, else keeps the box survivor */
+const HERO={ready:false,mixer:null,walk:null,root:null};
+const boxParts=pl.children.slice();
+function toonGradient(){const d=new Uint8Array([70,70,70,255,150,150,150,255,255,255,255,255]);const t=new THREE.DataTexture(d,3,1,THREE.RGBAFormat);t.minFilter=t.magFilter=THREE.NearestFilter;t.needsUpdate=true;return t;}
+function setupHero(gltf){
+  const root=gltf.scene;root.updateMatrixWorld(true);
+  const b=new THREE.Box3().setFromObject(root);const h=(b.max.y-b.min.y)||1;const s=1.95/h;root.scale.setScalar(s);
+  root.updateMatrixWorld(true);const b2=new THREE.Box3().setFromObject(root);
+  root.position.set(-(b2.min.x+b2.max.x)/2,-b2.min.y,-(b2.min.z+b2.max.z)/2);
+  pl.add(root);pl.updateMatrixWorld(true);
+  const grad=toonGradient(),meshes=[];root.traverse(o=>{if(o.isMesh)meshes.push(o);});
+  const ws=new V3();
+  for(const o of meshes){
+    const old=Array.isArray(o.material)?o.material[0]:o.material;const sk=!!o.isSkinnedMesh;
+    o.material=new THREE.MeshToonMaterial({map:old&&old.map||null,color:old&&old.map?0xffffff:(old&&old.color?old.color.getHex():0xcccccc),gradientMap:grad,skinning:sk});
+    o.castShadow=true;o.receiveShadow=false;o.frustumCulled=false;
+    // inked comic outline: inverted hull pushed out along normals
+    o.getWorldScale(ws);const th=(.022/(ws.x||1)).toFixed(5);
+    const om=new THREE.MeshBasicMaterial({color:0x0b0a09,side:THREE.BackSide,skinning:sk});
+    om.onBeforeCompile=sh=>{sh.vertexShader=sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n transformed += normal * '+th+';');};
+    const ol=sk?new THREE.SkinnedMesh(o.geometry,om):new THREE.Mesh(o.geometry,om);
+    if(sk){ol.bind(o.skeleton,o.bindMatrix);ol.bindMode=o.bindMode;}
+    ol.position.copy(o.position);ol.quaternion.copy(o.quaternion);ol.scale.copy(o.scale);ol.frustumCulled=false;o.parent.add(ol);
+  }
+  HERO.mixer=new THREE.AnimationMixer(root);
+  const clip=gltf.animations.find(a=>/walk/i.test(a.name))||gltf.animations[0];
+  if(clip){HERO.walk=HERO.mixer.clipAction(clip);HERO.walk.play();}
+  for(const p of boxParts)if(p!==gun)p.visible=false;
+  HERO.root=root;HERO.ready=true;
+}
+if(THREE.GLTFLoader){try{new THREE.GLTFLoader().load('hero.glb',g=>{try{setupHero(g);}catch(e){console.warn('Hero model setup failed; using box survivor.',e);}},undefined,()=>{});}catch(e){}}
 
 /* ================= DEFINITIONS ================= */
 const WEAP={
@@ -1640,7 +1673,15 @@ function updatePlayer(dt){
   player.walk+=dt*(moving?sp*1.6:0);const sw=moving?Math.sin(player.walk):0;
   plLegs[0].rotation.x=sw*.7;plLegs[1].rotation.x=-sw*.7;
   player.recoil=Math.max(0,player.recoil-dt);
-  pl.position.set(player.x,moving?Math.abs(Math.cos(player.walk))*.07:0,player.z);pl.rotation.y=player.yaw;gun.position.z=.62-player.recoil*2;
+  pl.position.set(player.x,moving&&!HERO.ready?Math.abs(Math.cos(player.walk))*.07:0,player.z);pl.rotation.y=player.yaw;gun.position.z=.62-player.recoil*2;
+  if(HERO.ready){
+    if(HERO.walk){
+      // play the walk while moving, playing it backwards when backpedalling against the aim
+      const fwd=moving?(mx*Math.sin(player.yaw)+mz*Math.cos(player.yaw))/(ml||1):1;
+      HERO.walk.timeScale=moving?(sp/6.5)*1.15*(fwd<-.3?-1:1):0;
+    }
+    HERO.mixer.update(dt);
+  }
   player.hurtT-=dt;
   // prompt
   const c=nearestCrate();let ps='';
