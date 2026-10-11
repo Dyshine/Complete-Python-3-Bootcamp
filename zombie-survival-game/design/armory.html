@@ -1,0 +1,510 @@
+<title>Dead Acre Armory</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Barlow:wght@400;500;600&family=Stardos+Stencil:wght@400;700&display=swap">
+<style>
+/* Layout: one readable column of HUD-style panels on the game's dark ground; tier colour is the only accent system. */
+:root{
+  color-scheme:dark;
+  --ink:#0c0e0b; --panel:#14170f; --panel-2:#1a1e15; --line:rgba(232,226,208,.14); --line-2:rgba(232,226,208,.28);
+  --bone:#e8e2d0; --mute:#a3a28e; --dim:#77766a; --hazard:#f2a516; --blood:#d6432f;
+  --t1:#a8977f; --t2:#79c252; --t3:#5fa8d3; --t4:#b08be6; --ts:#f2a516;
+  --f-display:"Stardos Stencil","Impact","Arial Black",sans-serif;
+  --f-ui:"Barlow Condensed","Arial Narrow","Roboto Condensed",sans-serif;
+  --f-body:"Barlow","Segoe UI",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--ink);color:var(--bone);font-family:var(--f-body);font-size:16px;line-height:1.55;margin:0}
+.wrap{max-width:1080px;margin:0 auto;padding-inline:20px;padding-block:40px 80px;display:flex;flex-direction:column;gap:56px}
+h1,h2,h3{font-family:var(--f-display);font-weight:400;letter-spacing:.02em;text-wrap:balance;margin:0}
+h1{font-size:clamp(40px,7vw,68px);line-height:1;color:var(--bone)}
+h2{font-size:clamp(26px,3.6vw,34px);line-height:1.1}
+h3{font-size:22px}
+p{margin:0;max-width:68ch}
+.eyebrow{font-family:var(--f-ui);font-weight:600;font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:var(--hazard)}
+.lead{font-size:18px;color:var(--bone);max-width:66ch}
+.note{color:var(--mute);font-size:15px}
+header{display:flex;flex-direction:column;gap:14px;border-bottom:2px solid var(--line-2);padding-bottom:28px}
+.stamp{display:flex;flex-wrap:wrap;gap:8px 18px;font-family:var(--f-ui);font-size:15px;color:var(--mute)}
+.stamp b{color:var(--bone);font-weight:600}
+section{display:flex;flex-direction:column;gap:18px}
+.sec-head{display:flex;flex-direction:column;gap:8px}
+.tag{font-family:var(--f-ui);font-weight:700;font-size:13px;letter-spacing:.1em;text-transform:uppercase;padding:2px 8px;border-radius:3px;color:var(--ink);white-space:nowrap}
+.k1{background:var(--t1)}.k2{background:var(--t2)}.k3{background:var(--t3)}.k4{background:var(--t4)}.ks{background:var(--ts)}
+.c1{color:var(--t1)}.c2{color:var(--t2)}.c3{color:var(--t3)}.c4{color:var(--t4)}.cs{color:var(--ts)}
+
+/* tier ladder */
+.tiers{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+.tier{background:var(--panel);border:1px solid var(--line);border-top:4px solid var(--c);padding:16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.tier h3{color:var(--c)}
+.tier dl{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;margin:0;font-family:var(--f-ui);font-size:15px}
+.tier dt{color:var(--mute)}.tier dd{margin:0;font-variant-numeric:tabular-nums}
+.tier p{font-size:14.5px;color:var(--bone)}
+
+/* tables */
+.tbl{overflow-x:auto;border:1px solid var(--line);background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-family:var(--f-ui);font-size:16px;font-variant-numeric:tabular-nums}
+th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:600;color:var(--mute);font-size:13px;letter-spacing:.08em;text-transform:uppercase;background:var(--panel-2);white-space:nowrap}
+td.n,th.n{text-align:right;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td .look{font-family:var(--f-body);font-size:14px;color:var(--mute);display:block;max-width:44ch}
+td.model{font-weight:600;white-space:nowrap}
+
+/* DPS chart */
+.chart{background:var(--panel);border:1px solid var(--line);padding:18px;display:flex;flex-direction:column;gap:12px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-family:var(--f-ui);font-size:14px;color:var(--mute)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:12px;height:12px;display:inline-block;border-radius:2px}
+.bars{display:grid;grid-template-columns:110px 1fr;gap:10px 14px;align-items:center}
+.bars .lbl{font-family:var(--f-ui);font-weight:600;font-size:15px}
+.bars .grp{display:flex;flex-direction:column;gap:2px;min-width:0}
+.bar{height:9px;border-radius:0 2px 2px 0;position:relative;min-width:2px}
+.bar em{position:absolute;left:calc(100% + 6px);top:50%;transform:translateY(-50%);font-style:normal;font-family:var(--f-ui);font-size:12px;color:var(--mute);white-space:nowrap}
+.axis{display:grid;grid-template-columns:110px 1fr;gap:14px;font-family:var(--f-ui);font-size:12px;color:var(--dim)}
+.axis div{display:flex;justify-content:space-between;border-top:1px solid var(--line);padding-top:4px}
+
+/* class tabs */
+.tabs{display:flex;flex-wrap:wrap;gap:6px}
+.tabs button{font-family:var(--f-ui);font-weight:600;font-size:16px;letter-spacing:.04em;background:var(--panel);color:var(--mute);border:1px solid var(--line-2);padding:7px 14px;border-radius:3px;cursor:pointer}
+.tabs button:hover{color:var(--bone);border-color:var(--bone)}
+.tabs button[aria-selected="true"]{background:var(--hazard);color:var(--ink);border-color:var(--hazard)}
+.tabs button:focus-visible,.card:focus-visible{outline:2px solid var(--hazard);outline-offset:2px}
+.panel{display:flex;flex-direction:column;gap:16px}
+.panel-head{display:flex;flex-wrap:wrap;gap:8px 24px;align-items:baseline}
+.panel-head p{color:var(--mute)}
+.facts{display:flex;flex-wrap:wrap;gap:8px}
+.fact{font-family:var(--f-ui);font-size:14px;border:1px solid var(--line-2);padding:3px 10px;border-radius:3px;color:var(--bone)}
+.fact b{color:var(--mute);font-weight:500;margin-right:4px}
+.guns{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}
+.gun{background:var(--panel);border:1px solid var(--line);border-bottom:3px solid var(--c);padding:10px 10px 12px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.gun canvas{width:100%;height:auto;aspect-ratio:240/84;display:block}
+.gun .nm{font-family:var(--f-ui);font-weight:700;font-size:17px;display:flex;justify-content:space-between;gap:8px;align-items:center}
+.split{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+.box{background:var(--panel);border:1px solid var(--line);padding:16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.box h4{margin:0;font-family:var(--f-ui);font-weight:700;font-size:14px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute)}
+ul.parts{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-family:var(--f-ui);font-size:16px}
+ul.parts li{display:flex;justify-content:space-between;gap:12px;border-bottom:1px dashed var(--line);padding-bottom:5px}
+ul.parts li span:last-child{color:var(--hazard);white-space:nowrap}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-family:var(--f-ui);font-size:14px;background:var(--panel-2);border:1px solid var(--line-2);border-radius:3px;padding:2px 8px}
+
+/* components */
+.comps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.comp{background:var(--panel);border:1px solid var(--line);padding:14px;display:flex;gap:12px;min-width:0}
+.comp .ic{flex:none;width:40px;height:40px;border:2px solid var(--hazard);border-radius:4px;display:grid;place-items:center;font-family:var(--f-display);font-size:13px;color:var(--hazard)}
+.comp h4{margin:0 0 2px;font-family:var(--f-ui);font-weight:700;font-size:17px}
+.comp p{font-size:14px;color:var(--mute)}
+
+/* specials */
+.specials{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--ts);padding:14px 16px 16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.card canvas{width:100%;height:auto;aspect-ratio:240/84;display:block;background:radial-gradient(ellipse at 50% 60%,rgba(242,165,22,.12),transparent 70%)}
+.card .top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.card h3{color:var(--ts)}
+.card .base{font-family:var(--f-ui);font-size:14px;color:var(--mute)}
+.card .stats{display:flex;flex-wrap:wrap;gap:6px}
+.card p{font-size:14.5px}
+.card .look{color:var(--mute)}
+.card .src{font-family:var(--f-ui);font-size:14px;color:var(--bone);border-top:1px solid var(--line);padding-top:8px}
+.card .src b{color:var(--hazard);font-weight:600}
+
+footer{border-top:2px solid var(--line-2);padding-top:20px;color:var(--mute);font-size:14px}
+@media (max-width:560px){.bars,.axis{grid-template-columns:78px 1fr}.bars .lbl{font-size:13px}}
+@media (prefers-reduced-motion:no-preference){.bar{transition:width .5s ease}}
+</style>
+
+<div class="wrap">
+<header>
+  <div class="eyebrow">Dead Acre · weapon design proposal</div>
+  <h1>Dead Acre Armory</h1>
+  <p class="lead">Nine weapon classes, each in four quality tiers, plus nine special weapons. Every gun can be broken down into parts that feed mods and tier upgrades at the base workshop. Tier 2 is today's in-game gun, so the numbers slot straight into the current balance.</p>
+  <div class="stamp"><span>Walker <b>45 HP</b></span><span>Runner <b>28 HP</b></span><span>Horde member <b>30 + 4 per night</b></span><span>Brute <b>380 HP</b></span><span>Abomination <b>2,600 HP</b></span></div>
+</header>
+
+<section id="tiers">
+  <div class="sec-head"><h2>Quality tiers</h2><p class="note">Colour-coded like the loot crates. A tier changes damage, handling, mod slots and how the gun looks, all at once.</p></div>
+  <div class="tiers" id="tierCards"></div>
+</section>
+
+<section id="glance">
+  <div class="sec-head"><h2>Firepower at a glance</h2><p class="note">Sustained damage per second while firing (not counting reloads). Shotgun assumes every pellet hits; launcher is per target in the blast.</p></div>
+  <div class="chart">
+    <div class="legend" id="legend"></div>
+    <div class="bars" id="bars"></div>
+    <div class="axis"><span></span><div id="axis"></div></div>
+  </div>
+</section>
+
+<section id="classes">
+  <div class="sec-head"><h2>Weapon classes</h2><p class="note">Pick a class to see all four tiers, what the gun breaks down into, and which mods it takes. Noise is how far away a horde hears the shot.</p></div>
+  <div class="tabs" role="tablist" id="tabs"></div>
+  <div id="panels"></div>
+</section>
+
+<section id="salvage">
+  <div class="sec-head"><h2>Breaking weapons down</h2><p class="note">Salvage any gun at the workshop. You get scrap and gun parts (the two currencies the game already has) plus six components. Better tiers give more back.</p></div>
+  <div class="comps" id="comps"></div>
+  <div class="tbl"><table>
+    <thead><tr><th>Tier</th><th class="n">Yield</th><th>Notes</th></tr></thead>
+    <tbody id="yield"></tbody>
+  </table></div>
+</section>
+
+<section id="mods">
+  <div class="sec-head"><h2>Mods</h2><p class="note">Crafted from components and fitted into a gun's mod slots. Tier 1 has no slots, Tier 2 has one, Tier 3 two, Tier 4 three.</p></div>
+  <div class="tbl"><table>
+    <thead><tr><th>Slot</th><th>Mod</th><th>Recipe</th><th>Effect</th><th>Fits</th></tr></thead>
+    <tbody id="modRows"></tbody>
+  </table></div>
+</section>
+
+<section id="upgrade">
+  <div class="sec-head"><h2>Upgrading a tier</h2><p class="note">Done at the workshop. The hunting rifle and grenade launcher cost 30% more.</p></div>
+  <div class="tbl"><table>
+    <thead><tr><th>Step</th><th>Name</th><th>Cost</th><th>What changes on the model</th></tr></thead>
+    <tbody id="upRows"></tbody>
+  </table></div>
+</section>
+
+<section id="specials">
+  <div class="sec-head"><h2>Special weapons</h2><p class="note">One of a kind, orange-tier. Each has a mechanic no other weapon has, and most live in a particular kind of building. Salvaging one gives a Relic Core, which upgrades another special from Mk I to Mk III.</p></div>
+  <div class="specials" id="spCards"></div>
+</section>
+
+<section id="drops">
+  <div class="sec-head"><h2>Where weapons come from</h2></div>
+  <div class="tbl"><table>
+    <thead><tr><th>Source</th><th class="n">Rusted</th><th class="n">Field</th><th class="n">Workshop</th><th class="n">Military</th><th class="n">Special</th></tr></thead>
+    <tbody id="dropRows"></tbody>
+  </table></div>
+</section>
+
+<section id="ttk">
+  <div class="sec-head"><h2>Shots to kill</h2><p class="note">Body shots, no mods. Horde members get 4 HP tougher each night, so a Field gun that two-shots them early needs three by night 10.</p></div>
+  <div class="tbl"><table>
+    <thead><tr><th>Weapon</th><th class="n">Runner</th><th class="n">Walker</th><th class="n">Horde N1</th><th class="n">Horde N10</th><th class="n">Brute</th></tr></thead>
+    <tbody id="ttkRows"></tbody>
+  </table></div>
+</section>
+
+<footer>Design proposal for Dead Acre. Tier 2 stats are the values in the game today; the rest are starting points for tuning in playtests.</footer>
+</div>
+
+<script>
+const TIERS=[
+  {k:1,name:'Rusted',c:'--t1',mult:'×0.8 damage',hand:'+20% reload time, jams 1 in 40 shots',slots:0,where:'Common crates, dead survivors',look:'Rust, duct tape, wire and mismatched parts. Grips wrapped in rags. Looks like it was dug out of a ditch, because it was.'},
+  {k:2,name:'Field',c:'--t2',mult:'×1.0 damage',hand:'Baseline',slots:1,where:'Common and rare crates',look:'Factory finish worn thin. Blued steel, scuffed wood, a strap. Today\'s in-game guns.'},
+  {k:3,name:'Workshop',c:'--t3',mult:'×1.3 damage',hand:'−10% reload, +8% fire rate',slots:2,where:'Rare and epic crates, brute drops',look:'Hand-tuned. Painted panels, stencilled numbers, a rail with a red-dot, cleaner lines.'},
+  {k:4,name:'Military',c:'--t4',mult:'×1.6 damage',hand:'−20% reload, +15% fire rate',slots:3,where:'Epic crates and airdrops',look:'Matte black polymer with hazard-orange stripes, glowing sights, suppressors and kill tallies.'},
+  {k:5,name:'Special',c:'--ts',mult:'Unique',hand:'Unique mechanic',slots:'3 + perk',where:'Hordes, the Abomination, specific buildings',look:'One-off silhouettes nobody would build twice. See the Special weapons section.'},
+];
+// stats per tier: [damage per shot, rounds per minute, magazine, reload s]
+const CLASSES=[
+  {id:'side',name:'Sidearm',role:'Cheap backup with free ammo at Rusted and Field. Accurate at range.',noise:45,range:42,ammo:'9mm',
+   models:['Junker 9','M9 Service','Ranger 10mm','Viper Mk IV'],
+   looks:['Pitted slide, rubber-band grip, taped mag.','Worn black finish, wood grip panels.','Two-tone slide in blue, red-dot on a cut slide.','Matte black, threaded suppressor, orange witness stripes.'],
+   s:[[16,210,9,1.2],[20,231,12,1.0],[26,251,14,.9],[33,272,17,.8]],
+   parts:[['Slide and barrel','Barrel',1],['Frame','Receiver',1],['Recoil and hammer springs','Springs',2],['Grip panels','Furniture',1]],scrap:12,gp:1,
+   mods:['Suppressor','Compensator','Extended mag','Red-dot','Hair trigger','Incendiary rounds','Hollow points']},
+  {id:'rev',name:'Revolver',role:'Hard-hitting sidearm that punches through two bodies. Slow to reload, cannot be suppressed.',noise:65,range:48,ammo:'.357 / .44',pierce:[1,2,2,3],
+   models:['Rust Bucket .38','Ranch .357','Dead-Eye .44','Judge .500'],
+   looks:['Snub barrel with a wire-wrapped grip.','Nickel frame, horn grip, ranch brand.','Long blued barrel, blue enamel inlay, red-dot.','Black and orange hand cannon with a ported barrel.'],
+   s:[[52,99,5,2.6],[65,109,6,2.2],[85,118,6,2.0],[107,128,6,1.7]],
+   parts:[['Barrel','Barrel',1],['Frame and cylinder','Receiver',1],['Mainspring','Springs',1],['Grips','Furniture',1]],scrap:18,gp:2,
+   mods:['Compensator','Red-dot','Hair trigger','Incendiary rounds','Hollow points']},
+  {id:'smg',name:'SMG',role:'Sprays fast at short range. Shreds runners and clears a doorway, but drinks ammo.',noise:50,range:26,ammo:'.45',
+   models:['Pipe Rattler','Mac-Stitch','Hornet 45','Wasp Kinetic'],
+   looks:['Plumbing pipe receiver, bent-wire stock.','Stamped steel, wire stock, canvas strap.','Blue receiver, vertical grip, red-dot.','Black polymer, suppressor, hazard stripes.'],
+   s:[[9,840,26,1.7],[11,923,35,1.4],[14,1003,42,1.3],[18,1085,49,1.1]],
+   parts:[['Barrel','Barrel',1],['Receiver','Receiver',1],['Bolt, recoil and mag springs','Springs',3],['Stock and foregrip','Furniture',1]],scrap:20,gp:2,
+   mods:['Suppressor','Compensator','Extended mag','Drum mag','Red-dot','Padded stock','Hair trigger','Incendiary rounds','Hollow points']},
+  {id:'shot',name:'Shotgun',role:'Close-range crowd stopper with heavy knockback. Pellets spread wide.',noise:70,range:17,ammo:'12 gauge',pellets:8,
+   models:['Barn Pump','Pump 870','Riot Pump','Breacher S-8'],
+   looks:['Rust-streaked barrel, cracked stock bound with twine.','Walnut pump and stock, blued receiver.','Ventilated heat shield, blue stock, red-dot.','Semi-auto, box magazine, side-saddle shells.'],
+   s:[[12,73,4,2.4],[15,80,6,2.0],[20,87,7,1.8],[22,120,8,1.6]],
+   parts:[['Smoothbore barrel','Barrel',1],['Receiver','Receiver',1],['Action and tube springs','Springs',2],['Stock and pump','Furniture',2]],scrap:24,gp:2,
+   mods:['Full choke','Extended mag','Drum mag','Red-dot','Padded stock','Hair trigger','Incendiary rounds']},
+  {id:'ar',name:'Assault rifle',role:'All-rounder. Good damage at every range and a big magazine.',noise:60,range:46,ammo:'5.56',
+   models:['Scrap Carbine','AR Field','Warden AR','Ghost M4'],
+   looks:['Mismatched upper and lower, taped mag.','Black rifle with a carry handle and plastic handguard.','Blue handguard, flat top and red-dot.','Scope, suppressor, black and orange furniture.'],
+   s:[[18,575,22,2.0],[22,632,30,1.7],[29,687,36,1.5],[36,743,42,1.4]],
+   parts:[['Barrel','Barrel',1],['Upper and lower receiver','Receiver',1],['Buffer, bolt and mag springs','Springs',3],['Carry-handle sights','Optics',1],['Stock and handguard','Furniture',1]],scrap:30,gp:3,
+   mods:['Suppressor','Compensator','Extended mag','Drum mag','Red-dot','4× scope','Padded stock','Hair trigger','Incendiary rounds','Hollow points']},
+  {id:'hunt',name:'Hunting rifle',role:'Long-range, one shot at a time. Bullets pass through a whole line of zombies.',noise:85,range:75,ammo:'.308',pierce:[3,5,6,8],
+   models:['Bolt Junk .30','Hunting .308','Longshot Mk II','Widowmaker .338'],
+   looks:['Iron sights, split stock held with hose clamps.','Walnut stock, blued barrel, iron sights.','Blue laminate stock with a hunting scope.','Black chassis, big scope, muzzle brake and bipod.'],
+   s:[[120,55,4,2.8],[150,60,5,2.3],[195,65,5,2.1],[248,71,6,1.8]],
+   parts:[['Rifled barrel','Barrel',1],['Bolt and receiver','Receiver',1],['Firing-pin spring','Springs',1],['Sights or scope','Optics',1],['Stock','Furniture',1]],scrap:34,gp:3,
+   mods:['Suppressor','Extended mag','4× scope','Padded stock','Incendiary rounds','Hollow points']},
+  {id:'gl',name:'Grenade launcher',role:'Splash damage for packed hordes and brutes. Can hurt you up close.',noise:65,range:30,ammo:'40mm',splash:[4.0,4.8,5.4,6.0],
+   models:['Pipe Popper','M32 Field','Thumper Six','Cyclone MGL'],
+   looks:['Single pipe on a broom-handle stock.','Six-round drum, olive paint.','Blue drum with a ranging sight.','Black drum, hazard stripes, glowing sight.'],
+   s:[[104,65,3,3.0],[130,71,4,2.5],[169,77,5,2.3],[215,83,6,2.0]],
+   parts:[['Wide-bore barrel','Barrel',1],['Drum and frame','Receiver',1],['Drum springs','Springs',2],['Fuzes and propellant','Chem',2]],scrap:40,gp:4,
+   mods:['Padded stock','Red-dot']},
+  {id:'bow',name:'Crossbow',role:'Silent. Kills without alerting a horde, and you get most bolts back.',noise:6,range:55,ammo:'Bolts, 70% recoverable',pierce:[1,2,2,3],
+   models:['Bike-Wheel Bow','Hunter\'s Crossbow','Recurve Cross','Silent Partner'],
+   looks:['Car-spring limbs, bicycle-brake trigger.','Camo stock, aluminium rail.','Blue recurve limbs, red-dot.','Black compound cams, scope, orange string dampers.'],
+   s:[[96,42,1,0],[120,46,1,0],[156,50,1,0],[198,54,1,0]],
+   parts:[['Limbs and string','Springs',2],['Stock and rail','Furniture',2],['Sight','Optics',1]],scrap:16,gp:2,
+   mods:['Red-dot','4× scope','Incendiary rounds']},
+  {id:'melee',name:'Melee',role:'Silent and free. Each tier is a different tool: the axe cleaves up to three zombies per swing.',noise:4,range:2.2,ammo:'None',cleave:[1,1,1,3],
+   models:['Rebar','Machete','Spiked Bat','Fire Axe'],
+   looks:['Bent rebar with a taped handle.','Farm machete, leather-wrapped grip.','Baseball bat studded with nails, blue tape.','Red fire axe with a black and orange handle.'],
+   s:[[36,100,0,0],[45,109,0,0],[58,100,0,0],[74,86,0,0]],
+   parts:[['Handle','Furniture',1]],scrap:6,gp:0,mods:['Incendiary rounds']},
+];
+const COMPS=[
+  ['SPR','Springs','Recoil, mag and action springs. Used in magazines and triggers.'],
+  ['BAR','Barrels','Barrels and slides. Used in muzzle devices and tier upgrades.'],
+  ['REC','Receivers','Frames and bolts, the core of a gun. Needed to upgrade a tier.'],
+  ['OPT','Optics','Sights and scope glass. Used in red-dots and scopes.'],
+  ['FUR','Furniture','Stocks, grips and handles. Used in stocks and suppressor packing.'],
+  ['CHM','Chem','Propellant, fuzes and fuel. Used in special ammo and the chainsaw.'],
+];
+const YIELD=[
+  ['Rusted','×0.5','Corroded parts: each component has a 50% chance to survive.',1],
+  ['Field','×1','Full yield, as listed per class.',2],
+  ['Workshop','×1.5','Installed mods come back half the time.',3],
+  ['Military','×2','Installed mods always come back.',4],
+  ['Special','60 scrap, 8 parts, 1 Relic Core','A Relic Core upgrades another special weapon, Mk I to Mk II to Mk III.',5],
+];
+const MODS=[
+  ['Muzzle','Suppressor','1 Barrel, 1 Furniture, 20 scrap','Noise ×0.35, damage −5%','Sidearm, SMG, rifle, hunting rifle'],
+  ['Muzzle','Compensator','1 Barrel, 15 scrap','Spread −30%, recoil −30%','Sidearm, revolver, SMG, rifle'],
+  ['Muzzle','Full choke','1 Barrel, 10 scrap','Pellet spread −40%, range +35%','Shotgun'],
+  ['Magazine','Extended mag','2 Springs, 15 scrap','Magazine +50%','Most firearms'],
+  ['Magazine','Drum mag','4 Springs, 1 Receiver, 35 scrap','Magazine +150%, reload +40% slower','SMG, shotgun, rifle'],
+  ['Optic','Red-dot','1 Optics, 15 scrap','Spread −25%, range +15%','Everything but the hunting rifle'],
+  ['Optic','4× scope','2 Optics, 25 scrap','Range +50%, 15% chance of double damage','Rifle, hunting rifle, crossbow'],
+  ['Stock','Padded stock','2 Furniture, 10 scrap','Recoil −40%, move 15% faster while firing','SMG, shotgun, rifle, hunting rifle, launcher'],
+  ['Trigger','Hair trigger','2 Springs, 1 Receiver, 1 part','Fire rate +15%','Sidearm, revolver, SMG, shotgun, rifle'],
+  ['Ammo','Incendiary rounds','2 Chem, 10 scrap per load','Sets targets on fire: 8 damage/s for 3 s. Burning horde members scatter.','All but the launcher'],
+  ['Ammo','Hollow points','1 Chem, 15 scrap per load','Damage +20%, pierce −1','Sidearm, revolver, SMG, rifle, hunting rifle'],
+];
+const UPS=[
+  ['Rusted → Field','Repair','30 scrap, 1 part, 1 Springs','Rust and tape come off; the gun gets its first mod slot.',2],
+  ['Field → Workshop','Tune','90 scrap, 4 parts, 1 Receiver, 1 Barrel','Blue paint panels, rail and stencilled serial.',3],
+  ['Workshop → Military','Mil-spec rebuild','200 scrap, 10 parts, 2 Receivers, 1 Barrel, 1 Optics','Black polymer, hazard stripes, glowing sight.',4],
+];
+const DROPS=[
+  ['Common crate',[70,30,0,0,0]],['Rare crate',[0,60,40,0,0]],['Epic crate',[0,0,65,35,0]],['Airdrop',[0,0,0,85,15]],
+  ['Brute kill (10% drops a gun)',[0,0,100,0,0]],['Horde destroyed (35% drops a gun)',[0,0,0,0,100]],['The Abomination',[0,0,0,0,100]],
+];
+const SPECIALS=[
+  {id:'lullaby',name:'Lullaby',base:'side',cls:'Sidearm',stats:[['DMG',70],['RPM',150],['MAG',8],['NOISE','0 m']],
+   mech:'Completely silent. Kills on horde members that haven\'t spotted you don\'t spread the alert, and it does double damage to anything unaware.',
+   look:'Bone-white ceramic slide with lace engraving and a music-box crank on the side.',src:'Church altar'},
+  {id:'piper',name:'Pied Piper',base:'gl',cls:'Launcher',stats:[['DMG',300],['RADIUS','7 m'],['MAG',1],['LURE','120 m']],
+   mech:'Fires a screaming siren canister. Every horde within 120 m drops what it\'s doing and walks to it. After 12 s it detonates. The ambush tool.',
+   look:'Brass gramophone horn for a barrel, pressure gauges and a red siren dome.',src:'Reward for destroying a horde'},
+  {id:'dawn',name:'Dawnbreaker',base:'shot',cls:'Shotgun',stats:[['DMG','18×10'],['RPM',80],['MAG',5],['BURN','12/s']],
+   mech:'Incendiary pellets. A burning zombie sets fire to any zombie within 1.5 m, so fire spreads through a packed horde. Burns half as well in rain.',
+   look:'Sunburst-orange paint, a flare-gun drum and a scorched barrel.',src:'Gas station back office'},
+  {id:'thunder',name:'Grandpa\'s Thunder',base:'shot',cls:'Shotgun',stats:[['DMG',600],['RPM',90],['MAG',2],['PIERCE','All']],
+   mech:'Double-barrel 4-gauge slugs that go through every zombie in a line and knock brutes flat. The kick shoves you back 3 m.',
+   look:'Walnut stock with a gold inlay of a barn, comically fat barrels and a duct-taped recoil pad.',src:'Farmhouse cellar'},
+  {id:'lineman',name:'Lineman',base:'ar',cls:'Rifle',stats:[['DMG',45],['RPM',300],['CHAINS','4'],['AMMO','Battery']],
+   mech:'Shoots lightning that jumps to 4 more zombies (−20% per jump). In rain or storms it chains to 7 and hits 30% harder. The battery recharges instead of using ammo.',
+   look:'Built from an electric-fence charger, with ceramic insulators, a copper coil barrel and blue sparks.',src:'Top of a water tower'},
+  {id:'harvester',name:'Harvester',base:'melee',cls:'Melee',stats:[['DPS',180],['STAGGER','Brutes'],['FUEL','30 s'],['NOISE','55 m']],
+   mech:'A chainsaw. Continuous damage that staggers even brutes, but it\'s loud enough to pull a horde. Each Chem adds 30 s of fuel.',
+   look:'Red farm chainsaw with tractor-brand decals and a long bar wrapped in baling twine.',src:'Barn hayloft'},
+  {id:'lastword',name:'Last Word',base:'hunt',cls:'Hunting rifle',stats:[['DMG',300],['RPM',50],['MAG',4],['PIERCE',6]],
+   mech:'Each kill adds 20% damage, stacking 5 times until you reload. A kill with the last round puts 2 rounds back in the magazine.',
+   look:'Matte black with a long muzzle brake, a cracked scope and 47 tally marks scratched into the stock.',src:'Apartment rooftop'},
+  {id:'hive',name:'Hivemind',base:'smg',cls:'SMG',stats:[['DMG',12],['RPM',1000],['MAG',60],['BOUNCE','6 m']],
+   mech:'Every bullet ricochets once to the nearest other zombie within 6 m, at 60% damage. Turns a crowd into its own ammo.',
+   look:'Honeycomb barrel shroud, yellow-and-black striped polymer and a wax-sealed magazine.',src:'Dropped by the Abomination'},
+  {id:'digger',name:'Grave Digger',base:'bow',cls:'Crossbow',stats:[['DMG',220],['RADIUS','3.5 m'],['FUSE','2 s'],['NOISE','0 / 50 m']],
+   mech:'Bolts stick and blow up 2 s later. The shot is silent but the blast isn\'t, so you can set a trap and be gone before the horde arrives.',
+   look:'Shovel-blade stock, wrought-iron grave-fence limbs and bolts tipped with dynamite.',src:'Forest cabin'},
+];
+
+const $=id=>document.getElementById(id);
+const tv=k=>getComputedStyle(document.documentElement).getPropertyValue(k).trim();
+const dps=(c,t)=>{const s=c.s[t];return s[0]*(c.pellets||1)*s[1]/60;};
+const fmtDmg=(c,t)=>(c.pellets?`${c.s[t][0]}×${c.pellets}`:c.s[t][0]);
+
+/* ---------- weapon drawings: flat shapes with a heavy ink outline, coloured by tier ---------- */
+const PAL={
+  1:{metal:'#7d6656',metal2:'#5c4c40',wood:'#8a6a44',dark:'#3a312a',tape:'#b9b2a2',accent:'#a8977f',glow:'#d8c8a0'},
+  2:{metal:'#5a6264',metal2:'#3f4749',wood:'#7d5433',dark:'#24292a',tape:'#6a5a44',accent:'#79c252',glow:'#d6432f'},
+  3:{metal:'#4d575c',metal2:'#363e42',wood:'#3e7fae',dark:'#1f2528',tape:'#5fa8d3',accent:'#5fa8d3',glow:'#ff5040'},
+  4:{metal:'#2c2e31',metal2:'#1d1f21',wood:'#36393d',dark:'#141516',tape:'#f2a516',accent:'#f2a516',glow:'#c9a0ff'},
+};
+function shapes(cls,t,sp){
+  const S=[],R=(x,y,w,h,r)=>S.push(['r',x,y,w,h,r]),P=(p,r)=>S.push(['p',p,r]),C=(x,y,rad,r)=>S.push(['c',x,y,rad,r]),L=(a,b,c,d,w,r)=>S.push(['l',a,b,c,d,w,r]);
+  const tape=(x,y,w,h)=>{if(t===1)R(x,y,w,h,'tape');};
+  const reddot=(x,y)=>{R(x,y,22,10,'dark');C(x+16,y+5,2.6,'glow');};
+  const scope=(x,y,l)=>{R(x,y,l,10,'dark');R(x-6,y-2,10,14,'dark');R(x+l-4,y-2,10,14,'dark');R(x+l*.3,y+10,6,6,'metal2');R(x+l*.65,y+10,6,6,'metal2');};
+  const stripes=(x,y,w,h)=>{if(t===4)for(let i=0;i<w;i+=10)P([[x+i,y+h],[x+i+5,y+h],[x+i+10,y],[x+i+5,y]],'tape');};
+  switch(cls){
+    case 'side':
+      if(t===4)R(162,27,58,16,'metal2');
+      R(62,24,104,18,'metal');R(70,40,86,10,'metal2');P([[78,46],[104,46],[98,78],[70,78]],'wood');
+      R(100,50,26,3,'dark');R(124,44,3,10,'dark');R(164,28,8,10,'dark');
+      tape(76,58,26,5);tape(73,68,26,5);if(t>=3&&!sp)reddot(108,15);stripes(70,26,40,5);
+      if(t===3)R(120,26,40,6,'tape');break;
+    case 'rev':
+      R(112,28,t===1?50:(t===4?104:88),10,'metal');R(112,24,t===1?50:(t===4?104:88),5,'metal2');
+      if(t===4)for(let i=0;i<4;i++)R(196+i*5,25,2.5,6,'dark');
+      P([[66,24],[114,24],[114,48],[98,52],[66,46]],'metal');R(80,25,32,22,'metal2');L(86,28,86,44,2,'dark');L(96,28,96,44,2,'dark');L(106,28,106,44,2,'dark');
+      P([[66,44],[92,48],[84,80],[58,78]],'wood');P([[62,22],[70,16],[74,28]],'dark');R(90,50,20,3,'dark');
+      tape(62,58,26,5);tape(60,68,26,5);if(t===3)reddot(130,14);if(t===3)R(130,29,40,4,'tape');stripes(66,40,30,5);break;
+    case 'smg':
+      if(t===4)R(186,28,50,16,'metal2');
+      L(70,30,26,36,4,'dark');L(26,36,26,54,4,'dark');L(70,46,26,54,4,'dark');
+      R(68,24,96,24,'metal');R(162,31,26,9,'dark');P([[116,46],[132,46],[138,80],[122,82]],'metal2');
+      P([[84,46],[102,46],[96,74],[80,74]],'wood');R(146,46,10,20,'wood');
+      tape(70,30,8,14);tape(88,30,8,14);tape(118,60,16,5);if(t>=3)reddot(98,15);if(t===3)R(70,40,90,4,'tape');stripes(100,26,50,6);break;
+    case 'shot':{
+      const bl=t===1?96:120;
+      P([[6,34],[70,28],[70,46],[18,62],[6,60]],'wood');R(70,26,42,22,'metal');
+      R(112,27,bl,9,'metal');R(112,37,bl-18,7,'metal2');
+      if(t<4)R(140,35,42,13,'wood');else{R(96,46,14,24,'metal2');for(let i=0;i<4;i++)R(74+i*8,30,5,10,'glow');}
+      R(84,48,18,3,'dark');R(100,46,3,8,'dark');
+      if(t===3){for(let i=0;i<6;i++)R(126+i*14,21,9,6,'tape');reddot(76,15);}
+      tape(24,44,30,6);tape(150,36,16,12);stripes(16,40,40,6);break;}
+    case 'ar':
+      if(t===4)R(218,28,28,12,'metal2');
+      P([[6,30],[62,30],[62,44],[16,58],[6,58]],'wood');R(62,25,64,22,'metal');
+      if(t<=2){R(80,15,34,9,'metal2');R(84,12,4,6,'dark');}
+      P([[98,46],[114,46],[122,78],[106,80]],'metal2');P([[70,46],[84,46],[80,70],[66,70]],'dark');
+      R(126,25,58,17,t===3?'tape':'wood');R(184,30,36,6,'dark');R(178,17,4,12,'dark');
+      tape(100,58,18,5);tape(20,40,30,6);if(t===3)reddot(86,14);if(t===4)scope(76,11,50);stripes(130,27,50,6);break;
+    case 'hunt':
+      if(t===4){R(230,23,14,12,'dark');L(170,40,158,72,3,'dark');L(176,40,188,72,3,'dark');}
+      P([[4,40],[82,32],[88,46],[20,64],[4,62]],'wood');R(82,32,104,12,'wood');R(86,23,40,12,'metal');
+      L(114,30,106,44,4,'dark');C(106,46,4.5,'dark');R(126,25,t===4?104:110,7,'metal');R(98,44,14,3,'dark');
+      if(t<=2)R(222,19,3,8,'dark');if(t>=3)scope(92,8,t===4?66:54);
+      if(t===1){R(40,40,6,18,'tape');R(150,31,6,14,'tape');}stripes(22,44,40,6);break;
+    case 'gl':
+      P([[8,34],[56,34],[56,46],[18,58],[8,58]],'wood');R(56,30,32,18,'metal');
+      if(t===1){R(88,30,120,14,'metal');R(60,46,14,24,'wood');tape(120,30,10,14);tape(160,30,10,14);}
+      else{R(86,20,48,34,'metal2');C(98,30,4,'dark');C(110,30,4,'dark');C(122,30,4,'dark');C(98,44,4,'dark');C(110,44,4,'dark');C(122,44,4,'dark');
+        R(134,22,72,26,'metal');C(206,35,9,'dark');R(150,48,10,18,'wood');R(66,48,14,22,'dark');
+        if(t>=3)R(100,10,20,10,'dark');if(t>=3)C(116,15,2.6,'glow');}
+      if(t===3)R(134,22,72,5,'tape');stripes(140,40,60,6);break;
+    case 'bow':
+      P([[8,38],[124,32],[124,42],[22,58],[8,56]],'wood');R(124,32,92,7,'metal');
+      L(182,34,206,4,t===1?6:5,'metal2');L(182,38,206,68,t===1?6:5,'metal2');
+      if(t===4){C(206,6,6,'dark');C(206,66,6,'dark');}
+      L(206,4,150,35,1.6,'tape');L(206,68,150,35,1.6,'tape');
+      R(150,29,82,3,'dark');P([[232,26],[242,30.5],[232,35]],'metal');
+      P([[60,42],[76,42],[72,66],[58,66]],'dark');
+      tape(186,24,10,6);if(t>=3&&!sp)reddot(130,18);if(t===4)scope(128,16,40);stripes(30,40,40,6);break;
+    case 'melee':
+      if(t===1){L(20,64,226,22,7,'metal');for(let i=0;i<10;i++){const x=40+i*18;L(x,64-(x-20)*.2-4,x+4,64-(x-20)*.2+4,1.5,'dark');}R(14,58,34,12,'tape');}
+      else if(t===2){R(16,36,60,13,'wood');R(10,34,8,17,'dark');R(74,32,8,21,'dark');P([[82,33],[200,26],[228,38],[204,50],[82,49]],'metal');L(90,44,200,44,1.5,'dark');}
+      else if(t===3){P([[14,38],[60,36],[226,26],[232,40],[226,56],[60,46],[14,46]],'wood');R(14,36,40,12,'tape');
+        for(let i=0;i<9;i++){const x=120+i*12;L(x,30-(i%2)*2,x+4,20,2,'metal');L(x+5,52,x+9,62,2,'metal');}}
+      else{R(14,40,186,10,'wood');stripes(20,40,60,10);R(14,40,22,10,'tape');P([[186,20],[212,20],[230,45],[212,70],[196,70],[200,45]],'metal');P([[186,24],[168,32],[186,40]],'metal');}
+      break;
+  }
+  return S;
+}
+const SPAL={
+  lullaby:{metal:'#e8e2d0',metal2:'#c9c0aa',wood:'#b89ab0',dark:'#3a3238',tape:'#d8b8c8',glow:'#ffffff'},
+  piper:{metal:'#8a6a3a',metal2:'#6a4e2a',wood:'#5a3a22',dark:'#2a1e14',tape:'#c9a54a',glow:'#ff3a2a'},
+  dawn:{metal:'#d06a1c',metal2:'#a24e14',wood:'#5a2e1a',dark:'#2a1a12',tape:'#f2c21b',glow:'#ffde5a'},
+  thunder:{metal:'#4a4f52',metal2:'#33383a',wood:'#6a3e22',dark:'#1e1a16',tape:'#d9b24a',glow:'#d9b24a'},
+  lineman:{metal:'#3a4a52',metal2:'#2a363c',wood:'#c87a3a',dark:'#161c20',tape:'#e8e4d8',glow:'#7ad8ff'},
+  harvester:{metal:'#8a9090',metal2:'#5a6060',wood:'#b8322a',dark:'#1d1d1b',tape:'#e0c060',glow:'#f2a516'},
+  lastword:{metal:'#26282a',metal2:'#18191a',wood:'#2c2a28',dark:'#0f1010',tape:'#d8d0b8',glow:'#ff4030'},
+  hive:{metal:'#2a2a24',metal2:'#1c1c18',wood:'#e9c02a',dark:'#141410',tape:'#e9c02a',glow:'#ffd84a'},
+  digger:{metal:'#4a4640',metal2:'#33302c',wood:'#5a4a3a',dark:'#1a1714',tape:'#9a9488',glow:'#d6432f'},
+};
+function specialShapes(sp){
+  const base={lullaby:'side',piper:'gl',dawn:'shot',thunder:'shot',lineman:'ar',harvester:null,lastword:'hunt',hive:'smg',digger:'bow'}[sp];
+  let S=base?shapes(base,base==='hunt'||base==='ar'?3:2,true):[];
+  const R=(x,y,w,h,r)=>S.push(['r',x,y,w,h,r]),P=(p,r)=>S.push(['p',p,r]),C=(x,y,rad,r)=>S.push(['c',x,y,rad,r]),L=(a,b,c,d,w,r)=>S.push(['l',a,b,c,d,w,r]);
+  switch(sp){
+    case 'lullaby':C(70,34,7,'metal2');L(70,34,56,22,3,'dark');C(56,22,3,'tape');for(let i=0;i<5;i++)L(80+i*16,30,88+i*16,36,1.4,'tape');break;
+    case 'piper':S=S.filter(s=>!(s[0]==='c'&&s[1]===206));P([[200,22],[238,4],[238,68],[200,48]],'tape');L(238,4,238,68,3,'dark');C(70,38,7,'tape');C(70,38,3,'dark');C(112,14,7,'glow');break;
+    case 'dawn':for(let i=0;i<7;i++){const a=-1.4+i*.47;L(90,37,90+Math.cos(a)*22,37+Math.sin(a)*22,2,'tape');}C(90,37,6,'glow');break;
+    case 'thunder':S=[];P([[4,30],[74,24],[74,48],[16,64],[4,62]],'wood');R(74,22,40,28,'metal');R(114,20,118,13,'metal');R(114,33,118,13,'metal2');
+      R(30,40,26,8,'tape');R(4,34,10,26,'dark');R(88,48,20,3,'dark');C(232,26.5,5,'dark');C(232,39.5,5,'dark');break;
+    case 'lineman':for(let i=0;i<6;i++)R(188+i*7,27,4,14,'wood');C(150,22,5,'tape');C(166,22,5,'tape');
+      L(212,34,226,24,1.8,'glow');L(226,24,234,38,1.8,'glow');L(234,38,242,28,1.8,'glow');break;
+    case 'harvester':R(30,22,78,40,'wood');R(40,14,44,10,'dark');L(24,30,30,62,5,'dark');P([[108,30],[226,30],[236,38],[226,46],[108,46]],'metal');
+      for(let i=0;i<14;i++){const x=112+i*8.4;P([[x,30],[x+4,24],[x+8,30]],'dark');P([[x,46],[x+4,52],[x+8,46]],'dark');}R(50,36,40,10,'tape');L(130,36,200,40,2,'tape');break;
+    case 'lastword':for(let i=0;i<12;i++)L(16+i*4,46,18+i*4,56,1.2,'tape');L(14,51,64,47,1.2,'tape');R(222,22,22,13,'dark');C(160,13,3,'glow');break;
+    case 'hive':for(let r=0;r<2;r++)for(let i=0;i<6;i++)C(168+i*10+(r%2)*5,30+r*9,5,i%2?'wood':'dark');for(let i=0;i<6;i++)R(70+i*15,26,7,20,'wood');break;
+    case 'digger':P([[8,36],[34,30],[40,56],[14,62],[2,50]],'metal');L(182,34,206,4,6,'dark');L(182,38,206,68,6,'dark');R(232,27,10,8,'glow');L(242,31,248,24,1.4,'tape');break;
+  }
+  return S;
+}
+function drawGun(cv,S,pal){
+  const dpr=Math.min(2,window.devicePixelRatio||1),W=240,H=84;cv.width=W*dpr*2;cv.height=H*dpr*2;const g=cv.getContext('2d');g.scale(dpr*2,dpr*2);
+  g.lineJoin='round';g.lineCap='round';
+  for(const pass of [0,1])for(const s of S){
+    const col=pal[s[s.length-1]]||'#888';
+    g.beginPath();
+    if(s[0]==='r')g.rect(s[1],s[2],s[3],s[4]);
+    else if(s[0]==='p'){s[1].forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]));g.closePath();}
+    else if(s[0]==='c')g.arc(s[1],s[2],s[3],0,Math.PI*2);
+    else if(s[0]==='l'){g.moveTo(s[1],s[2]);g.lineTo(s[3],s[4]);
+      if(pass===0){g.strokeStyle='#0b0a09';g.lineWidth=s[5]+3.2;g.stroke();}else{g.strokeStyle=col;g.lineWidth=s[5];g.stroke();}continue;}
+    if(pass===0){g.strokeStyle='#0b0a09';g.lineWidth=3.2;g.stroke();}
+    else{g.fillStyle=col;g.fill();
+      if(s[0]==='r'&&s[4]>5){g.fillStyle='rgba(255,255,255,.16)';g.fillRect(s[1]+1,s[2]+1,s[3]-2,Math.min(2.5,s[4]*.25));g.fillStyle='rgba(0,0,0,.22)';g.fillRect(s[1]+1,s[2]+s[4]*.7,s[3]-2,s[4]*.3-1);}}
+  }
+}
+
+/* ---------- render ---------- */
+$('tierCards').innerHTML=TIERS.map(t=>`<article class="tier" style="--c:var(${t.c})"><h3>${t.k<5?'T'+t.k+' · ':''}${t.name}</h3>
+  <dl><dt>Damage</dt><dd>${t.mult}</dd><dt>Handling</dt><dd>${t.hand}</dd><dt>Mod slots</dt><dd>${t.slots}</dd><dt>Found in</dt><dd>${t.where}</dd></dl><p>${t.look}</p></article>`).join('');
+
+const tierCol=k=>`var(--t${k})`;
+$('legend').innerHTML=[1,2,3,4].map(k=>`<span><i style="background:${tierCol(k)}"></i>${TIERS[k-1].name}</span>`).join('');
+const maxD=Math.max(...CLASSES.map(c=>dps(c,3)));const axTop=Math.ceil(maxD/100)*100;
+$('bars').innerHTML=CLASSES.map(c=>`<div class="lbl">${c.name}</div><div class="grp">${[0,1,2,3].map(t=>{const v=dps(c,t);return `<div class="bar" style="width:calc(${(v/axTop*100).toFixed(1)}% - 34px);background:${tierCol(t+1)}"><em>${Math.round(v)}</em></div>`;}).join('')}</div>`).join('');
+$('axis').innerHTML=[0,axTop/4,axTop/2,axTop*3/4,axTop].map(v=>`<span>${v}</span>`).join('');
+
+$('tabs').innerHTML=CLASSES.map((c,i)=>`<button role="tab" id="tab-${c.id}" aria-controls="panel-${c.id}" aria-selected="${i===0}" tabindex="${i===0?0:-1}">${c.name}</button>`).join('');
+$('panels').innerHTML=CLASSES.map((c,i)=>{
+  const extra=t=>c.pierce?`<td class="n">${c.pierce[t]}</td>`:c.splash?`<td class="n">${c.splash[t]} m</td>`:c.cleave?`<td class="n">${c.cleave[t]}</td>`:'';
+  const exH=c.pierce?'<th class="n">Pierce</th>':c.splash?'<th class="n">Blast</th>':c.cleave?'<th class="n">Targets</th>':'';
+  const melee=c.id==='melee',bow=c.id==='bow';
+  return `<div class="panel" role="tabpanel" id="panel-${c.id}" aria-labelledby="tab-${c.id}" ${i?'hidden':''}>
+  <div class="panel-head"><h3>${c.name}</h3><p>${c.role}</p></div>
+  <div class="facts"><span class="fact"><b>Noise</b>${c.noise} m</span><span class="fact"><b>Range</b>${c.range} m</span><span class="fact"><b>Ammo</b>${c.ammo}</span></div>
+  <div class="guns">${c.models.map((m,t)=>`<div class="gun" style="--c:${tierCol(t+1)}"><canvas data-cls="${c.id}" data-t="${t+1}" role="img" aria-label="${m}, ${TIERS[t].name} tier: ${c.looks[t]}"></canvas>
+    <div class="nm"><span>${m}</span><span class="tag k${t+1}">${TIERS[t].name}</span></div></div>`).join('')}</div>
+  <div class="tbl"><table><thead><tr><th>Tier</th><th>Model and look</th><th class="n">Damage</th><th class="n">${melee?'Swings/min':'Rounds/min'}</th><th class="n">DPS</th>${melee?'':`<th class="n">Mag</th><th class="n">Reload</th>`}${exH}</tr></thead><tbody>
+  ${c.s.map((s,t)=>`<tr><td><span class="tag k${t+1}">${TIERS[t].name}</span></td><td class="model">${c.models[t]}<span class="look">${c.looks[t]}</span></td>
+    <td class="n">${fmtDmg(c,t)}</td><td class="n">${s[1]}</td><td class="n">${Math.round(dps(c,t))}</td>${melee?'':`<td class="n">${bow?'1':s[2]}</td><td class="n">${bow?'—':s[3].toFixed(1)+' s'}</td>`}${extra(t)}</tr>`).join('')}
+  </tbody></table></div>
+  <div class="split">
+    <div class="box"><h4>Breaks down into (Field tier)</h4><ul class="parts">
+      ${c.parts.map(p=>`<li><span>${p[0]}</span><span>${p[2]} ${p[1]}</span></li>`).join('')}
+      <li><span>Scrap metal</span><span>${c.scrap} scrap</span></li>${c.gp?`<li><span>Small parts</span><span>${c.gp} gun part${c.gp>1?'s':''}</span></li>`:''}</ul></div>
+    <div class="box"><h4>Mods it takes</h4><div class="chips">${c.mods.map(m=>`<span class="chip">${m}</span>`).join('')}</div>
+      <p class="note">${c.id==='side'?'Rusted and Field sidearms keep infinite ammo; Workshop and Military use 9mm.':c.id==='rev'?'Revolvers can\'t take a suppressor.':c.id==='bow'?'Already silent, so it never needs a suppressor.':c.id==='melee'?'Melee only takes incendiary wraps (2 Chem): the weapon burns for 30 s.':c.id==='gl'?'Shells hurt you inside 3 m.':'Noise drops to '+Math.round(c.noise*.35)+' m with a suppressor.'}</p></div>
+  </div></div>`;}).join('');
+const tabs=[...document.querySelectorAll('[role=tab]')];
+function sel(btn){tabs.forEach(b=>{const on=b===btn;b.setAttribute('aria-selected',on);b.tabIndex=on?0:-1;$(b.getAttribute('aria-controls')).hidden=!on;});}
+tabs.forEach((b,i)=>{b.addEventListener('click',()=>sel(b));b.addEventListener('keydown',e=>{const d=e.key==='ArrowRight'?1:e.key==='ArrowLeft'?-1:0;if(d){const n=tabs[(i+d+tabs.length)%tabs.length];sel(n);n.focus();}});});
+
+$('comps').innerHTML=COMPS.map(c=>`<div class="comp"><div class="ic">${c[0]}</div><div><h4>${c[1]}</h4><p>${c[2]}</p></div></div>`).join('')+
+  `<div class="comp"><div class="ic" style="border-color:var(--ts);color:var(--ts)">RC</div><div><h4>Relic Core</h4><p>Only from salvaging a special weapon. Raises another special's Mk level.</p></div></div>`;
+$('yield').innerHTML=YIELD.map(y=>`<tr><td><span class="tag ${y[3]<5?'k'+y[3]:'ks'}">${y[0]}</span></td><td class="n">${y[1]}</td><td>${y[2]}</td></tr>`).join('');
+$('modRows').innerHTML=MODS.map(m=>`<tr><td>${m[0]}</td><td class="model">${m[1]}</td><td>${m[2]}</td><td>${m[3]}</td><td>${m[4]}</td></tr>`).join('');
+$('upRows').innerHTML=UPS.map(u=>`<tr><td><span class="tag k${u[4]}">${u[0]}</span></td><td class="model">${u[1]}</td><td>${u[2]}</td><td>${u[3]}</td></tr>`).join('');
+$('dropRows').innerHTML=DROPS.map(d=>`<tr><td>${d[0]}</td>${d[1].map((v,i)=>`<td class="n ${v?'c'+(i<4?i+1:'s'):''}">${v?v+'%':'—'}</td>`).join('')}</tr>`).join('');
+
+const HP=[['Runner',28],['Walker',45],['Horde N1',34],['Horde N10',70],['Brute',380]];
+$('ttkRows').innerHTML=CLASSES.flatMap(c=>[1,3].map(t=>{const d=c.s[t][0]*(c.pellets||1);
+  return `<tr><td>${c.models[t]} <span class="tag k${t+1}">${TIERS[t].name}</span></td>${HP.map(h=>`<td class="n">${Math.ceil(h[1]/d)}</td>`).join('')}</tr>`;})).join('');
+
+$('spCards').innerHTML=SPECIALS.map(s=>`<article class="card"><canvas data-sp="${s.id}" role="img" aria-label="${s.name}: ${s.look}"></canvas>
+  <div class="top"><h3>${s.name}</h3><span class="base">Special ${s.cls}</span></div>
+  <div class="stats">${s.stats.map(x=>`<span class="fact"><b>${x[0]}</b>${x[1]}</span>`).join('')}</div>
+  <p>${s.mech}</p><p class="look">${s.look}</p><div class="src"><b>Found:</b> ${s.src}</div></article>`).join('');
+
+document.querySelectorAll('canvas[data-cls]').forEach(cv=>drawGun(cv,shapes(cv.dataset.cls,+cv.dataset.t),PAL[cv.dataset.t]));
+document.querySelectorAll('canvas[data-sp]').forEach(cv=>drawGun(cv,specialShapes(cv.dataset.sp),SPAL[cv.dataset.sp]));
+</script>
