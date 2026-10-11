@@ -842,9 +842,37 @@ const gun=new THREE.Group();gun.position.set(0,1.38,.62);pl.add(gun);
 const gunBody=mk(BOX(.12,.16,.8),M(0x1c1e1c,{metalness:.4,roughness:.5}),0,0,.2);gun.add(gunBody);
 
 /* hero model: loads hero.glb (rigged character) if it ships with the page, else keeps the box survivor */
-const HERO={ready:false,mixer:null,walk:null,root:null};
+const HERO={ready:false,mixer:null,root:null,acts:{},cur:null,hand:null,hitT:0,dead:false};
 const boxParts=pl.children.slice();
+// extra clips, each exported on its own copy of the same rig; matched to the hero skeleton by bone name
+const HERO_ANIMS={idle:'anim/idle.glb',walk:'anim/walk_shoot.glb',back:'anim/walk_back_shoot.glb',run:'anim/run.glb',hit:'anim/hit.glb',death:'anim/death.glb'};
 function toonGradient(){const d=new Uint8Array([70,70,70,255,150,150,150,255,255,255,255,255]);const t=new THREE.DataTexture(d,3,1,THREE.RGBAFormat);t.minFilter=t.magFilter=THREE.NearestFilter;t.needsUpdate=true;return t;}
+function stripRootMotion(clip,rootName){
+  // keep the hips' vertical bob, drop horizontal travel (the game moves the player itself)
+  for(const t of clip.tracks){
+    if(!t.name.endsWith('.position'))continue;const node=t.name.slice(0,-9);
+    if(rootName&&node!==rootName)continue;
+    const v=t.values,x0=v[0],z0=v[2];for(let i=0;i<v.length;i+=3){v[i]=x0;v[i+2]=z0;}
+  }
+  return clip;
+}
+function addHeroClip(name,clip){
+  if(!HERO.mixer||!clip)return;
+  clip=stripRootMotion(clip.clone(),HERO.rootBone);clip.name=name;
+  const a=HERO.mixer.clipAction(clip);
+  if(name==='hit'||name==='death'){a.setLoop(THREE.LoopOnce,1);a.clampWhenFinished=true;}
+  HERO.acts[name]=a;
+  if(name==='idle'&&HERO.cur===HERO.acts.walk&&!HERO.dead)heroPlay('idle',.3);
+}
+function heroPlay(name,fade){
+  const a=HERO.acts[name];if(!a||HERO.cur===a)return;
+  a.reset();a.setEffectiveWeight(1);a.play();
+  if(HERO.cur)HERO.cur.crossFadeTo(a,fade==null?.2:fade,false);
+  HERO.cur=a;
+}
+function heroHit(){if(!HERO.ready||HERO.dead||!HERO.acts.hit||HERO.hitT>0)return;HERO.hitT=1.2;const a=HERO.acts.hit;a.reset();a.setEffectiveWeight(.85);a.fadeIn(.06);a.play();setTimeout(()=>{if(a.isRunning())a.fadeOut(.25);},380);}
+function heroDeath(){if(!HERO.ready||!HERO.acts.death)return false;HERO.dead=true;if(HERO.acts.hit)HERO.acts.hit.stop();heroPlay('death',.12);return true;}
+function heroReset(){if(!HERO.ready)return;HERO.dead=false;HERO.hitT=0;HERO.mixer.stopAllAction();HERO.cur=null;heroPlay(HERO.acts.idle?'idle':'walk',0);}
 function setupHero(gltf){
   const root=gltf.scene;root.updateMatrixWorld(true);
   const b=new THREE.Box3().setFromObject(root);const h=(b.max.y-b.min.y)||1;const s=1.95/h;root.scale.setScalar(s);
@@ -865,11 +893,34 @@ function setupHero(gltf){
     if(sk){ol.bind(o.skeleton,o.bindMatrix);ol.bindMode=o.bindMode;}
     ol.position.copy(o.position);ol.quaternion.copy(o.quaternion);ol.scale.copy(o.scale);ol.frustumCulled=false;o.parent.add(ol);
   }
-  HERO.mixer=new THREE.AnimationMixer(root);
-  const clip=gltf.animations.find(a=>/walk/i.test(a.name))||gltf.animations[0];
-  if(clip){HERO.walk=HERO.mixer.clipAction(clip);HERO.walk.play();}
+  // skeleton landmarks: root bone (for root-motion stripping) and right hand (gun anchor)
+  root.traverse(o=>{if(!o.isBone)return;if(!HERO.rootBone&&!(o.parent&&o.parent.isBone))HERO.rootBone=o.name;
+    if(!HERO.hand&&/right.?hand|hand.?r(ight)?$|r_?hand/i.test(o.name))HERO.hand=o;});
+  HERO.mixer=new THREE.AnimationMixer(root);HERO.root=root;
+  const base=gltf.animations.find(a=>/walk/i.test(a.name))||gltf.animations[0];
+  if(base){addHeroClip('walk',base);if(/idle/i.test(base.name))HERO.acts.idle=HERO.acts.walk;}
   for(const p of boxParts)if(p!==gun)p.visible=false;
-  HERO.root=root;HERO.ready=true;
+  HERO.ready=true;heroPlay(HERO.acts.idle?'idle':'walk',0);
+  const L=new THREE.GLTFLoader();
+  for(const [k,url] of Object.entries(HERO_ANIMS))L.load(url,g=>{if(g.animations[0])addHeroClip(k,g.animations[0]);},undefined,()=>{});
+}
+const _hp=new V3();
+function updateHero(dt,moving,sprint,fwd,sp){
+  if(!HERO.ready)return;HERO.hitT-=dt;
+  if(!HERO.dead){
+    const A=HERO.acts;
+    if(!moving)heroPlay(A.idle?'idle':'walk',.25);
+    else if(sprint&&A.run)heroPlay('run',.18);
+    else if(fwd<-.3&&A.back)heroPlay('back',.2);
+    else heroPlay('walk',.2);
+    const c=HERO.cur;
+    if(c===A.walk||c===A.back)c.timeScale=A.idle?clamp(sp/6.5,.6,1.6):(moving?(sp/6.5)*1.15*(fwd<-.3?-1:1):0);
+    else if(c===A.run)c.timeScale=clamp(sp/10.5,.7,1.3);
+    else if(c)c.timeScale=1;
+  }
+  HERO.mixer.update(dt);
+  // keep the gun in the right hand, pointed where the player aims
+  if(HERO.hand){HERO.hand.getWorldPosition(_hp);pl.worldToLocal(_hp);gun.position.set(_hp.x*.6,_hp.y,Math.max(.25,_hp.z+.25)-player.recoil*2);gun.visible=!HERO.dead;}
 }
 if(THREE.GLTFLoader){try{new THREE.GLTFLoader().load('hero.glb',g=>{try{setupHero(g);}catch(e){console.warn('Hero model setup failed; using box survivor.',e);}},undefined,()=>{});}catch(e){}}
 
@@ -1309,7 +1360,7 @@ function explode(x,z,r,dmg,o){
   Sound.play('boom',clamp(1-pd/70,.2,1));rumble(clamp(1-pd/35,0,1),clamp(1-pd/50,0,1)*.7,350);
 }
 function hurtPlayer(d){
-  if(!player.alive)return;player.hp-=d;player.hurtT=.35;Sound.play('hurt');if(Math.random()<.4)decal(player.x+rand(-.4,.4),player.z+rand(-.4,.4),rand(.4,.7),0x5a0e0a,.7);S.shake=Math.max(S.shake,.2);burst(player.x,1.3,player.z,3,'blood',3);rumble(.6,.3,160);
+  if(!player.alive)return;player.hp-=d;player.hurtT=.35;Sound.play('hurt');heroHit();if(Math.random()<.4)decal(player.x+rand(-.4,.4),player.z+rand(-.4,.4),rand(.4,.7),0x5a0e0a,.7);S.shake=Math.max(S.shake,.2);burst(player.x,1.3,player.z,3,'blood',3);rumble(.6,.3,160);
   if(player.hp<=0){player.hp=0;die();}
 }
 
@@ -1674,14 +1725,7 @@ function updatePlayer(dt){
   plLegs[0].rotation.x=sw*.7;plLegs[1].rotation.x=-sw*.7;
   player.recoil=Math.max(0,player.recoil-dt);
   pl.position.set(player.x,moving&&!HERO.ready?Math.abs(Math.cos(player.walk))*.07:0,player.z);pl.rotation.y=player.yaw;gun.position.z=.62-player.recoil*2;
-  if(HERO.ready){
-    if(HERO.walk){
-      // play the walk while moving, playing it backwards when backpedalling against the aim
-      const fwd=moving?(mx*Math.sin(player.yaw)+mz*Math.cos(player.yaw))/(ml||1):1;
-      HERO.walk.timeScale=moving?(sp/6.5)*1.15*(fwd<-.3?-1:1):0;
-    }
-    HERO.mixer.update(dt);
-  }
+  if(HERO.ready)updateHero(dt,moving,sprint,moving?(mx*Math.sin(player.yaw)+mz*Math.cos(player.yaw))/(ml||1):1,sp);
   player.hurtT-=dt;
   // prompt
   const c=nearestCrate();let ps='';
@@ -1768,7 +1812,7 @@ function updateCamera(dt){
 
 /* ================= LIFECYCLE ================= */
 function die(){
-  player.alive=false;S.over=true;pl.rotation.x=-Math.PI/2;pl.position.y=.3;burst(player.x,1,player.z,20,'blood',6);rumble(1,1,700);
+  player.alive=false;S.over=true;if(!heroDeath()){pl.rotation.x=-Math.PI/2;pl.position.y=.3;}burst(player.x,1,player.z,20,'blood',6);rumble(1,1,700);
   const nights=Math.max(0,S.wave-(S.phase==='night'?1:0));
   const best=Math.max(store.get('deadacre.best',0),nights);store.set('deadacre.best',best);
   setTimeout(()=>{$('stNights').textContent=nights;$('stKills').textContent=S.kills;$('stCrates').textContent=S.looted;
@@ -1788,7 +1832,7 @@ function resetGame(){
   Object.assign(base,{wallLv:1,turrets:0,turretLv:1,spikeLv:0,infLv:0,floods:0,radar:0});
   for(const s of segs){s.maxHp=WALL_HP[1];s.open=false;s.openAmt=0;}applyWalls(true);applyTurrets();applyFloods();
   Object.assign(player,{x:0,z:2,vx:0,vz:0,kx:0,kz:0,yaw:Math.PI,hp:100,maxHp:100,st:100,alive:true,scrap:40,parts:0,med:1,gren:0,weapon:'pistol',fireCd:0,reloadT:0,hurtT:0,acidT:0,recoil:0});
-  resetInv();pl.rotation.x=0;gunBody.scale.z=WEAP.pistol.len/.8;gunBody.position.z=WEAP.pistol.len/2-.2;
+  resetInv();pl.rotation.x=0;heroReset();gunBody.scale.z=WEAP.pistol.len/.8;gunBody.position.z=WEAP.pistol.len/2-.2;
   Object.assign(S,{paused:false,menu:false,over:false,phase:'day',dayT:75,wave:0,queue:[],spawnT:0,daySpawnT:14,kills:0,looted:0,shake:0,env:0,envT:0});
   spawnCrates(12);refreshSlots();toasts.innerHTML='';
   setWeather('clear');W.rain=W.ash=W.fog=W.cloud=0;W.wet=0;W.flash=0;for(const d of decals)d.m.visible=false;
@@ -1832,7 +1876,7 @@ function frame(now){
     mapT-=dt;if(mapT<=0){mapT=.12;drawMinimap();}
     $('vignette').style.opacity=player.hurtT>0?Math.min(1,player.hurtT*2.5):0;
     crossT-=dt;$('crosshair').classList.toggle('hit',crossT>0);
-  }else if(S.over){updateZombies(dt);updateProps(dt);updateDoors(dt);updateWorld(dt);updateWeather(dt,player.x,player.z-2);updateEnv(dt);}
+  }else if(S.over){if(HERO.ready)HERO.mixer.update(dt);updateZombies(dt);updateProps(dt);updateDoors(dt);updateWorld(dt);updateWeather(dt,player.x,player.z-2);updateEnv(dt);}
   else if(!S.running){idleA+=dt*.05;camera.position.set(Math.sin(idleA)*34,22,Math.cos(idleA)*34);camera.lookAt(0,0,0);updateWorld(dt);updateDoors(dt);updateWeather(dt,0,0);updateEnv(dt);
     sun.position.set(22,40,12);sun.target.position.set(0,0,0);}
   else if(gradePass)gradePass.uniforms.time.value=now/1000;
