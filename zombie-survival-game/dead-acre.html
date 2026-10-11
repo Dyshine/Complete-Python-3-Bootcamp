@@ -264,7 +264,8 @@ kbd.pl{border-radius:3px;width:auto;padding:0 6px;background:var(--bone)}
         <h3>Keyboard &amp; mouse</h3>
         <div class="keys">
           <kbd>W A S D</kbd><span>Move · <b>Shift</b> to sprint</span>
-          <kbd>Mouse</kbd><span>Aim · hold left button to fire</span>
+          <kbd>Mouse</kbd><span>Look and aim · hold left button to fire</span>
+          <kbd>V</kbd><span>Third-person / top-down camera</span>
           <kbd>1–5 / Q</kbd><span>Switch weapon · <b>R</b> reload</span>
           <kbd>E</kbd><span>Loot crates, open gates, kick doors</span>
           <kbd>B</kbd><span>Base workshop (inside walls)</span>
@@ -277,7 +278,7 @@ kbd.pl{border-radius:3px;width:auto;padding:0 6px;background:var(--bone)}
         <h3>Xbox controller</h3>
         <div class="keys">
           <kbd>L stick</kbd><span>Move · click to sprint</span>
-          <kbd>R stick</kbd><span>Aim</span>
+          <kbd>R stick</kbd><span>Look and aim</span>
           <kbd>RT / LT</kbd><span>Fire · throw grenade</span>
           <kbd class="pb pa">A</kbd><span>Loot, gates, doors</span>
           <kbd class="pb px">X</kbd><span>Reload</span>
@@ -866,7 +867,9 @@ function kFinish(K,hw,hd,h,kind,loot){
 function updateRoofs(){const px=player.x,pz=player.z;
   for(const b of BUILDS){const dx=px-b.x,dz=pz-b.z;let hide=false;
     if(dx*dx+dz*dz<1600){const c=Math.cos(b.rot),s=Math.sin(b.rot),lx=dx*c-dz*s,lz=dx*s+dz*c;
-      hide=(Math.abs(lx)<b.hw+.5&&Math.abs(lz)<b.hd+.5)||(Math.abs(dx)<b.ex+.7&&dz<b.ez&&dz>-(b.ez+b.h*.64+.5));}
+      hide=(Math.abs(lx)<b.hw+.5&&Math.abs(lz)<b.hd+.5);
+      if(!hide&&TP){const cx=camera.position.x-b.x,cz=camera.position.z-b.z,clx=cx*c-cz*s,clz=cx*s+cz*c;hide=Math.abs(clx)<b.hw+1.2&&Math.abs(clz)<b.hd+1.2;}
+      else if(!hide)hide=Math.abs(dx)<b.ex+.7&&dz<b.ez&&dz>-(b.ez+b.h*.64+.5);}
     if(b.roof.visible===hide)b.roof.visible=!hide;}
 }
 function updateSpin(dt){for(const s of SPIN)s.g.rotation.z+=dt*(.6+W.wind*3.2)*s.k;}
@@ -2961,7 +2964,7 @@ $('menu').addEventListener('click',e=>{
   }
   Sound.play('build');rumble(.2,.3,80);renderMenu();updateHUD();refreshSlots();
 });
-function openMenu(){if(!S.running||S.over)return;if(!inBase(player.x,player.z)){toast('Get inside your walls to use the workshop');return;}S.menu=true;$('menu').hidden=false;document.body.classList.remove('playing');renderMenu();}
+function openMenu(){if(!S.running||S.over)return;unlockMouse();if(!inBase(player.x,player.z)){toast('Get inside your walls to use the workshop');return;}S.menu=true;$('menu').hidden=false;document.body.classList.remove('playing');renderMenu();}
 function closeMenu(){S.menu=false;$('menu').hidden=true;setPadFocus(null);if(!isTouch&&!pad.active)document.body.classList.add('playing');}
 
 /* ================= PHASES ================= */
@@ -3012,6 +3015,7 @@ window.addEventListener('keydown',e=>{
   if(e.code==='KeyM'){toggleMute();return;}
   if(e.code==='KeyB'){if(S.menu)closeMenu();else if(!S.paused)openMenu();return;}
   if(S.paused||S.menu)return;
+  if(e.code==='KeyV'){setView(!TP);return;}
   const n=['Digit1','Digit2','Digit3','Digit4','Digit5','Digit6','Digit7','Digit8','Digit9','Digit0'].indexOf(e.code);if(n>=0)setWeapon(SLOTS[n]);
   if(e.code==='KeyQ')cycleWeapon(1);
   if(e.code==='KeyR')startReload();
@@ -3026,8 +3030,9 @@ let lastMouse={x:0,y:0};
 window.addEventListener('mousemove',e=>{mouse.x=e.clientX;mouse.y=e.clientY;
   if(pad.active&&Math.hypot(e.clientX-lastMouse.x,e.clientY-lastMouse.y)>8){setPadActive(false);if(S.running&&!S.menu&&!S.paused&&!S.over)document.body.classList.add('playing');}
   lastMouse={x:e.clientX,y:e.clientY};
-  if(!pad.active){const c=$('crosshair');c.style.left=e.clientX+'px';c.style.top=e.clientY+'px';}});
-stage.addEventListener('mousedown',e=>{if(e.button===0){mouseDown=true;setPadActive(false);}Sound.init();});
+  if(TP){if(S.running&&!S.paused&&!S.menu&&!S.over)tpLook(e.movementX||0,e.movementY||0);}
+  else if(!pad.active){const c=$('crosshair');c.style.left=e.clientX+'px';c.style.top=e.clientY+'px';}});
+stage.addEventListener('mousedown',e=>{if(e.button===0){mouseDown=true;setPadActive(false);}Sound.init();if(S.running&&!S.paused&&!S.menu&&!S.over)lockMouse();});
 window.addEventListener('mouseup',e=>{if(e.button===0)mouseDown=false;});
 stage.addEventListener('wheel',e=>{if(S.running&&!S.paused&&!S.menu)cycleWeapon(e.deltaY>0?1:-1);},{passive:true});
 stage.addEventListener('contextmenu',e=>e.preventDefault());
@@ -3055,7 +3060,7 @@ function interact(){
   if(inBase(player.x,player.z))openMenu();
 }
 function nearestCrate(){let best=null,bd=2.6;for(const c of crates){if(c.opened)continue;const d=Math.hypot(c.x-player.x,c.z-player.z);if(d<bd){bd=d;best=c;}}return best;}
-function togglePause(){if(S.over)return;S.paused=!S.paused;$('pauseScreen').hidden=!S.paused;document.body.classList.toggle('playing',!S.paused&&!isTouch&&!pad.active);mouseDown=false;
+function togglePause(){if(S.over)return;S.paused=!S.paused;if(S.paused)unlockMouse();$('pauseScreen').hidden=!S.paused;document.body.classList.toggle('playing',!S.paused&&!isTouch&&!pad.active);mouseDown=false;
   if(S.paused&&pad.active)setPadFocus($('resumeBtn'));else if(!S.paused)setPadFocus(null);}
 function toggleMute(){const m=Sound.toggle();$('muteBtn').textContent=m?'Unmute sound':'Mute sound';toast(m?'Sound off':'Sound on');}
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&S.running&&!S.over&&!S.paused&&!S.menu)togglePause();});
@@ -3125,6 +3130,7 @@ function updatePlayer(dt){
   if(keys.KeyW||keys.ArrowUp)mz-=1;if(keys.KeyS||keys.ArrowDown)mz+=1;if(keys.KeyA||keys.ArrowLeft)mx-=1;if(keys.KeyD||keys.ArrowRight)mx+=1;
   mx+=touch.mx+pad.lx;mz+=touch.mz+pad.ly;
   const ml=Math.hypot(mx,mz);if(ml>1){mx/=ml;mz/=ml;}
+  if(TP){const fx=Math.sin(camYaw),fz=Math.cos(camYaw),wx=-fz*mx-fx*mz,wz=fx*mx-fz*mz;mx=wx;mz=wz;}
   const moving=ml>.1;
   const dep=depthAt(player.x,player.z),wasSwim=player.swim;player.swim=dep>1.25;
   if(player.swim&&!wasSwim)toast('Swimming: you can\'t shoot, and stamina drains. Infected won\'t follow you into deep water.');
@@ -3140,7 +3146,8 @@ function updatePlayer(dt){
   for(const s of segs){if(!solidSeg(s))continue;if(Math.abs(player.x-s.cx)>4.5||Math.abs(player.z-s.cz)>4.5)continue;collideSeg(player,.5,s);}
   doorCollide(player,.5,1.2);
   // aim
-  if(pad.active){const rm=Math.hypot(pad.rx,pad.ry);if(rm>.25)aim.set(player.x+pad.rx/rm*12,1.2,player.z+pad.ry/rm*12);else if(moving)aim.set(player.x+mx/ml*12,1.2,player.z+mz/ml*12);else aim.set(player.x+Math.sin(player.yaw)*12,1.2,player.z+Math.cos(player.yaw)*12);}
+  if(TP){const ad=aimDist();aim.set(player.x+Math.sin(camYaw)*ad,1.2,player.z+Math.cos(camYaw)*ad);}
+  else if(pad.active){const rm=Math.hypot(pad.rx,pad.ry);if(rm>.25)aim.set(player.x+pad.rx/rm*12,1.2,player.z+pad.ry/rm*12);else if(moving)aim.set(player.x+mx/ml*12,1.2,player.z+mz/ml*12);else aim.set(player.x+Math.sin(player.yaw)*12,1.2,player.z+Math.cos(player.yaw)*12);}
   else if(isTouch){if(touch.am>.2){aim.set(player.x+touch.ax*12,1.2,player.z+touch.az*12);}else if(moving){aim.set(player.x+mx*12,1.2,player.z+mz*12);}}
   else{ndc.set(mouse.x/innerWidth*2-1,-(mouse.y/innerHeight)*2+1);aimPlane.constant=-(1.2+gH(player.x,player.z));ray.setFromCamera(ndc,camera);ray.ray.intersectPlane(aimPlane,aim);}
   player.yaw=Math.atan2(aim.x-player.x,aim.z-player.z);
@@ -3238,21 +3245,61 @@ function updateEnv(dt){
   for(const f of floods)f.intensity=base.floods?lerp(.15,1.7,v):0;
 }
 const camGoal=new V3();let camGY=0;
+/* ---------- third-person chase camera (default) · V switches to the classic top-down view ---------- */
+let TP=!isTouch&&store.get('deadacre.view','tp')==='tp';
+let camYaw=Math.PI,camPitch=.3;const TPD=4.8,TP_SENS=.0024;
+const _cp=new V3(),_cd=new V3(),_ct=new V3();
+const aimDist=()=>lerp(28,5,clamp((camPitch+.12)/1.07,0,1));
+function setView(tp){
+  TP=tp&&!isTouch;store.set('deadacre.view',TP?'tp':'top');camera.near=TP?.15:.5;camera.updateProjectionMatrix();
+  if(TP){camYaw=player.yaw;lockMouse();}else{if(document.pointerLockElement)document.exitPointerLock();const c=$('crosshair');c.style.left=mouse.x+'px';c.style.top=mouse.y+'px';}
+  toast(TP?'Third-person view: move the mouse to look. V for top-down.':'Top-down view. V for third-person.');
+}
+function lockMouse(){if(!TP||document.pointerLockElement||!stage.requestPointerLock)return;try{const r=stage.requestPointerLock();if(r&&r.catch)r.catch(()=>{});}catch(e){}}
+function unlockMouse(){if(document.pointerLockElement&&document.exitPointerLock)document.exitPointerLock();}
+// losing the pointer lock (Esc) pauses, like Esc does in top-down
+document.addEventListener('pointerlockchange',()=>{if(!document.pointerLockElement&&TP&&S.running&&!S.over&&!S.menu&&!S.paused)togglePause();});
+function tpLook(dx,dy){camYaw-=dx*TP_SENS;camPitch=clamp(camPitch+dy*TP_SENS,-.12,.95);}
+function camBlocked(x,y,z){
+  if(y<gH(x,z)+.35)return true;let hit=false;
+  nearObs(x,z,.3,o=>{if(!hit&&Math.hypot(o.x-x,o.z-z)<o.r+.3)hit=true;});
+  if(!hit&&Math.abs(x)<BR+2&&Math.abs(z)<BR+2&&y<WALL_H[base.wallLv]+.6)for(const sg of segs)if(solidSeg(sg)&&segDist(sg,x,z)<.45){hit=true;break;}
+  return hit;
+}
+function updateCameraTP(dt){
+  if(!document.pointerLockElement&&!pad.active){const ex=mouse.x/innerWidth;if(ex<.05)camYaw+=dt*2.2;else if(ex>.95)camYaw-=dt*2.2;}
+  if(pad.active){camYaw-=pad.rx*2.8*dt;camPitch=clamp(camPitch+pad.ry*1.8*dt,-.12,.95);}
+  const fx=Math.sin(camYaw),fz=Math.cos(camYaw),rx=-Math.cos(camYaw),rz=Math.sin(camYaw);
+  const gy=gH(player.x,player.z)+(player.swim?depthAt(player.x,player.z)-1.35:0);
+  camGY+=(gy-camGY)*Math.min(1,dt*8);
+  _ct.set(player.x+rx*.75,camGY+1.75,player.z+rz*.75);
+  const cp=Math.cos(camPitch),sp=Math.sin(camPitch);_cd.set(fx*cp,-sp,fz*cp);
+  // pull the camera in front of walls, trees and hillsides
+  let d=TPD;for(let t=.6;t<=TPD;t+=.3){if(camBlocked(_ct.x-_cd.x*t,_ct.y-_cd.y*t,_ct.z-_cd.z*t)){d=Math.max(.6,t-.35);break;}}
+  _cp.set(_ct.x-_cd.x*d,_ct.y-_cd.y*d,_ct.z-_cd.z*d);
+  camera.position.lerp(_cp,Math.min(1,dt*14));
+  if(S.shake>0){camera.position.x+=rand(-1,1)*S.shake*.22;camera.position.y+=rand(-1,1)*S.shake*.18;S.shake=Math.max(0,S.shake-dt*2.2);}
+  camera.lookAt(camera.position.x+_cd.x,camera.position.y+_cd.y,camera.position.z+_cd.z);
+  // the crosshair marks where the gun is actually pointing
+  const ad=aimDist(),ax=player.x+fx*ad,az=player.z+fz*ad;projV.set(ax,gH(ax,az)+1.3,az).project(camera);
+  const c=$('crosshair');c.style.left=((projV.x+1)/2*innerWidth)+'px';c.style.top=((1-projV.y)/2*innerHeight)+'px';
+}
 function updateCamera(dt){
+  if(TP)updateCameraTP(dt);else{
   const look=isTouch?0:.18;
   camTarget.set(player.x+(aim.x-player.x)*look,0,player.z+(aim.z-player.z)*look);
   camGY+=(gH(camTarget.x,camTarget.z)-camGY)*Math.min(1,dt*3);
   camGoal.set(camTarget.x+CAM_OFF.x,CAM_OFF.y+camGY,camTarget.z+CAM_OFF.z);
   camera.position.lerp(camGoal,Math.min(1,dt*6));
   if(S.shake>0){camera.position.x+=rand(-1,1)*S.shake*.6;camera.position.z+=rand(-1,1)*S.shake*.6;S.shake=Math.max(0,S.shake-dt*2.2);}
-  camera.lookAt(camera.position.x-CAM_OFF.x,camera.position.y-CAM_OFF.y,camera.position.z-CAM_OFF.z);
+  camera.lookAt(camera.position.x-CAM_OFF.x,camera.position.y-CAM_OFF.y,camera.position.z-CAM_OFF.z);}
   sun.position.set(player.x+22,40,player.z+12);sun.target.position.set(player.x,0,player.z);
   {const fh=gH(player.x,player.z);flash.position.set(player.x,2.4+fh,player.z);flash.target.position.set(player.x+Math.sin(player.yaw)*12,fh,player.z+Math.cos(player.yaw)*12);}
 }
 
 /* ================= LIFECYCLE ================= */
 function die(){
-  player.alive=false;S.over=true;if(!heroDeath()){pl.rotation.x=-Math.PI/2;pl.position.y=.3;}burst(player.x,1,player.z,20,'blood',6);rumble(1,1,700);
+  unlockMouse();player.alive=false;S.over=true;if(!heroDeath()){pl.rotation.x=-Math.PI/2;pl.position.y=.3;}burst(player.x,1,player.z,20,'blood',6);rumble(1,1,700);
   const nights=Math.max(0,S.wave-(S.phase==='night'?1:0));
   const best=Math.max(store.get('deadacre.best',0),nights);store.set('deadacre.best',best);
   setTimeout(()=>{$('stNights').textContent=nights;$('stKills').textContent=S.kills;$('stCrates').textContent=S.looted;
@@ -3261,6 +3308,7 @@ function die(){
     $('overScreen').hidden=false;document.body.classList.remove('playing');if(pad.active)setPadFocus($('againBtn'));},1400);
 }
 function resetGame(){
+  camYaw=Math.PI;camPitch=.3;camera.near=TP?.15:.5;camera.updateProjectionMatrix();
   for(const z of zombies)removeZombie(z);zombies.length=0;
   for(const c of crates)scene.remove(c.g);crates.length=0;
   for(const p of pickups)scene.remove(p.m);pickups.length=0;
