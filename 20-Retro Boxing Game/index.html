@@ -238,6 +238,12 @@ const TYPES = {
              pal: pal('c', { hair:'#100810', hairStyle:'flattop', pants:'#282878', belt:'#f8c800', shoes:'#f8c800', gloves:'#f8c800' }) }
 };
 const PLAYER_PAL = pal('a', { hair:'#6c3418', band:'#d82020', shirt:'#f0f0f0', pants:'#3058b0', shoes:'#d83030', gloves:'#e02828' });
+/* Jack Johnson, heavyweight champion 1908-1915: shaved head, gold-tooth grin, long white trunks, flag sash, leather gloves, high boots */
+const JACK_PAL = pal('c', { skin:'#94583a', hairStyle:'bald', goldTooth:true, pants:'#ece6d4', shorts:true, belt:'#2848a8', beltStars:true, sash:'#c82830', boots:true, shoes:'#1c1820', gloves:'#d8a868' });
+const FIGHTERS = [
+  { name:'DUKE', full:'DUKE',         tag:'STREET BRAWLER',      pal:PLAYER_PAL, bulk:0, hp:100, power:1,   speed:1,    stats:[3, 3, 4] },
+  { name:'JACK', full:'JACK JOHNSON', tag:'THE GALVESTON GIANT', pal:JACK_PAL,   bulk:2, hp:115, power:1.2, speed:0.9,  stats:[5, 4, 3] }
+];
 
 const STAGES = [
   { name:'DOWNTOWN',   sub:'MIDNIGHT ON MAIN STREET', len:1700, bg:'city',  song:0, seed:11,
@@ -339,7 +345,7 @@ let state = 'title', stageIdx = 0, stage = STAGES[0], camX = 0, locked = false, 
 let enemies = [], sparks = [], parts = [], floats = [];
 let score = 0, hiscore = 0, lives = 3, timer = 0, shakeT = 0, shakeMag = 0, hitstop = 0, goT = 0;
 let paused = false, focusEnemy = null, frameN = 0, crowdHype = 0, banner = null, player = null;
-let props = [], pickups = [], money = 0, shopSel = 0, shopMsg = null;
+let props = [], pickups = [], money = 0, shopSel = 0, shopMsg = null, pick = 0;
 try { hiscore = +localStorage.getItem('ko-alley-hi') || 0; } catch (_) {}
 function saveHi(){ if (score > hiscore) { hiscore = score; try { localStorage.setItem('ko-alley-hi', hiscore); } catch (_) {} } }
 
@@ -347,14 +353,15 @@ function makeFighter(o){
   return Object.assign({ x:0, y:GROUND, z:0, vx:0, vy:0, face:1, state:'idle', t:0, hp:100, maxHp:100,
     invul:0, cool:60, flashT:0, bulk:0, power:1, move:null, mStart:0, hitDone:false, downTime:50 }, o);
 }
-function makePlayer(){
-  return makeFighter({ isPlayer:true, pal:PLAYER_PAL, name:'DUKE', stars:0, combo:0, queued:null, maxHp:100, hp:100,
+function makePlayer(fi = FIGHTERS[0]){
+  return makeFighter({ isPlayer:true, fighter:fi, pal:fi.pal, name:fi.name, bulk:fi.bulk, stars:0, combo:0, queued:null, maxHp:fi.hp, hp:fi.hp,
     up:{ power:0, stamina:0, speed:0, chin:0, stars:0 } });
 }
 function applyUpgrades(p){
-  p.power = 1 + p.up.power * 0.15;
-  p.maxHp = 100 + p.up.stamina * 20;
-  p.speed = 1.9 * (1 + p.up.speed * 0.12);
+  const fi = p.fighter;
+  p.power = fi.power * (1 + p.up.power * 0.15);
+  p.maxHp = fi.hp + p.up.stamina * 20;
+  p.speed = 1.9 * fi.speed * (1 + p.up.speed * 0.12);
   p.chin = 1 - p.up.chin * 0.1;
 }
 function makeEnemy(kind, x){
@@ -597,14 +604,19 @@ function drawBoxer(f){
     if (st === 'hit') { lean = -3; fg = { x:5, y:-31, w:6, h:7 }; bg = { x:-1, y:-36, w:6, h:6 }; arm = [{ x:2, y:-30, w:4, h:3 }]; }
     if (st === 'win') { fg = { x:-1, y:-62, w:7, h:7 }; arm = [{ x:0, y:-55, w:3, h:22 }]; bg = { x:3, y:-38, w:6, h:6 }; }
     // legs and shoes
-    A(0, -5 - legA, -14 + b, 4, 11 - b, P.pants); A(0, 1 + legA, -14 + b, 4, 11 - b, P.pants);
-    A(0, -6 - legA, -3, 6, 3, P.shoes); A(0, 1 + legA, -3, 7, 3, P.shoes);
+    const legC = P.shorts ? P.skin : P.pants;
+    A(0, -5 - legA, -14 + b, 4, 11 - b, legC); A(0, 1 + legA, -14 + b, 4, 11 - b, legC);
+    if (P.shorts) { A(0, -6 - legA, -14 + b, 5, 6, P.pants); A(0, legA, -14 + b, 6, 6, P.pants); }
+    if (P.boots) { A(0, -6 - legA, -7, 6, 7, P.shoes); A(0, 1 + legA, -7, 7, 7, P.shoes); A(0, 1 + legA, -5, 5, 1, shade(P.shoes, 0.3), false); }
+    else { A(0, -6 - legA, -3, 6, 3, P.shoes); A(0, 1 + legA, -3, 7, 3, P.shoes); }
     A(0, 2 + legA, -1, 6, 1, shade(P.shoes, 0.5), false);
     // hips and belt
     const tl = lean >> 1;
     A(0, -6 - bulk + tl, -21 + b, 12 + bulk * 2, 8, P.pants);
     A(0, -6 - bulk + tl, -21 + b, 12 + bulk * 2, 2, P.belt, false);
     if (P.belt === '#f8c800') A(0, 1 + tl, -22 + b, 5, 4, '#f8e070');
+    if (P.beltStars) for (let i = 0; i < 4; i++) A(0, -4 - bulk + tl + i * 3, -21 + b, 1, 1, '#fcfcfc', false);
+    if (P.sash) { A(0, -5 - bulk + tl, -19 + b, 3, 7, P.sash, false); A(0, -5 - bulk + tl, -17 + b, 3, 1, '#fcfcfc', false); A(0, -5 - bulk + tl, -15 + b, 3, 1, '#fcfcfc', false); }
     // torso: shirt, jacket or vest
     const tx = -5 - bulk + lean, tw = 11 + bulk * 2;
     A(0, tx, -32 + b, tw, 11, P.jacket || top);
@@ -629,7 +641,8 @@ function drawBoxer(f){
     else { A(0, hx + 5, hy + 4, 2, 2, '#fcfcfc', false); A(0, hx + 6, hy + 4, 1, 2, '#140c1c', false); A(0, hx + 5, hy + 3, 3, 1, shade(P.hair || P.skin, -0.3), false); }
     if (st === 'hit') A(0, hx + 5, hy + 4, 2, 2, '#140c1c', false);
     if (P.beard) A(0, hx + 3, hy + 6, 6, 3, P.beard, false);
-    A(0, hx + 6, hy + 7, 3, 1, shade(P.skin, -0.45), false);
+    if (P.goldTooth) { A(0, hx + 5, hy + 7, 4, 1, '#fcfcfc', false); A(0, hx + 7, hy + 7, 1, 1, '#f8d020', false); A(0, hx + 5, hy + 6, 1, 1, shade(P.skin, -0.45), false); }
+    else A(0, hx + 6, hy + 7, 3, 1, shade(P.skin, -0.45), false);
     if (P.stache) A(0, hx + 5, hy + 6, 5, 1, P.stache, false);
     A(1, bg.x + lean, bg.y + b, bg.w, bg.h, shade(P.gloves, -0.3));
     for (const r of arm) A(2, r.x + lean, r.y + b, r.w, r.h, arms);
@@ -791,7 +804,7 @@ function enemyAI(e){
 }
 
 /* ---------- game flow ---------- */
-function newGame(){ score = 0; money = 0; lives = 3; player = makePlayer(); applyUpgrades(player); startStage(0); }
+function newGame(){ score = 0; money = 0; lives = 3; player = makePlayer(FIGHTERS[pick]); applyUpgrades(player); player.hp = player.maxHp; startStage(0); }
 function startStage(i){
   stageIdx = i; stage = STAGES[i]; build(stage);
   camX = 0; locked = false; waveIdx = 0; enemies = []; sparks = []; parts = []; floats = []; focusEnemy = null; banner = null;
@@ -828,7 +841,13 @@ function update(){
   if (pressed.mute) { muted = !muted; if (master) master.gain.value = muted ? 0 : 0.22; }
   if (state === 'title') {
     camX += 0.4; if (camX > stage.len - W) camX = 0;
-    if (pressed.start || pressed.jab) newGame();
+    if (pressed.start || pressed.jab) { state = 'select'; timer = 0; sfx.tick(); }
+    return;
+  }
+  if (state === 'select') {
+    timer++;
+    if (pressed.left || pressed.right || pressed.up || pressed.down) { pick = (pick + 1) % FIGHTERS.length; sfx.tick(); }
+    if (timer > 10 && (pressed.start || pressed.jab)) { sfx.bell(); newGame(); }
     return;
   }
   if (state === 'gameover') {
@@ -1045,7 +1064,8 @@ function drawFace(x, y, P){
   else { R(x + 10, y + 9, 2, 2, '#fcfcfc'); R(x + 11, y + 9, 1, 2, '#140c1c'); }
   if (P.beard) R(x + 8, y + 13, 7, 4, P.beard);
   if (P.stache) R(x + 10, y + 13, 5, 1, P.stache);
-  R(x + 11, y + 14, 3, 1, shade(P.skin, -0.5));
+  if (P.goldTooth) { R(x + 10, y + 14, 5, 2, '#fcfcfc'); R(x + 12, y + 14, 1, 1, '#f8d020'); R(x + 10, y + 16, 5, 1, shade(P.skin, -0.5)); }
+  else R(x + 11, y + 14, 3, 1, shade(P.skin, -0.5));
 }
 function drawSpark(s){
   const x = Math.round(s.x - camX), y = Math.round(s.y), r = s.big ? (s.life > 4 ? 15 : 9) : (s.life > 3 ? 10 : 6);
@@ -1065,7 +1085,7 @@ function hudBar(x, y, w, frac, trail, rtl){
 function drawHUD(){
   const p = player, low = p.hp / p.maxHp < 0.3;
   ctx.fillStyle = 'rgba(12,6,24,.6)'; ctx.fillRect(0, 0, W, 36); R(0, 36, W, 1, 'rgba(12,6,24,.35)');
-  drawFace(6, 5, PLAYER_PAL);
+  drawFace(6, 5, p.pal);
   txt(p.name, 32, 4, '#fcfcfc');
   txt(String(score).padStart(6, '0'), 72, 4, '#f8d820');
   hudBar(32, 15, 96, p.hp / p.maxHp, (p.trail ?? p.hp) / p.maxHp);
@@ -1120,8 +1140,36 @@ function drawShop(){
   if (shopMsg) txt(shopMsg[0], 220, 184, shopMsg[1], 'center');
   txt('UP/DOWN PICK  JAB BUY', 220, 204, '#8c84a0', 'center');
 }
+function drawSelect(){
+  patFill(PAT.brickDark, 0, 0, 0, W, 160);
+  ctx.fillStyle = 'rgba(8,4,16,.5)'; ctx.fillRect(0, 0, W, 160);
+  patFill(PAT.clubFloor, 0, 0, 160, W, 64); R(0, 160, W, 2, '#24203a');
+  bigTitle('SELECT FIGHTER', 8, 16);
+  const saved = camX; camX = 0;
+  FIGHTERS.forEach((fi, i) => {
+    const cx = 80 + i * 160, sel = i === pick;
+    if (sel) { ctx.fillStyle = 'rgba(255,240,180,.12)'; ctx.beginPath(); ctx.ellipse(cx, 154, 44, 10, 0, 0, 7); ctx.fill(); }
+    const f = makeFighter({ x: cx, y: 154, face: i ? -1 : 1, pal: fi.pal, bulk: fi.bulk, isPlayer: true,
+      state: sel ? 'win' : 'idle', t: frameN });
+    if (!sel) f.flashT = 0;
+    drawBoxer(f);
+    if (!sel) { ctx.fillStyle = 'rgba(12,6,24,.45)'; ctx.fillRect(cx - 40, 40, 80, 120); }
+    drawFace(cx - 10, 166, fi.pal);
+    txt(fi.full, cx, 190, sel ? '#f8d020' : '#8c84a0', 'center');
+    txt(fi.tag, cx, 202, sel ? '#90d8f8' : '#5c5470', 'center');
+    if (sel) {
+      [['PWR', 0], ['HP', 1], ['SPD', 2]].forEach(([lab, k], j) => {
+        txt(lab, cx - 50, 36 + j * 10, '#a8a0c0');
+        for (let q = 0; q < 5; q++) R(cx - 18 + q * 9, 37 + j * 10, 7, 6, q < fi.stats[k] ? '#f8d020' : '#3c3048');
+      });
+    }
+  });
+  camX = saved;
+  if ((frameN >> 5) & 1) txt('LEFT/RIGHT  JAB TO FIGHT', W / 2, 214, '#fcfcfc', 'center');
+}
 function render(){
   if (state === 'shop') { drawShop(); return; }
+  if (state === 'select') { drawSelect(); return; }
   ctx.save();
   if (shakeT > 0) ctx.translate((Math.random() * 2 - 1) * shakeMag | 0, (Math.random() * 2 - 1) * shakeMag | 0);
   drawBackground(state === 'title');

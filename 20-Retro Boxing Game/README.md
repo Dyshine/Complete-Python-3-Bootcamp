@@ -4,6 +4,19 @@ A 2D side-scrolling street-boxing brawler drawn in a 16-bit, Streets of Rage-ins
 
 Fight through three stages (Downtown, The Docks, Fight Club). Each stage ends with a boss fight.
 
+## Fighters
+
+Pick your fighter after pressing Start:
+
+| Fighter | Style | Power | HP | Speed |
+| --- | --- | --- | --- | --- |
+| Duke | Street brawler | ★★★ | ★★★ | ★★★★ |
+| Jack Johnson | "The Galveston Giant", heavyweight champion 1908–1915 | ★★★★★ | ★★★★ | ★★★ |
+
+Jack Johnson is drawn in his era's style: shaved head, gold-toothed grin, long white trunks with a stars-and-stripes sash, leather gloves and high boots.
+
+![Jack Johnson sprite sheet](jack-johnson-sprites.png)
+
 ## Controls
 
 | Action | Keyboard | Touch |
