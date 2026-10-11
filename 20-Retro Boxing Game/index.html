@@ -36,12 +36,13 @@ canvas:focus-visible{box-shadow:0 0 0 2px var(--gold)}
 kbd{font-family:inherit;font-size:8px;color:var(--ink);background:var(--text);padding:2px 5px;border-radius:2px;box-shadow:0 2px 0 var(--dim)}
 .pad{display:none;width:100%;max-width:560px;justify-content:space-between;align-items:center;gap:12px;user-select:none;-webkit-user-select:none;touch-action:none}
 .cluster{display:flex;gap:8px;align-items:center}
-.pad button{font-family:inherit;font-size:11px;color:var(--text);background:var(--bezel);border:0;border-radius:50%;width:56px;height:56px;box-shadow:0 4px 0 var(--ink);touch-action:none}
+.pad button{font-family:inherit;font-size:10px;color:var(--text);background:var(--bezel);border:0;border-radius:50%;width:46px;height:46px;box-shadow:0 4px 0 var(--ink);touch-action:none}
 .pad button:active,.pad button.on{transform:translateY(3px);box-shadow:0 1px 0 var(--ink)}
-.pad .dir{border-radius:8px;width:44px;height:44px}
-.dpad{display:grid;grid-template-columns:repeat(3,44px);grid-template-rows:repeat(3,44px);gap:2px}
+.pad .dir{border-radius:8px;width:38px;height:38px}
+.dpad{display:grid;grid-template-columns:repeat(3,38px);grid-template-rows:repeat(3,38px);gap:2px;flex:none}
 .d-up{grid-area:1/2}.d-left{grid-area:2/1}.d-right{grid-area:2/3}.d-down{grid-area:3/2}
-.pad .cluster{flex-wrap:wrap;justify-content:flex-end;max-width:196px}
+.pad .cluster{flex-wrap:wrap;justify-content:flex-end;max-width:216px;gap:6px}
+.pad .b-dodge,.pad .b-duck{background:#5c3c90}
 .pad .b-duck{background:#5c3c90}
 .pad .b-body{background:#c06018}
 .pad .b-block{background:#2850b0}
@@ -59,12 +60,15 @@ kbd{font-family:inherit;font-size:8px;color:var(--ink);background:var(--text);pa
   <div class="screen"><canvas id="game" width="320" height="224" tabindex="0" aria-label="Knockout Alley game screen"></canvas></div>
   <div class="pad" id="pad">
     <div class="dpad">
-      <button class="dir d-up" data-k="up" aria-label="Move up">&#9650;&#xFE0E;</button>
+      <button class="dir d-up" data-k="up" aria-label="Step in">&#9650;&#xFE0E;</button>
       <button class="dir d-left" data-k="left" aria-label="Move left">&#9664;&#xFE0E;</button>
       <button class="dir d-right" data-k="right" aria-label="Move right">&#9654;&#xFE0E;</button>
-      <button class="dir d-down" data-k="down" aria-label="Move down">&#9660;&#xFE0E;</button>
+      <button class="dir d-down" data-k="down" aria-label="Step back">&#9660;&#xFE0E;</button>
     </div>
     <div class="cluster">
+      <button class="b-dodge" data-k="dodgeL" aria-label="Dodge left">&laquo;</button>
+      <button class="b-duck" data-k="duck" aria-label="Duck">DCK</button>
+      <button class="b-dodge" data-k="dodgeR" aria-label="Dodge right">&raquo;</button>
       <button class="b-block" data-k="block" aria-label="Block">BLK</button>
       <button class="b-body" data-k="body" aria-label="Body punch">BDY</button>
       <button class="b-star" data-k="star" aria-label="Star punch">&#9733;&#xFE0E;</button>
@@ -77,8 +81,9 @@ kbd{font-family:inherit;font-size:8px;color:var(--ink);background:var(--text);pa
     <button data-k="mute" id="b-mute">SOUND</button>
   </div>
   <div class="legend">
-    <span><kbd>&larr;</kbd> <kbd>&rarr;</kbd> DODGE</span>
-    <span><kbd>&darr;</kbd> DUCK</span>
+    <span><kbd>&larr;</kbd> <kbd>&uarr;</kbd> <kbd>&darr;</kbd> <kbd>&rarr;</kbd> MOVE</span>
+    <span><kbd>A</kbd> <kbd>D</kbd> DODGE</span>
+    <span><kbd>S</kbd> DUCK</span>
     <span><kbd>Z</kbd> JAB</span>
     <span><kbd>X</kbd> HOOK</span>
     <span><kbd>C</kbd> BODY PUNCH</span>
@@ -111,9 +116,9 @@ addEventListener('resize', fit); fit();
 /* ---------- input ---------- */
 const held = {}, pressed = {};
 const KEYMAP = {
-  ArrowLeft:'left', KeyA:'left', ArrowRight:'right', KeyD:'right',
-  ArrowUp:'up', KeyW:'up', ArrowDown:'down', KeyS:'down',
-  KeyC:'body', KeyV:'block', ShiftLeft:'duck', ShiftRight:'duck',
+  ArrowLeft:'left', ArrowRight:'right', ArrowUp:'up', ArrowDown:'down',
+  KeyA:'dodgeL', KeyQ:'dodgeL', KeyD:'dodgeR', KeyE:'dodgeR', KeyS:'duck', ShiftLeft:'duck', ShiftRight:'duck',
+  KeyC:'body', KeyV:'block',
   KeyZ:'jab', KeyJ:'jab', KeyX:'hook', KeyK:'hook',
   Space:'star', KeyL:'star', Enter:'start', KeyP:'pause', Escape:'pause', KeyM:'mute'
 };
@@ -245,22 +250,22 @@ const OMOVES = {
   haymaker: { tell:46, dmg:28, hand:'r', avoid:['dodge','duck'], block:0.7 }
 };
 const OPPONENTS = [
-  { name:'ALLEY CAT', record:'8-12', from:'THE BACK ALLEY', quote:'NINE LIVES, PAL. YOU GOT ONE.', bulk:0, hp:80, power:0.9, tell:1.35, aggro:0.025, cool:[70,130],
+  { name:'ALLEY CAT', foot:0.8, range:58, circle:10, record:'8-12', from:'THE BACK ALLEY', quote:'NINE LIVES, PAL. YOU GOT ONE.', bulk:0, hp:80, power:0.9, tell:1.35, aggro:0.025, cool:[70,130],
     moves:['jab','jab','hookL','hookR'], guard:{ high:5, low:2, open:3 }, chain:4, taunt:0.004,
     pal: pal('b', { hair:'#181018', jacket:'#a82830', shirt:'#2c2030', pants:'#3c4460', gloves:'#8c5c30' }) },
-  { name:'SPEEDY RICO', record:'14-6', from:'EAST SIDE', quote:"YOU CAN'T HIT WHAT YOU CAN'T SEE!", bulk:0, hp:90, power:0.85, tell:1.15, aggro:0.04, cool:[50,100],
+  { name:'SPEEDY RICO', foot:1.5, range:66, circle:34, record:'14-6', from:'EAST SIDE', quote:"YOU CAN'T HIT WHAT YOU CAN'T SEE!", bulk:0, hp:90, power:0.85, tell:1.15, aggro:0.04, cool:[50,100],
     moves:['jab','jab','rush','hookL','hookR'], guard:{ high:4, low:3, open:2 }, chain:3, taunt:0.003,
     pal: pal('a', { hair:'#f040a0', hairStyle:'mohawk', vest:'#282830', pants:'#e8b820', shoes:'#ececec', gloves:'#f0d020' }) },
-  { name:'BIG TONY', record:'19-4', from:'THE DOCKS', quote:"I DON'T DODGE. I DON'T NEED TO.", bulk:2, hp:120, power:1.25, tell:1.15, aggro:0.03, cool:[60,120],
+  { name:'BIG TONY', foot:0.7, range:48, circle:6, record:'19-4', from:'THE DOCKS', quote:"I DON'T DODGE. I DON'T NEED TO.", bulk:2, hp:120, power:1.25, tell:1.15, aggro:0.03, cool:[60,120],
     moves:['hookL','hookR','body','upper','jab'], guard:{ high:3, low:5, open:2 }, chain:4, taunt:0.002,
     pal: pal('c', { hairStyle:'bald', beard:'#201010', vest:'#6c4428', pants:'#44444c', gloves:'#282828' }) },
-  { name:'BRUNO BRICK', record:'24-3', from:'FORT BRICKHOUSE', quote:'TEN-HUT! TIME FOR DRILLS, ROOKIE.', bulk:3, hp:140, power:1.35, tell:1.0, aggro:0.035, cool:[50,110],
+  { name:'BRUNO BRICK', foot:0.9, range:50, circle:12, record:'24-3', from:'FORT BRICKHOUSE', quote:'TEN-HUT! TIME FOR DRILLS, ROOKIE.', bulk:3, hp:140, power:1.35, tell:1.0, aggro:0.035, cool:[50,110],
     moves:['upper','upper','hookL','hookR','jab','body','haymaker'], guard:{ high:5, low:3, open:1 }, chain:3, taunt:0.002,
     pal: pal('a', { hairStyle:'bald', stache:'#5c3018', shades:true, shirt:'#4c6c34', pants:'#6c6c48', shoes:'#3c3020', gloves:'#2058e0' }) },
-  { name:'VINNIE VOLT', record:'27-1', from:'LITTLE ITALY', quote:'THE BOSS SAYS YOU TAKE A DIVE.', bulk:1, hp:150, power:1.25, tell:0.85, aggro:0.05, cool:[40,90],
+  { name:'VINNIE VOLT', foot:1.5, range:64, circle:30, record:'27-1', from:'LITTLE ITALY', quote:'THE BOSS SAYS YOU TAKE A DIVE.', bulk:1, hp:150, power:1.25, tell:0.85, aggro:0.05, cool:[40,90],
     moves:['rush','jab','hookL','hookR','body','upper'], guard:{ high:4, low:4, open:1 }, chain:3, taunt:0.003,
     pal: pal('b', { hair:'#100810', hairStyle:'long', shades:true, jacket:'#ececec', shirt:'#e02060', pants:'#ececec', belt:'#202020', gloves:'#40e090' }) },
-  { name:'GRANITE GRANT', record:'33-0', from:'WORLD CHAMPION', quote:'NOBODY HAS EVER SEEN ME FALL.', bulk:3, hp:180, power:1.5, tell:0.75, aggro:0.055, cool:[35,80],
+  { name:'GRANITE GRANT', foot:1.2, range:56, circle:22, record:'33-0', from:'WORLD CHAMPION', quote:'NOBODY HAS EVER SEEN ME FALL.', bulk:3, hp:180, power:1.5, tell:0.75, aggro:0.055, cool:[35,80],
     moves:['jab','hookL','hookR','upper','body','rush','haymaker'], guard:{ high:4, low:4, open:1 }, chain:3, taunt:0.002,
     pal: pal('c', { hair:'#100810', hairStyle:'flattop', pants:'#282878', belt:'#f8c800', shoes:'#f8c800', gloves:'#f8c800' }) }
 ];
@@ -275,6 +280,8 @@ const TIPS = [
   'HIGH GUARD? GO TO THE BODY.',
   'HIT THEM MID WIND-UP FOR A STAR.',
   'DUCK JABS AND HOOKS. DODGE UPPERCUTS.',
+  'STEP BACK DURING A WIND-UP AND THE PUNCH FALLS SHORT.',
+  'LINE UP WITH THEM OR YOUR PUNCHES WILL MISS.',
   'BLOCKED PUNCHES COST YOU HEARTS.',
   'AFTER A SLIP, YOUR NEXT PUNCH IS A COUNTER.',
   'BODY SHOTS GET THROUGH A HIGH GUARD.'
@@ -411,6 +418,13 @@ const U = 2, OPP_X = 160, OPP_Y = 178, PL_Y = 236;
 let state = 'title', timer = 0, frameN = 0, paused = false, pick = 0;
 let player = null, opp = null, fightIdx = 0, round = 1, clock = 180, clockF = 0, count = null, result = null;
 let pPts = 0, oPts = 0, score = 0, hiscore = 0, money = 0, shopSel = 0, shopMsg = null, tipIdx = 0;
+let camX = 0;
+const RING_X = 112, RING_BACK = 250, REACH = 66, LANE = 22;
+/* ring projection: world x is side to side, z runs away from the camera behind you */
+function proj(x, z){
+  const dz = z - (player ? player.z : 30), k = 90 / (Math.max(dz, -25) + 35);
+  return { x: 160 + (x - camX) * k, y: 112 + 66 * k, k };
+}
 let sparks = [], parts = [], floats = [], shakeT = 0, shakeMag = 0, hitstop = 0, hurtFlash = 0, crowdHype = 0, banner = null;
 try { hiscore = +localStorage.getItem('ko-alley-hi') || 0; } catch (_) {}
 function saveHi(){ if (score > hiscore) { hiscore = score; try { localStorage.setItem('ko-alley-hi', hiscore); } catch (_) {} } }
@@ -421,7 +435,7 @@ function venue(){ return VENUES[Math.min(2, fightIdx >> 1)]; }
 
 function makePlayer(fi){
   return { fi, pal:fi.pal, name:fi.name, bulk:fi.bulk, up:{ power:0, stamina:0, speed:0, chin:0, stars:0, heart:0 },
-    state:'guard', t:0, stars:0, hearts:20, maxHearts:20, hp:fi.hp, maxHp:fi.hp, slipT:0, flashT:0, kd:0, kdRound:0, getUp:0, bodyHand:-1, queued:null };
+    state:'guard', t:0, x:0, z:30, moving:false, stars:0, hearts:20, maxHearts:20, hp:fi.hp, maxHp:fi.hp, slipT:0, flashT:0, kd:0, kdRound:0, getUp:0, bodyHand:-1, queued:null };
 }
 function applyUpgrades(p){
   p.power = p.fi.power * (1 + p.up.power * 0.15);
@@ -430,7 +444,7 @@ function applyUpgrades(p){
   p.maxHearts = 20 + p.up.heart * 5;
 }
 function makeOpp(T){
-  return { T, pal:T.pal, bulk:T.bulk, hp:T.hp, maxHp:T.hp, state:'guard', t:0, guard:'high', guardT:90, cool:rand(T.cool[0], T.cool[1]),
+  return { T, pal:T.pal, bulk:T.bulk, hp:T.hp, maxHp:T.hp, state:'guard', t:0, x:0, z:90, phase:Math.random() * 6, circleT:0, wantAttack:null, wantT:0, guard:'high', guardT:90, cool:rand(T.cool[0], T.cool[1]),
     move:'jab', tellLen:20, queue:[], whiffed:false, stun:0, chain:0, kd:0, kdRound:0, flashT:0, hitDir:1, forceGuard:null, alt:false };
 }
 function setP(s){ if (player.state !== s) { player.state = s; player.t = 0; } }
@@ -537,7 +551,7 @@ function drawFront(Pal, bulk, P, X, Y, u = U, extras = {}){
   if (P.glint) { const ex = X + (2 + hx) * u, ey = Y + (-54 + hy) * u, r = 5; R(ex, ey - r, 1, r * 2 + 1, '#fcfcfc'); R(ex - r, ey, r * 2 + 1, 1, '#fcfcfc'); }
   if (P.face === 'dizzy') for (let i = 0; i < 3; i++) { const a = frameN / 10 + i * 2.1; starIcon(Math.round(X + (hx + Math.cos(a) * 11) * u) - 3, Math.round(Y + (-66 + hy + Math.sin(a) * 3) * u), '#f8e070'); }
 }
-function drawFrontDown(Pal, bulk, X, Y){
+function drawFrontDown(Pal, bulk, X, Y, u = U){
   const L = [[], [], []], A = (l, x, y, w, h, c, sh = true) => L[l].push([x, y, w, h, c, sh]);
   A(0, 12, -6, 14, 5, Pal.shorts ? Pal.skin : Pal.pants); A(0, 25, -8, 4, 8, Pal.shoes);
   A(0, 2, -9, 11, 9, Pal.pants); A(0, 2, -9, 2, 9, Pal.belt, false);
@@ -545,7 +559,7 @@ function drawFrontDown(Pal, bulk, X, Y){
   A(0, -26 - bulk, -12, 12, 12, Pal.skin); hairFrontDown(A, Pal, -26 - bulk);
   for (const [ex, ey] of [[-22, -8], [-20, -6], [-18, -8], [-22, -4], [-18, -4]]) A(0, ex - bulk, ey, 1, 1, OUT, false);
   glove(L[2], { x: -6, y: -12, s: 8 }, Pal.gloves); glove(L[2], { x: 6, y: -11, s: 8 }, Pal.gloves);
-  renderLayers(L, X, Y, U);
+  renderLayers(L, X, Y, u);
 }
 function hairFrontDown(A, P, x){ if (P.hair) A(0, x - (P.hairStyle === 'afro' ? 6 : 2), P.hairStyle === 'afro' ? -16 : -12, P.hairStyle === 'afro' ? 8 : 3, P.hairStyle === 'afro' ? 18 : 12, P.hair); }
 
@@ -580,7 +594,7 @@ function drawBack(p, X, Y){
   renderLayers(L, X + P.ox, Y + P.oy, U, P.white, tint);
 }
 function backPose(p){
-  const P = { ox:0, oy:(frameN >> 4) & 1, lean:0, gl:{ x:-11, y:-50, s:9 }, gr:{ x:11, y:-50, s:9 }, white:p.flashT > 0, tired:p.state === 'tired', glow:null };
+  const P = { ox:0, oy:p.moving ? ((frameN >> 3) & 1) * 2 : (frameN >> 4) & 1, lean:0, gl:{ x:-11, y:-50, s:9 }, gr:{ x:11, y:-50, s:9 }, white:p.flashT > 0, tired:p.state === 'tired', glow:null };
   const t = p.t;
   switch (p.state) {
     case 'atk': {
@@ -651,7 +665,10 @@ function startFight(i){
   sparks = []; parts = []; floats = [];
   state = 'vs'; timer = 0; playSong(0);
 }
-function beginRound(){ state = 'roundStart'; timer = 0; stopSong(); setP('guard'); setO('guard'); opp.kdRound = 0; player.kdRound = 0; }
+function beginRound(){
+  state = 'roundStart'; timer = 0; stopSong(); setP('guard'); setO('guard'); opp.kdRound = 0; player.kdRound = 0;
+  player.x = 0; player.z = 30; opp.x = 0; opp.z = 92; opp.wantAttack = null; camX = 0;
+}
 function fightSong(){ return fightIdx < 2 ? 0 : fightIdx < 4 ? 1 : 2; }
 function endRound(){
   sfx.bell(); stopSong();
@@ -719,6 +736,11 @@ function startOppMove(mv){
 function resolveOppStrike(){
   const o = opp, p = player, mv = OMOVES[o.move];
   if (p.state === 'down') return;
+  // footwork: out of reach or off the line means the punch falls short
+  if (o.z - p.z > REACH + (o.move === 'haymaker' ? 8 : 0) || Math.abs(o.x - p.x) > LANE + 2) {
+    o.whiffed = true; o.queue = []; p.slipT = 50; p.hearts = Math.min(p.maxHearts, p.hearts + 1);
+    pop(160, 120, 'MISS!', '#90d8f8'); sfx.swing(); return;
+  }
   const def = playerDefense();
   if (mv.avoid.includes(def)) {
     o.whiffed = true; o.queue = []; p.slipT = 50; p.hearts = Math.min(p.maxHearts, p.hearts + 1);
@@ -738,13 +760,15 @@ function resolveOppStrike(){
   sparks.push({ x:160 + (Math.random() * 20 - 10), y:128, life:7, big:dmg > 9, c:'#fcfcfc' });
   hurtFlash = 8; shake(dmg > 12 ? 8 : 4); hitstop = dmg > 12 ? 8 : 4;
   if (dmg > 12) sfx.big(); else sfx.hit();
+  p.z = Math.max(0, p.z - (dmg > 12 ? 10 : 4));
   if (p.hp <= 0) knockdownPlayer(); else setP('hurt');
 }
 function resolvePlayerPunch(){
   const p = player, o = opp, m = PMOVES[p.move];
   if (['falling', 'down', 'rising', 'win'].includes(o.state)) return;
-  const pose = frontPose(o);
-  const hx = OPP_X + (pose.ox + pose.hx) * U, hy = OPP_Y + (-54 + pose.oy) * U, bx = OPP_X + pose.ox * U, by = OPP_Y + (-33 + pose.oy) * U;
+  if (o.z - p.z > REACH || Math.abs(o.x - p.x) > LANE) { sfx.swing(); pop(160, 140, 'TOO FAR', '#8c84a0'); return; }
+  const pose = frontPose(o), pr = proj(o.x, o.z), ou = 2 * pr.k;
+  const hx = pr.x + (pose.ox + pose.hx) * ou, hy = pr.y + (-54 + pose.oy) * ou, bx = pr.x + pose.ox * ou, by = pr.y + (-33 + pose.oy) * ou;
   let land = false, counter = false, blocked = false, mult = 1;
   switch (o.state) {
     case 'tell': land = true; counter = true; break;
@@ -774,6 +798,7 @@ function resolvePlayerPunch(){
   for (let i = 0; i < (m.star ? 10 : 4); i++) parts.push({ x:sx, y:sy, vx:Math.random() * 4 - 2, vy:-Math.random() * 3, life:22, c:'#c8e8ff', g:0.15, sz:2 });
   hitstop = m.star ? 10 : counter ? 6 : 3; shake(m.star ? 7 : counter ? 4 : 2);
   if (m.star || counter) sfx.big(); else sfx.hit();
+  o.z = Math.min(RING_BACK, o.z + (m.star ? 14 : counter ? 6 : 3));
   if (o.hp <= 0) { o.hitDir = p.move === 'hook' ? -1 : 1; knockdownOpp(); return; }
   o.chain++;
   o.hitDir = p.move === 'jab' ? 1 : p.move === 'hook' ? -1 : o.hitDir;
@@ -803,8 +828,18 @@ function updatePlayer(){
     case 'tired': if (p.t % 40 === 39) p.hearts++; if (p.hearts >= 3) setP('guard'); break;
   }
   // guard, block or tired: read input
-  if (pressed.left || pressed.right) { p.dodgeDir = pressed.left ? -1 : 1; setP('dodge'); return; }
-  if (pressed.down || pressed.duck) { setP('duck'); return; }
+  p.moving = false;
+  if (pressed.dodgeL || pressed.dodgeR) { p.dodgeDir = pressed.dodgeL ? -1 : 1; setP('dodge'); return; }
+  if (pressed.duck) { setP('duck'); return; }
+  if (p.state !== 'block') {
+    const mx = (held.right ? 1 : 0) - (held.left ? 1 : 0), mz = (held.up ? 1 : 0) - (held.down ? 1 : 0);
+    if (mx || mz) {
+      const sp = (1 + p.up.speed * 0.1) * (p.state === 'tired' ? 0.6 : 1) * (mx && mz ? 0.75 : 1);
+      p.x = clamp(p.x + mx * 1.5 * sp, -RING_X, RING_X);
+      p.z = clamp(p.z + mz * 1.1 * sp, 0, opp.z - 30);
+      p.moving = true;
+    }
+  }
   if (p.state !== 'tired') {
     const q = p.queued; p.queued = null;
     const go = mv => { p.move = mv; setP('atk'); if (mv === 'body') p.bodyHand = -p.bodyHand; sfx.swing(); };
@@ -826,9 +861,16 @@ function updateOpp(){
         o.guard = r < g.high ? 'high' : r < g.high + g.low ? 'low' : 'open'; o.guardT = rand(60, 150);
       }
       if (player.state === 'down') break;
+      oppFootwork(o);
       if (player.hp < player.maxHp * 0.3 && Math.random() < T.taunt) { setO('taunt'); break; }
+      if (o.wantAttack) {
+        // close the distance, then throw
+        o.wantT++;
+        if ((o.z - player.z <= REACH - 6 && Math.abs(o.x - player.x) <= LANE - 6) || o.wantT > 100) { startOppMove(o.wantAttack); o.wantAttack = null; }
+        break;
+      }
       o.cool--;
-      if (o.cool <= 0 && Math.random() < T.aggro * (1 + fightIdx * 0.08)) { startOppMove(T.moves[Math.random() * T.moves.length | 0]); o.cool = rand(T.cool[0], T.cool[1]); }
+      if (o.cool <= 0 && Math.random() < T.aggro * (1 + fightIdx * 0.08)) { o.wantAttack = T.moves[Math.random() * T.moves.length | 0]; o.wantT = 0; o.cool = rand(T.cool[0], T.cool[1]); }
       break;
     }
     case 'tell': if (o.t >= o.tellLen) setO('strike'); break;
@@ -854,6 +896,17 @@ function updateOpp(){
     case 'rising': if (o.t >= 40) { setO('dizzy'); o.stun = 40; } break;
   }
 }
+function oppFootwork(o){
+  const p = player, T = o.T, sp = T.foot;
+  o.circleT++;
+  const hurt = o.hp < o.maxHp * 0.3;
+  const wantD = o.wantAttack ? 48 : T.range + (hurt ? 18 : 0);
+  const wantX = p.x + (o.wantAttack ? 0 : Math.sin(o.circleT / 80 + o.phase) * T.circle);
+  if (Math.abs(wantX - o.x) > 2) o.x += Math.sign(wantX - o.x) * sp * (o.wantAttack ? 1.4 : 1);
+  const dz = o.z - p.z;
+  if (Math.abs(dz - wantD) > 3) o.z += Math.sign(wantD - dz) * sp * (o.wantAttack ? 1.3 : 0.8);
+  o.x = clamp(o.x, -RING_X, RING_X); o.z = clamp(o.z, p.z + 30, RING_BACK);
+}
 function updateFight(){
   if (pressed.pause) { paused = !paused; sfx.pause(); if (paused) stopSong(); else playSong(fightSong()); }
   if (paused) return;
@@ -863,7 +916,11 @@ function updateFight(){
   if (!count && opp.state !== 'falling') {
     if (++clockF >= 30) { clockF = 0; clock--; if (clock <= 0) { endRound(); return; } }
   }
-  updatePlayer(); updateOpp(); stepFX();
+  updatePlayer(); updateOpp();
+  if (opp.state === 'falling') opp.z = Math.min(RING_BACK, opp.z + 1.2);
+  if (opp.z - player.z < 30) { const d = 30 - (opp.z - player.z); opp.z = Math.min(RING_BACK, opp.z + d / 2); player.z = Math.max(0, opp.z - 30); }
+  camX += (player.x - camX) * 0.12;
+  stepFX();
 }
 
 /* ---------- gym ---------- */
@@ -956,8 +1013,9 @@ function drawRing(){
   const hype = crowdHype > 0;
   for (let row = 0; row < 6; row++) {
     const y = 42 + row * 12, shift = row & 1 ? 6 : 0;
+    const off = camX * 0.35, c0 = Math.floor(off / 12);
     for (let col = -1; col < W / 12 + 1; col++) {
-      const sx = col * 12 + shift, h = hash(col, row);
+      const sx = Math.round(col * 12 - (off - c0 * 12) + shift), h = hash(col + c0, row);
       const jump = hype && hash(col, row + (frameN >> 3)) > 0.55 ? -3 : 0;
       const dk = v.crowd - (5 - row) * 0.05;
       const skin = shade(h < 0.33 ? SK.a : h < 0.66 ? SK.b : SK.c, dk);
@@ -969,22 +1027,33 @@ function drawRing(){
     }
   }
   box(104, 40, 112, 12, v.banner); txt(CIRCUITS[fightIdx] || 'KNOCKOUT ALLEY', 160, 42, '#f8e8c0', 'center', 8, null);
-  // apron wall and canvas
-  R(0, 112, W, 22, v.apron); R(0, 112, W, 2, shade(v.apron, 0.3));
-  for (let x = 12; x < W; x += 132) txt('KNOCKOUT ALLEY', x, 120, shade(v.apron, 0.45), 'left', 8, null);
-  ctx.fillStyle = v.canvas; ctx.beginPath(); ctx.moveTo(28, 134); ctx.lineTo(292, 134); ctx.lineTo(392, H); ctx.lineTo(-72, H); ctx.closePath(); ctx.fill();
-  for (let i = 0; i < 6; i++) { ctx.fillStyle = 'rgba(20,12,28,' + (0.03 + i * 0.02) + ')'; const y = 134 + i * 15; ctx.fillRect(0, y, W, 15); }
-  ctx.fillStyle = shade(v.canvas, -0.12); ctx.beginPath(); ctx.ellipse(160, 172, 70, 16, 0, 0, 7); ctx.fill();
-  ctx.fillStyle = shade(v.canvas, 0.25); ctx.beginPath(); ctx.ellipse(160, 172, 56, 12, 0, 0, 7); ctx.fill();
-  txt('KA', 160, 167, shade(v.canvas, -0.3), 'center', 8, null);
-  ctx.fillStyle = 'rgba(255,248,220,.14)'; ctx.beginPath(); ctx.ellipse(160 + (opp ? frontPose(opp).ox * U : 0), OPP_Y, 46, 9, 0, 0, 7); ctx.fill();
-  // back ropes with posts, side ropes in perspective
+  const pz = player ? player.z : 30, bl = proj(-130, 260), br = proj(130, 260), kB = bl.k;
+  const nl = proj(-130, pz - 22), nr = proj(130, pz - 22);
+  // apron wall behind the far ropes
+  R(0, 112, W, Math.max(2, Math.round(bl.y) - 112), v.apron); R(0, 112, W, 2, shade(v.apron, 0.3));
+  for (let x = 12 - ((camX * 0.6) % 132 + 132) % 132; x < W; x += 132) txt('KNOCKOUT ALLEY', Math.round(x), 116, shade(v.apron, 0.45), 'left', 8, null);
+  // canvas floor
+  ctx.fillStyle = v.canvas; ctx.beginPath(); ctx.moveTo(bl.x, bl.y); ctx.lineTo(br.x, br.y); ctx.lineTo(nr.x, nr.y); ctx.lineTo(nl.x, nl.y); ctx.closePath(); ctx.fill();
+  for (let i = 0; i < 6; i++) { ctx.fillStyle = 'rgba(20,12,28,' + (0.03 + i * 0.02) + ')'; const y = bl.y + i * (H - bl.y) / 6; ctx.fillRect(0, y, W, (H - bl.y) / 6 + 1); }
+  const lg = proj(0, 150);
+  ctx.fillStyle = shade(v.canvas, -0.12); ctx.beginPath(); ctx.ellipse(lg.x, lg.y, 70 * lg.k, 16 * lg.k, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = shade(v.canvas, 0.25); ctx.beginPath(); ctx.ellipse(lg.x, lg.y, 56 * lg.k, 12 * lg.k, 0, 0, 7); ctx.fill();
+  if (opp && player) { const op = proj(opp.x, opp.z); ctx.fillStyle = 'rgba(255,248,220,.14)'; ctx.beginPath(); ctx.ellipse(op.x, op.y, 46 * op.k, 9 * op.k, 0, 0, 7); ctx.fill(); }
+  // far ropes, corner posts and side ropes running toward the camera
+  const H3 = [52, 76, 100];
   for (let i = 0; i < 3; i++) {
-    const y = 98 + i * 10, c = v.ropes[i];
-    R(28, y, 264, 2, c); R(28, y, 264, 1, shade(c, 0.4));
-    for (let k = 0; k <= 20; k++) { const a = k / 20; R(Math.round(28 - a * 110), Math.round(y + a * (140 + i * 30)), 3, 2, c); R(Math.round(292 + a * 110) - 2, Math.round(y + a * (140 + i * 30)), 3, 2, c); }
+    const c = v.ropes[i], y = Math.round(bl.y - H3[i] * kB);
+    R(Math.round(bl.x), y, Math.round(br.x - bl.x), 2, c); R(Math.round(bl.x), y, Math.round(br.x - bl.x), 1, shade(c, 0.4));
+    for (const [a, b] of [[bl, nl], [br, nr]]) {
+      for (let k = 0; k <= 40; k++) {
+        const f = k / 40, kk = a.k + (b.k - a.k) * f;
+        const x = a.x + (b.x - a.x) * f, yy = a.y + (b.y - a.y) * f - H3[i] * kk;
+        if (yy > H + 4 || x < -8 || x > W + 8) continue;
+        const th = Math.max(2, Math.round(kk * 2)); R(Math.round(x), Math.round(yy), th, th, c);
+      }
+    }
   }
-  for (const x of [22, 290]) { box(x, 92, 8, 44, v.post); box(x - 1, 92, 10, 4, '#fcfcfc'); }
+  for (const c of [bl, br]) { const ph = Math.round(112 * kB), pw = Math.max(4, Math.round(9 * kB)); box(Math.round(c.x - pw / 2), Math.round(c.y - ph), pw, ph, v.post); box(Math.round(c.x - pw / 2) - 1, Math.round(c.y - ph), pw + 2, 4, '#fcfcfc'); }
 }
 function drawRef(x, y, raise){
   const L = [[], [], []], A = (l, xx, yy, w, h, c, sh = true) => L[l].push([xx, yy, w, h, c, sh]);
@@ -1029,10 +1098,17 @@ function drawArena(){
   const o = opp;
   ctx.save();
   if (shakeT > 0) ctx.translate((Math.random() * 2 - 1) * shakeMag | 0, (Math.random() * 2 - 1) * shakeMag | 0);
-  if (o.state === 'down') drawFrontDown(o.pal, o.bulk, OPP_X, OPP_Y - 4);
-  else drawFront(o.pal, o.bulk, frontPose(o), OPP_X, OPP_Y);
+  const op = proj(o.x, o.z), ou = 2 * op.k;
+  if (o.state === 'down') drawFrontDown(o.pal, o.bulk, Math.round(op.x), Math.round(op.y - 4 * op.k), ou);
+  else drawFront(o.pal, o.bulk, frontPose(o), Math.round(op.x), Math.round(op.y), ou);
   if (count) drawRef(272, 186, count.t < 12 && count.t >= 0);
-  drawBack(player, 160, PL_Y);
+  drawBack(player, Math.round(160 + (player.x - camX) * 1.5), PL_Y);
+  // range cue: dim chevrons when your punches can't reach
+  if (state === 'fight' && !count && (o.z - player.z > REACH || Math.abs(o.x - player.x) > LANE)) {
+    const a = (frameN >> 4) & 1 ? '#f8d020' : '#8c6c10', dir = o.x - player.x;
+    if (Math.abs(dir) > LANE) txt(dir > 0 ? '>' : '<', dir > 0 ? W - 14 : 14, 120, a, 'center', 16);
+    else txt('^', 160, 58, a, 'center', 16);
+  }
   for (const s of sparks) drawSpark(s);
   for (const q of parts) R(Math.round(q.x), Math.round(q.y), q.sz || 2, q.sz || 2, q.c);
   ctx.restore();
@@ -1050,7 +1126,7 @@ function drawFighterCard(x, fi, sel, face){
 function render(){
   switch (state) {
     case 'title': {
-      fightIdx = 5; const o0 = opp; opp = null; drawRing(); opp = o0;
+      fightIdx = 5; const o0 = opp; opp = null; camX = 0; player.z = 30; drawRing(); opp = o0;
       const ph = frameN % 120, P = frontPose({ state: ph > 60 && ph < 80 ? 'strike' : ph > 40 && ph <= 60 ? 'tell' : 'guard', t: ph > 60 ? ph - 60 : ph - 40, move:'hookL', tellLen:20, guard:'high', alt:false, flashT:0 });
       drawFront(OPPONENTS[5].pal, 3, P, OPP_X, OPP_Y);
       drawBack({ pal:GOLDIE_PAL, state: ph > 58 && ph < 84 ? 'dodge' : 'guard', t: ph - 58, dodgeDir: 1, flashT:0 }, 160, PL_Y);
@@ -1099,7 +1175,7 @@ function render(){
     }
     case 'shop': return drawShop();
     case 'victory': {
-      fightIdx = 5; const o0 = opp; opp = null; drawRing(); opp = o0;
+      fightIdx = 5; const o0 = opp; opp = null; camX = 0; player.z = 30; drawRing(); opp = o0;
       drawFront(player.pal, player.bulk, { ox:0, oy:(frameN >> 4) & 1, hx:0, hy:0, gl:{ x:-15, y:-72, s:8 }, gr:{ x:15, y:-72, s:8 }, face:'grin' }, 160, 178, U, { robe:true });
       box(136, 120, 48, 12, '#f8c820'); box(150, 117, 20, 18, '#fce060'); R(156, 121, 8, 10, '#e02838');
       for (const q of parts) R(Math.round(q.x), Math.round(q.y), 2, 2, q.c);

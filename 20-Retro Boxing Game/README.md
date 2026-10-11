@@ -20,8 +20,8 @@ You see your boxer from behind and face one opponent at a time. Work your way up
 | # | Opponent | Circuit | Watch out for |
 | --- | --- | --- | --- |
 | 1 | Alley Cat | Minor | Slow jabs and hooks |
-| 2 | Speedy Rico | Minor | Three-jab rushes |
-| 3 | Big Tony | Major | Body blows and uppercuts, low guard |
+| 2 | Speedy Rico | Minor | Three-jab rushes; circles at range |
+| 3 | Big Tony | Major | Stalks you; body blows and uppercuts, low guard |
 | 4 | Bruno Brick | Major | Uppercuts and a huge haymaker |
 | 5 | Vinnie Volt | World | Fast rushes, short wind-ups |
 | 6 | Granite Grant | Title bout | Everything, with the shortest tells |
@@ -30,8 +30,9 @@ You see your boxer from behind and face one opponent at a time. Work your way up
 
 | Action | Keyboard | Touch |
 | --- | --- | --- |
-| Dodge left / right | Left / Right (or A / D) | ◀ ▶ |
-| Duck | Down (or S / Shift) | ▼ |
+| Move around the ring | Arrow keys (Up steps in, Down steps back) | D-pad |
+| Dodge left / right | A / D (or Q / E) | « » |
+| Duck | S (or Shift) | DCK |
 | Block (hold) | V | BLK |
 | Jab (left, to the head) | Z (or J) | JAB |
 | Hook (right, to the head) | X (or K) | HOOK |
@@ -42,6 +43,9 @@ You see your boxer from behind and face one opponent at a time. Work your way up
 | Sound on/off | M | SOUND |
 
 ## How to fight
+
+- **Use the whole ring.** You and your opponent both move. Your punches only land when you're in range and lined up with them. When you're not, a yellow arrow shows which way to go. Step back during a wind-up and their punch falls short, which opens them up for a counter.
+- **Know their style.** Pressure fighters like Big Tony stalk you. Out-boxers like Speedy Rico and Vinnie Volt circle at range. A badly hurt opponent backs off. Landed punches push opponents back toward the ropes.
 
 - **Read the tell.** Opponents glint and flash a glove before they punch.
   - Jabs and hooks: dodge, duck or block.
