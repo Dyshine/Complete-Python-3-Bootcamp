@@ -352,6 +352,7 @@ kbd.pl{border-radius:3px;width:auto;padding:0 6px;background:var(--bone)}
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/SkeletonUtils.js"></script>
 <script>
 (function(){
 'use strict';
@@ -1081,7 +1082,56 @@ function updateWeather(dt,cx,cz){
 
 /* ================= ZOMBIES ================= */
 const eyeMats={};
+/* model-based zombies: rigged GLBs replace the box infected per type when they ship with the page */
+const ZMODEL_FILES={office:['zombies/office.glb',2.05],grandma:['zombies/grandma.glb',1.55],trucker:['zombies/trucker.glb',1.9],hulk:['zombies/hulk.glb',1.95]};
+const ZMODEL_FOR={walker:['office','grandma'],runner:['office','grandma'],boomer:['trucker'],brute:['hulk']};
+const ZSHARED={attack:'zombies/anim/attack.glb',death:'zombies/anim/death.glb'};
+const ZM={},ZCLIP={},zOlMats={};
+function prepZModel(k,gltf,h){
+  const root=gltf.scene;root.updateMatrixWorld(true);
+  const b=new THREE.Box3().setFromObject(root);const s=h/((b.max.y-b.min.y)||1);
+  const grad=toonGradient(),ws=new V3();let rootBone=null;
+  root.traverse(o=>{
+    if(o.isBone&&!rootBone&&!(o.parent&&o.parent.isBone))rootBone=o.name;
+    if(!o.isMesh)return;const old=Array.isArray(o.material)?o.material[0]:o.material;
+    o.material=new THREE.MeshToonMaterial({map:old&&old.map||null,color:old&&old.map?0xffffff:0xcccccc,gradientMap:grad,skinning:!!o.isSkinnedMesh});
+    o.castShadow=true;o.frustumCulled=false;o.getWorldScale(ws);o.userData.olTh=(.02/(s*(ws.x||1))).toFixed(5);
+  });
+  ZM[k]={root,s,h,offX:-(b.min.x+b.max.x)/2*s,offY:-b.min.y*s,offZ:-(b.min.z+b.max.z)/2*s,rootBone,
+    walk:gltf.animations[0]?stripRootMotion(gltf.animations[0].clone(),rootBone):null};
+}
+function zOutlineMat(sk,th){
+  const key=sk+'|'+th;if(zOlMats[key])return zOlMats[key];
+  const m=new THREE.MeshBasicMaterial({color:0x0b0a09,side:THREE.BackSide,skinning:sk});
+  m.onBeforeCompile=sh=>{sh.vertexShader=sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n transformed += normal * '+th+';');};
+  m.customProgramCacheKey=()=>key;return zOlMats[key]=m;
+}
+if(THREE.GLTFLoader&&THREE.SkeletonUtils){try{
+  const L=new THREE.GLTFLoader();
+  for(const [k,[url,h]] of Object.entries(ZMODEL_FILES))L.load(url,g=>{try{prepZModel(k,g,h);}catch(e){console.warn('Zombie model '+k+' failed; using box infected.',e);}},undefined,()=>{});
+  for(const [k,url] of Object.entries(ZSHARED))L.load(url,g=>{if(g.animations[0])ZCLIP[k]=g.animations[0];},undefined,()=>{});
+}catch(e){}}
+function makeZombieGLB(type){
+  const opts=ZMODEL_FOR[type];if(!opts)return null;const avail=opts.filter(k=>ZM[k]);if(!avail.length)return null;
+  const T=ZM[pick(avail)];
+  const g=new THREE.Group();g.rotation.order='YXZ';
+  const inst=THREE.SkeletonUtils.clone(T.root);inst.scale.setScalar(T.s);inst.position.set(T.offX,T.offY,T.offZ);g.add(inst);
+  const mats=[],meshes=[];inst.traverse(o=>{if(o.isMesh){o.material=o.material.clone();o.material.emissive=new THREE.Color(0);mats.push(o.material);meshes.push(o);}});
+  if(GFX==='high')for(const o of meshes){const sk=!!o.isSkinnedMesh;const ol=sk?new THREE.SkinnedMesh(o.geometry,zOutlineMat(sk,o.userData.olTh)):new THREE.Mesh(o.geometry,zOutlineMat(sk,o.userData.olTh));
+    if(sk){ol.bind(o.skeleton,o.bindMatrix);ol.bindMode=o.bindMode;}ol.position.copy(o.position);ol.quaternion.copy(o.quaternion);ol.scale.copy(o.scale);ol.frustumCulled=false;o.parent.add(ol);}
+  const mixer=new THREE.AnimationMixer(inst),acts={};
+  if(T.walk){acts.walk=mixer.clipAction(T.walk);acts.walk.play();acts.walk.time=Math.random()*T.walk.duration;}
+  for(const n of ['attack','death']){if(!T[n]&&ZCLIP[n])T[n]=stripRootMotion(ZCLIP[n].clone(),T.rootBone);
+    if(T[n]){const a=mixer.clipAction(T[n]);a.setLoop(THREE.LoopOnce,1);a.clampWhenFinished=true;acts[n]=a;}}
+  const v=type==='runner'?rand(.84,.94):type==='walker'?rand(.9,1.1):1;g.scale.setScalar(v);
+  return{g,mats,mixer,acts,glb:true,barY:T.h*v+.35};
+}
+function zAttackAnim(z){
+  const a=z.acts&&z.acts.attack;if(!a)return;a.reset();a.setEffectiveWeight(1);a.fadeIn(.08);a.play();
+  setTimeout(()=>{if(a.isRunning())a.fadeOut(.25);},520);
+}
 function makeZombie(type){
+  const gm=makeZombieGLB(type);if(gm)return gm;
   const d=ZT[type];const g=new THREE.Group();g.rotation.order='YXZ';
   const skin=new THREE.MeshStandardMaterial({color:d.skin,roughness:.9,flatShading:true,emissive:0x000000});
   const shirt=new THREE.MeshStandardMaterial({color:d.shirt,roughness:.95,flatShading:true,emissive:0x000000});
@@ -1155,6 +1205,7 @@ function killZombie(z){
   const hl=Math.hypot(z.hx,z.hz);
   z.dvx=z.hx*1.4*heavy;z.dvz=z.hz*1.4*heavy;z.dvy=(z.lift?z.lift:rand(1,2.5)+hl*.25)*heavy;z.dspin=rand(-6,6)*heavy*(z.lift?1.5:.4);
   if(hl>.5)z.yaw=Math.atan2(-z.hx,-z.hz);
+  if(z.acts&&z.acts.death){if(z.acts.walk)z.acts.walk.fadeOut(.12);if(z.acts.attack)z.acts.attack.stop();const a=z.acts.death;a.reset();a.fadeIn(.08);a.play();z.animDeath=true;}
   spawnPickup('scrap',z.x+rand(-.4,.4),z.z+rand(-.4,.4),randi(d.drop[0],d.drop[1]));
   if(d.parts)spawnPickup('parts',z.x+rand(-.6,.6),z.z+rand(-.6,.6),d.parts);
   if(Math.random()<.16&&ownedGuns().length)spawnPickup('ammo',z.x+rand(-.6,.6),z.z+rand(-.6,.6),1);
@@ -1162,7 +1213,7 @@ function killZombie(z){
   if(z.type==='boomer'){z.g.visible=false;explode(z.x,z.z,4.6,70,{hurt:45,wall:120,color:0xb8d050});}
   if(z.type==='boss'){banner('IT FALLS','The Abomination is down. Collect its parts.','dawn');S.shake=1;Sound.play('roar',.6);rumble(1,1,600);}
 }
-function removeZombie(z){scene.remove(z.g);scene.remove(z.bg);scene.remove(z.fg);z.mats.forEach(m=>m.dispose());}
+function removeZombie(z){if(z.mixer){z.mixer.stopAllAction();z.mixer.uncacheRoot(z.mixer.getRoot());}scene.remove(z.g);scene.remove(z.bg);scene.remove(z.fg);z.mats.forEach(m=>m.dispose());}
 
 function updateDying(z,dt){
   z.dieT+=dt;if(z.type==='boomer')return;
@@ -1173,9 +1224,10 @@ function updateDying(z,dt){
   for(const s of segs){if(!solidSeg(s))continue;if(Math.abs(z.x-s.cx)>4.5||Math.abs(z.z-s.cz)>4.5)continue;collideSeg(z,z.def.r*.7,s);}
   if(z.x!==ox||z.z!==oz){z.dvx*=-.3;z.dvz*=-.3;}
   z.yaw+=z.dspin*dt;
-  z.g.rotation.x=lerp(z.g.rotation.x,-Math.PI/2,Math.min(1,dt*(z.y>0?5:9)));
+  if(z.mixer)z.mixer.update(dt);
+  if(!z.animDeath)z.g.rotation.x=lerp(z.g.rotation.x,-Math.PI/2,Math.min(1,dt*(z.y>0?5:9)));
   if(z.dieT>1.6)z.sink+=dt*.7;
-  z.g.position.set(z.x,z.y*.9+.15*Math.min(1,z.dieT*3)*z.def.scale-z.sink,z.z);z.g.rotation.y=z.yaw;
+  z.g.position.set(z.x,z.y*.9+(z.animDeath?0:.15*Math.min(1,z.dieT*3)*z.def.scale)-z.sink,z.z);z.g.rotation.y=z.yaw;
 }
 
 function updateZombies(dt){
@@ -1222,23 +1274,29 @@ function updateZombies(dt){
     z.blocked=null;
     for(const s of segs){if(!solidSeg(s))continue;if(Math.abs(z.x-s.cx)>5.5||Math.abs(z.z-s.cz)>5.5)continue;if(collideSeg(z,d.r,s))z.blocked=s;}
     if(z.blocked){
-      z.wallT-=dt;if(z.wallT<=0){z.wallT=1.1;damageSeg(z.blocked,d.wall*(1+.06*S.wave));z.lunge=.25;}
+      z.wallT-=dt;if(z.wallT<=0){z.wallT=1.1;damageSeg(z.blocked,d.wall*(1+.06*S.wave));z.lunge=.25;zAttackAnim(z);}
       if(base.spikeLv&&!z.blocked.door){damageZombie(z,SPIKE_DPS[base.spikeLv]*dt,0,0,true);z.spikeT-=dt;if(z.spikeT<=0){z.spikeT=.5;burst(z.x,.8,z.z,2,'blood',3);}}
       if(z.dying)continue;
     }
     z.x=clamp(z.x,-MAP,MAP);z.z=clamp(z.z,-MAP,MAP);
-    if(player.alive&&pd<d.r+.85&&z.atkCd<=0){z.atkCd=z.type==='runner'?.75:1.1;z.lunge=.25;hurtPlayer(d.dmg*(1+.04*(S.wave-1)));
+    if(player.alive&&pd<d.r+.85&&z.atkCd<=0){z.atkCd=z.type==='runner'?.75:1.1;z.lunge=.25;zAttackAnim(z);hurtPlayer(d.dmg*(1+.04*(S.wave-1)));
       const kf=z.type==='brute'?(z.chargeT>0?20:9):z.type==='boss'?12:2.5;knockPlayer(pdx/(pd||1),pdz/(pd||1),kf);if(z.type==='brute')z.chargeT=0;}
     const fy=sp>0?Math.atan2(dx,dz):Math.atan2(pdx,pdz);
     let dy=fy-z.yaw;while(dy>Math.PI)dy-=Math.PI*2;while(dy<-Math.PI)dy+=Math.PI*2;z.yaw+=dy*Math.min(1,dt*8);
     z.walk+=dt*(sp+.5)*2.2;const sw=Math.sin(z.walk);
-    z.legs[0].rotation.x=sw*.6;z.legs[1].rotation.x=-sw*.6;
-    z.arms[0].rotation.x=-1.4+Math.sin(z.walk*.7)*.15-(z.lunge>0?.5:0);z.arms[1].rotation.x=-1.4-Math.sin(z.walk*.7)*.15-(z.lunge>0?.5:0);
-    z.g.position.set(z.x,Math.abs(Math.cos(z.walk))*.06,z.z);z.g.rotation.y=z.yaw;
+    if(z.mixer){
+      if(z.acts.walk)z.acts.walk.timeScale=clamp(sp/(d.speed*.8),.25,2.4)*(z.type==='runner'?1.5:1);
+      z.mixer.update(dt);z.g.position.set(z.x,0,z.z);
+    }else{
+      z.legs[0].rotation.x=sw*.6;z.legs[1].rotation.x=-sw*.6;
+      z.arms[0].rotation.x=-1.4+Math.sin(z.walk*.7)*.15-(z.lunge>0?.5:0);z.arms[1].rotation.x=-1.4-Math.sin(z.walk*.7)*.15-(z.lunge>0?.5:0);
+      z.g.position.set(z.x,Math.abs(Math.cos(z.walk))*.06,z.z);
+    }
+    z.g.rotation.y=z.yaw;
     z.g.rotation.x=z.type==='boss'&&z.slamT>0?-.35:0;
-    const fl=z.flash>0?.7:0;z.mats[0].emissive.setRGB(fl,fl*.2,fl*.1);z.mats[1].emissive.setRGB(fl,fl*.2,fl*.1);
+    const fl=z.flash>0?.7:0;for(const m of z.mats)if(m.emissive)m.emissive.setRGB(fl,fl*.2,fl*.1);
     const dmgd=z.hp<z.maxHp;z.bg.visible=z.fg.visible=dmgd;
-    if(dmgd){const y=(z.type==='boss'?2.6:2.35)*d.scale;z.bg.position.set(z.x-z.bw/2,y,z.z);z.fg.position.set(z.x-z.bw/2,y,z.z+.01);z.fg.scale.x=z.bw*Math.max(0,z.hp/z.maxHp);}
+    if(dmgd){const y=z.barY||(z.type==='boss'?2.6:2.35)*d.scale;z.bg.position.set(z.x-z.bw/2,y,z.z);z.fg.position.set(z.x-z.bw/2,y,z.z+.01);z.fg.scale.x=z.bw*Math.max(0,z.hp/z.maxHp);}
   }
   for(let i=0;i<zombies.length;i++){const a=zombies[i];if(a.dying)continue;
     for(let j=i+1;j<zombies.length;j++){const b=zombies[j];if(b.dying)continue;const dx=b.x-a.x,dz=b.z-a.z,rr=a.def.r+b.def.r;if(Math.abs(dx)>rr||Math.abs(dz)>rr)continue;
