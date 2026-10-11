@@ -1,8 +1,8 @@
 # Knockout Alley
 
-A 2D side-scrolling boxing game drawn in an 8-bit, NES-style look. It is one HTML file with no dependencies: open `index.html` in a browser to play.
+A 2D side-scrolling street-boxing brawler drawn in a 16-bit, Streets of Rage-inspired style. It is one HTML file with no dependencies: open `index.html` in a browser to play.
 
-Fight through three stages (Pier 9, Main Street, The Coliseum). Each stage ends with a boss fight.
+Fight through three stages (Downtown, The Docks, Fight Club). Each stage ends with a boss fight.
 
 ## Controls
 
