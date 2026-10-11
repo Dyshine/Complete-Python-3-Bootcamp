@@ -631,8 +631,21 @@ for(let i=0;i<95;i++){
   g.add(mki(CYL(.16,.3,dead?3.4:1.8,6),dead?TM('bark',1,2,0x4b4136,0xb0a89a):TM('bark',1,1,0x4a3a2a,0xffffff),0,dead?1.7:.9,0,.07));
   if(!dead){const c=pick(PINE);const fm=TM('pine',2,1,c,lighten(c,.62));g.add(mki(new THREE.ConeGeometry(1.6,3.2,7),fm,0,2.9,0,.1));g.add(mki(new THREE.ConeGeometry(1.1,2.4,7),fm,0,4.2,0,.1));}
   else{for(let b=0;b<3;b++){const br=mki(BOX(.12,1.4,.12),TM('bark',1,2,0x4b4136,0xb0a89a),0,rand(1.8,3),0,.05);br.rotation.z=rand(-.9,.9);br.rotation.y=rand(0,6.28);br.position.x=Math.sin(br.rotation.z)*-.5;g.add(br);}}
-  scene.add(g);obstacles.push({x:p.x,z:p.z,r:.55*s});trees.push({g,ph:rand(0,6.28),k:dead?.6:1/s});
+  scene.add(g);obstacles.push({x:p.x,z:p.z,r:.55*s});trees.push({g,ph:rand(0,6.28),k:dead?.6:1/s,kind:dead?'dead':'pine'});
 }
+// model trees: once a Higgsfield tree loads, every procedural tree of that kind is rebuilt from it
+const TREE_FILES={pine:['models/trees/pine.gltf.json',5.4],dead:['models/trees/dead.gltf.json',4.8]};
+function swapTrees(kind,gltf,h){
+  const root=gltf.scene;root.updateMatrixWorld(true);
+  const b=new THREE.Box3().setFromObject(root);const s=h/((b.max.y-b.min.y)||1);const c=b.getCenter(new THREE.Vector3());
+  root.traverse(o=>{if(!o.isMesh)return;const old=Array.isArray(o.material)?o.material[0]:o.material;
+    o.material=new THREE.MeshToonMaterial({map:old&&old.map||null,color:old&&old.map?0xffffff:(old&&old.color?old.color.getHex():0x6b5a48),gradientMap:TOON_GRAD});
+    o.castShadow=true;o.receiveShadow=true;});
+  root.scale.setScalar(s);root.position.set(-c.x*s,-b.min.y*s,-c.z*s);
+  for(const t of trees){if(t.kind!==kind)continue;t.g.clear();const inst=root.clone(true);t.g.add(inst);
+    inst.traverse(o=>{if(o.isMesh&&o.material!==INK)ink(o,.05/s);});}
+}
+if(THREE.GLTFLoader){const L=new THREE.GLTFLoader();for(const [k,[u,h]] of Object.entries(TREE_FILES))L.load(u,g=>{try{swapTrees(k,g,h);}catch(e){console.warn('Tree model '+k+' failed; keeping procedural trees.',e);}},undefined,()=>{});}
 for(let i=0;i<34;i++){
   const p=freeSpot(1.6,20,false);if(!p)continue;const s=rand(.6,1.5);
   const r=mki(new THREE.DodecahedronGeometry(1,0),TM('concrete',1,1,0x6d6a60,pick([0xb8b4a8,0xa8a498,0xc4bfb2])),p.x,.35*s,p.z,.07);r.scale.set(s*rand(.9,1.4),s*rand(.5,.9),s);r.rotation.set(rand(0,3),rand(0,3),0);
