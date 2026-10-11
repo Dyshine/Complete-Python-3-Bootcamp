@@ -22,3 +22,6 @@ get assets/zombies/grandma.glb      hf_20261011_192301_bcf453af-edd6-4b5f-aff6-f
 get assets/zombies/office.glb       hf_20261011_203740_ebe6f7fe-a969-4d1a-a870-376a2c9cfc48.glb  # walker/runner, Stumble_Walk (milder concept)
 get assets/zombies/anim/attack.glb  hf_20261011_203548_97cdc9b3-698e-402d-9c64-a9c4bc3f04b5.glb  # shared zombie attack: Left_Hook_from_Guard
 get assets/zombies/anim/death.glb   hf_20261011_203549_2287f39c-c8ab-43d0-a49c-c27cf968def4.glb  # shared zombie death: dying_backwards
+mkdir -p assets/trees
+get assets/trees/pine.glb           hf_20261011_205055_c5cdc406-83db-4158-89f7-7ae50a470056.glb  # Borderlands-style pine
+get assets/trees/dead.glb           hf_20261011_205056_c389ae8b-c159-416e-a723-aac405bcd49c.glb  # Borderlands-style dead tree
