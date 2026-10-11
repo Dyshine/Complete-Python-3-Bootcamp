@@ -41,7 +41,9 @@ kbd{font-family:inherit;font-size:8px;color:var(--ink);background:var(--text);pa
 .pad .dir{border-radius:8px;width:44px;height:44px}
 .dpad{display:grid;grid-template-columns:repeat(3,44px);grid-template-rows:repeat(3,44px);gap:2px}
 .d-up{grid-area:1/2}.d-left{grid-area:2/1}.d-right{grid-area:2/3}.d-down{grid-area:3/2}
-.pad .cluster{flex-wrap:wrap;justify-content:flex-end;max-width:132px}
+.pad .cluster{flex-wrap:wrap;justify-content:flex-end;max-width:196px}
+.pad .b-duck{background:#5c3c90}
+.pad .b-body{background:#c06018}
 .pad .b-block{background:#2850b0}
 .pad .b-jab{background:var(--red)}
 .pad .b-hook{background:#a01830}
@@ -64,6 +66,8 @@ kbd{font-family:inherit;font-size:8px;color:var(--ink);background:var(--text);pa
     </div>
     <div class="cluster">
       <button class="b-block" data-k="block" aria-label="Block">BLK</button>
+      <button class="b-duck" data-k="duck" aria-label="Duck">DCK</button>
+      <button class="b-body" data-k="body" aria-label="Body punch">BDY</button>
       <button class="b-star" data-k="star" aria-label="Star punch">&#9733;&#xFE0E;</button>
       <button class="b-hook" data-k="hook" aria-label="Uppercut">UPP</button>
       <button class="b-jab" data-k="jab" aria-label="Jab">JAB</button>
@@ -75,9 +79,11 @@ kbd{font-family:inherit;font-size:8px;color:var(--ink);background:var(--text);pa
   </div>
   <div class="legend">
     <span><kbd>&larr;</kbd> <kbd>&uarr;</kbd> <kbd>&darr;</kbd> <kbd>&rarr;</kbd> MOVE</span>
-    <span><kbd>C</kbd> BLOCK</span>
     <span><kbd>Z</kbd> JAB</span>
     <span><kbd>X</kbd> UPPERCUT</span>
+    <span><kbd>C</kbd> BODY PUNCH</span>
+    <span><kbd>V</kbd> BLOCK</span>
+    <span><kbd>SHIFT</kbd> DUCK</span>
     <span><kbd>SPACE</kbd> STAR PUNCH</span>
     <span><kbd>ENTER</kbd> START</span>
     <span><kbd>P</kbd> PAUSE</span>
@@ -108,7 +114,7 @@ const held = {}, pressed = {};
 const KEYMAP = {
   ArrowLeft:'left', KeyA:'left', ArrowRight:'right', KeyD:'right',
   ArrowUp:'up', KeyW:'up', ArrowDown:'down', KeyS:'down',
-  KeyC:'block', ShiftLeft:'block', ShiftRight:'block',
+  KeyC:'body', KeyV:'block', ShiftLeft:'duck', ShiftRight:'duck',
   KeyZ:'jab', KeyJ:'jab', KeyX:'hook', KeyK:'hook',
   Space:'star', KeyL:'star', Enter:'start', KeyP:'pause', Escape:'pause', KeyM:'mute'
 };
@@ -219,6 +225,7 @@ setInterval(() => {
 const MOVES = {
   jab:  { start:3,  active:3, rec:9,  dmg:4,  reach:38, kb:2,   stun:14 },
   hook: { start:9,  active:4, rec:16, dmg:9,  reach:34, kb:4,   stun:22 },
+  body: { start:5,  active:3, rec:12, dmg:6,  reach:34, kb:1.5, stun:26 },
   star: { start:18, active:6, rec:22, dmg:24, reach:40, kb:5.5, stun:30, launch:true }
 };
 const SK = { a:'#f0b088', b:'#c88058', c:'#8c5434' };
@@ -228,20 +235,22 @@ const TYPES = {
              pal: pal('b', { hair:'#181018', jacket:'#a82830', shirt:'#2c2030', pants:'#3c4460', gloves:'#8c5c30' }) },
   speedy:  { name:'SPEEDY RICO',   hp:26,  speed:1.6,  aggro:0.05,  block:0.3,  power:0.8, tell:{jab:6,hook:11}, moves:['jab','jab','jab','hook'],  score:400,  bulk:0,
              pal: pal('a', { hair:'#f040a0', hairStyle:'mohawk', vest:'#282830', pants:'#e8b820', shoes:'#ececec', gloves:'#f0d020' }) },
-  bruiser: { name:'BIG TONY',      hp:55,  speed:0.75, aggro:0.025, block:0.22, power:1.4, tell:{jab:8,hook:14}, moves:['hook','hook','jab'],        score:600,  bulk:2,
+  bruiser: { name:'BIG TONY',      hp:55,  speed:0.75, aggro:0.025, block:0.22, power:1.4, tell:{jab:8,hook:14}, moves:['hook','hook','jab','body'],        score:600,  bulk:2,
              pal: pal('c', { hairStyle:'bald', beard:'#201010', vest:'#6c4428', pants:'#44444c', gloves:'#282828' }) },
-  boss1:   { name:'BRUNO BRICK',   hp:110, speed:0.95, aggro:0.04,  block:0.3,  power:1.5, tell:{jab:6,hook:11}, moves:['hook','jab','hook','jab'], score:3000, bulk:3, boss:true,
+  boss1:   { name:'BRUNO BRICK',   hp:110, speed:0.95, aggro:0.04,  block:0.3,  power:1.5, tell:{jab:6,hook:11}, moves:['hook','jab','hook','jab','body'], score:3000, bulk:3, boss:true,
              pal: pal('a', { hairStyle:'bald', stache:'#5c3018', shades:true, shirt:'#4c6c34', pants:'#6c6c48', shoes:'#3c3020', gloves:'#2058e0' }) },
-  boss2:   { name:'VINNIE VOLT',   hp:120, speed:1.7,  aggro:0.06,  block:0.4,  power:1.3, tell:{jab:5,hook:10}, moves:['jab','jab','hook','jab'],  score:4000, bulk:1, boss:true,
+  boss2:   { name:'VINNIE VOLT',   hp:120, speed:1.7,  aggro:0.06,  block:0.4,  power:1.3, tell:{jab:5,hook:10}, moves:['jab','jab','hook','jab','body'],  score:4000, bulk:1, boss:true,
              pal: pal('b', { hair:'#100810', hairStyle:'long', shades:true, jacket:'#ececec', shirt:'#e02060', pants:'#ececec', belt:'#202020', gloves:'#40e090' }) },
-  boss3:   { name:'GRANITE GRANT', hp:160, speed:1.3,  aggro:0.06,  block:0.4,  power:1.7, tell:{jab:5,hook:9},  moves:['hook','jab','jab','hook'], score:8000, bulk:3, boss:true,
+  boss3:   { name:'GRANITE GRANT', hp:160, speed:1.3,  aggro:0.06,  block:0.4,  power:1.7, tell:{jab:5,hook:9},  moves:['hook','jab','jab','hook','body'], score:8000, bulk:3, boss:true,
              pal: pal('c', { hair:'#100810', hairStyle:'flattop', pants:'#282878', belt:'#f8c800', shoes:'#f8c800', gloves:'#f8c800' }) }
 };
-const PLAYER_PAL = pal('a', { hair:'#6c3418', band:'#d82020', shirt:'#f0f0f0', pants:'#3058b0', shoes:'#d83030', gloves:'#e02828' });
 /* Jack Johnson, heavyweight champion 1908-1915: shaved head, gold-tooth grin, long white trunks, flag sash, leather gloves, high boots */
 const JACK_PAL = pal('c', { skin:'#94583a', hairStyle:'bald', goldTooth:true, pants:'#ece6d4', shorts:true, belt:'#2848a8', beltStars:true, sash:'#c82830', boots:true, shoes:'#1c1820', gloves:'#d8a868' });
+/* Goldie Brooks: afro, mutton chops, mustache, orange satin trunks, red gloves with white wraps, white tasseled boots, gold robe */
+const GOLDIE_PAL = pal('b', { skin:'#a8643c', hair:'#140c10', hairStyle:'afro', sideburns:true, stache:'#140c10', pants:'#f07818', shorts:true, stripe:'#5c2c10',
+  belt:'#6c3418', boots:true, shoes:'#f0eee8', tassels:true, gloves:'#e02828', wraps:true, robe:'#e0b020' });
 const FIGHTERS = [
-  { name:'DUKE', full:'DUKE',         tag:'STREET BRAWLER',      pal:PLAYER_PAL, bulk:0, hp:100, power:1,   speed:1,    stats:[3, 3, 4] },
+  { name:'GOLDIE', full:'GOLDIE BROOKS', tag:'SOLID GOLD',       pal:GOLDIE_PAL, bulk:1, hp:105, power:1.1, speed:1,    stats:[4, 4, 4] },
   { name:'JACK', full:'JACK JOHNSON', tag:'THE GALVESTON GIANT', pal:JACK_PAL,   bulk:2, hp:115, power:1.2, speed:0.9,  stats:[5, 4, 3] }
 ];
 
@@ -372,7 +381,7 @@ function makeEnemy(kind, x){
 function setState(f, s){ if (f.state !== s) { f.state = s; f.t = 0; } }
 function startMove(f, mv){
   f.state = 'atk'; f.move = mv; f.t = 0; f.hitDone = false;
-  f.mStart = MOVES[mv].start + (f.isPlayer ? 0 : f.type.tell[mv] || 0);
+  f.mStart = MOVES[mv].start + (f.isPlayer ? 0 : f.type.tell[mv] ?? 9);
   if (f.isPlayer) sfx.swing();
 }
 function shake(n){ shakeT = Math.max(shakeT, n); shakeMag = Math.max(shakeMag, n > 6 ? 3 : 2); }
@@ -561,7 +570,7 @@ function drawBoxer(f){
   if (f.invul > 0 && (f.invul >> 2) & 1 && f.state !== 'down') return;
   if (!f.isPlayer && f.state === 'down' && f.hp <= 0 && f.t > f.downTime - 40 && (f.t >> 1) & 1) return;
   const P = f.pal, s = f.face, X = Math.round(f.x - camX), Y = Math.round(f.y + (f.z || 0));
-  const L = [[], [], []];
+  const L = [[], [], [], []];
   const A = (l, x, y, w, h, c, sh = true) => L[l].push([x, y, w, h, c, sh]);
   const st = f.state, t = f.t, bulk = f.bulk;
   const top = P.shirt || P.skin, arms = P.jacket || P.skin;
@@ -593,6 +602,10 @@ function drawBoxer(f){
         if (ph === 0) { fg = { x:-1, y:-28, w:6, h:7 }; arm = [{ x:1, y:-30, w:4, h:3 }]; lean = -2; b = 1; }
         else if (ph === 1) { fg = { x:11, y:-49, w:7, h:7 }; arm = [{ x:6, y:-34, w:4, h:4 }, { x:9, y:-43, w:3, h:7 }]; lean = 2; }
         else { fg = { x:10, y:-42, w:6, h:7 }; arm = [{ x:5, y:-34, w:5, h:4 }]; lean = 1; }
+      } else if (f.move === 'body') {
+        if (ph === 0) { fg = { x:2, y:-27, w:6, h:7 }; arm = [{ x:2, y:-27, w:3, h:3 }]; lean = -1; b = 3; }
+        else if (ph === 1) { fg = { x:16, y:-28, w:7, h:6 }; arm = [{ x:4, y:-28, w:13, h:3 }]; lean = 2; b = 3; }
+        else { fg = { x:11, y:-28, w:6, h:7 }; arm = [{ x:4, y:-28, w:8, h:3 }]; lean = 1; b = 2; }
       } else {
         if (ph === 0) { fg = { x:-6, y:-25, w:7, h:7 }; arm = [{ x:-2, y:-29, w:4, h:4 }]; lean = -2; b = 3; gl = (t >> 1) & 1 ? '#fcfcfc' : P.gloves; }
         else if (ph === 1) { fg = { x:9, y:-59, w:8, h:9 }; arm = [{ x:6, y:-36, w:4, h:6 }, { x:9, y:-50, w:4, h:14 }]; lean = 3; gl = '#f8e070'; }
@@ -600,14 +613,21 @@ function drawBoxer(f){
       }
       if (!f.isPlayer && ph === 0 && (t >> 2) & 1) gl = '#fcfcfc';
     }
+    if (st === 'duck') { b = 7; lean = 2; legA = 2; fg = { x:7, y:-37, w:6, h:7 }; bg = { x:4, y:-41, w:6, h:6 }; arm = [{ x:4, y:-33, w:4, h:3 }]; }
     if (st === 'block') { fg = { x:7, y:-41, w:6, h:8 }; bg = { x:5, y:-47, w:6, h:6 }; arm = [{ x:4, y:-33, w:5, h:3 }]; lean = -1; }
     if (st === 'hit') { lean = -3; fg = { x:5, y:-31, w:6, h:7 }; bg = { x:-1, y:-36, w:6, h:6 }; arm = [{ x:2, y:-30, w:4, h:3 }]; }
     if (st === 'win') { fg = { x:-1, y:-62, w:7, h:7 }; arm = [{ x:0, y:-55, w:3, h:22 }]; bg = { x:3, y:-38, w:6, h:6 }; }
     // legs and shoes
     const legC = P.shorts ? P.skin : P.pants;
     A(0, -5 - legA, -14 + b, 4, 11 - b, legC); A(0, 1 + legA, -14 + b, 4, 11 - b, legC);
-    if (P.shorts) { A(0, -6 - legA, -14 + b, 5, 6, P.pants); A(0, legA, -14 + b, 6, 6, P.pants); }
-    if (P.boots) { A(0, -6 - legA, -7, 6, 7, P.shoes); A(0, 1 + legA, -7, 7, 7, P.shoes); A(0, 1 + legA, -5, 5, 1, shade(P.shoes, 0.3), false); }
+    if (P.shorts) {
+      A(0, -6 - legA, -14 + b, 5, 6, P.pants); A(0, legA, -14 + b, 6, 6, P.pants);
+      if (P.stripe) A(0, 4 + legA, -14 + b, 1, 6, P.stripe, false);
+    }
+    if (P.boots) {
+      A(0, -6 - legA, -7, 6, 7, P.shoes); A(0, 1 + legA, -7, 7, 7, P.shoes); A(0, 1 + legA, -5, 5, 1, shade(P.shoes, 0.3), false);
+      if (P.tassels) { A(0, 0 + legA, -7, 1, 3, '#d8b048', false); A(0, -7 - legA, -7, 1, 3, '#d8b048', false); for (let i = 0; i < 3; i++) A(0, 3 + legA, -6 + i * 2, 2, 1, '#9c9c9c', false); }
+    }
     else { A(0, -6 - legA, -3, 6, 3, P.shoes); A(0, 1 + legA, -3, 7, 3, P.shoes); }
     A(0, 2 + legA, -1, 6, 1, shade(P.shoes, 0.5), false);
     // hips and belt
@@ -616,6 +636,11 @@ function drawBoxer(f){
     A(0, -6 - bulk + tl, -21 + b, 12 + bulk * 2, 2, P.belt, false);
     if (P.belt === '#f8c800') A(0, 1 + tl, -22 + b, 5, 4, '#f8e070');
     if (P.beltStars) for (let i = 0; i < 4; i++) A(0, -4 - bulk + tl + i * 3, -21 + b, 1, 1, '#fcfcfc', false);
+    if (P.robe) { // gold satin robe draped behind the back shoulder
+      const sway = (t >> 4) & 1, rc = P.robe;
+      A(3, -9 + lean, -34 + b, 9, 5, rc); A(3, -11 + lean, -31 + b, 8, 16, rc); A(3, -13 + lean - sway, -16 + b, 9, 7, rc);
+      A(3, -10 + lean, -30 + b, 1, 14, shade(rc, 0.45), false); A(3, -7 + lean, -26 + b, 1, 10, shade(rc, -0.35), false);
+    }
     if (P.sash) { A(0, -5 - bulk + tl, -19 + b, 3, 7, P.sash, false); A(0, -5 - bulk + tl, -17 + b, 3, 1, '#fcfcfc', false); A(0, -5 - bulk + tl, -15 + b, 3, 1, '#fcfcfc', false); }
     // torso: shirt, jacket or vest
     const tx = -5 - bulk + lean, tw = 11 + bulk * 2;
@@ -633,9 +658,11 @@ function drawBoxer(f){
       if (hs === 'mohawk') { A(0, hx + 2, hy - 4, 4, 5, P.hair); A(0, hx + 1, hy - 2, 1, 2, P.hair, false); }
       else if (hs === 'flattop') { A(0, hx, hy - 3, 9, 5, P.hair); A(0, hx, hy, 3, 5, P.hair, false); }
       else if (hs === 'long') { A(0, hx - 1, hy - 1, 10, 4, P.hair); A(0, hx - 1, hy, 4, 12, P.hair); }
+      else if (hs === 'afro') { A(0, hx - 1, hy - 8, 10, 2, P.hair); A(0, hx - 3, hy - 6, 14, 4, P.hair); A(0, hx - 4, hy - 3, 15, 5, P.hair); A(0, hx - 3, hy + 2, 5, 3, P.hair); }
       else { A(0, hx, hy - 1, 9, 4, P.hair); A(0, hx, hy, 3, 6, P.hair, false); }
     }
     if (P.band) A(0, hx, hy + 2, 9, 2, P.band, false);
+    if (P.sideburns) A(0, hx + 2, hy + 2, 2, 6, P.hair, false);
     A(0, hx + 9, hy + 4, 1, 2, P.skin, false);
     if (P.shades) { A(0, hx + 4, hy + 3, 6, 2, '#181020', false); A(0, hx + 7, hy + 3, 1, 1, '#8c8cd0', false); }
     else { A(0, hx + 5, hy + 4, 2, 2, '#fcfcfc', false); A(0, hx + 6, hy + 4, 1, 2, '#140c1c', false); A(0, hx + 5, hy + 3, 3, 1, shade(P.hair || P.skin, -0.3), false); }
@@ -646,12 +673,18 @@ function drawBoxer(f){
     if (P.stache) A(0, hx + 5, hy + 6, 5, 1, P.stache, false);
     A(1, bg.x + lean, bg.y + b, bg.w, bg.h, shade(P.gloves, -0.3));
     for (const r of arm) A(2, r.x + lean, r.y + b, r.w, r.h, arms);
+    if (P.wraps) { // white hand wraps on the wrist side of the glove
+      const ar = arm[arm.length - 1];
+      if (ar.h > ar.w) A(2, fg.x + lean + 1, fg.y + b + fg.h - 1, fg.w - 2, 2, '#f4f0e8');
+      else A(2, fg.x + lean - 2, fg.y + b + 1, 2, fg.h - 2, '#f4f0e8');
+      A(1, bg.x + lean + 1, bg.y + b + bg.h - 1, bg.w - 2, 2, '#d8d4cc');
+    }
     A(2, fg.x + lean, fg.y + b, fg.w, fg.h, gl);
     A(2, fg.x + lean + 1, fg.y + b + 1, 2, 1, '#fcfcfc', false);
     if (!f.isPlayer && st === 'atk' && f.move === 'hook' && t < f.mStart) { A(2, -1, -55, 2, 5, '#f8d020', false); A(2, -1, -48, 2, 2, '#f8d020', false); }
   }
   const white = f.flashT > 0;
-  for (const layer of L) {
+  for (const layer of [L[3], L[0], L[1], L[2]]) {
     const rs = layer.map(r => {
       const x0 = Math.round(r[0] * S), x1 = Math.round((r[0] + r[2]) * S), y0 = Math.round(r[1] * S), y1 = Math.round((r[1] + r[3]) * S);
       return [s > 0 ? X + x0 : X - x1, Y + y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0), r[4], r[5]];
@@ -675,6 +708,7 @@ function stepFighter(f){
   if (f.invul > 0) f.invul--;
   if (f.cool > 0) f.cool--;
   if (f.flashT > 0) f.flashT--;
+  if (f.slipT > 0) f.slipT--;
   if (f.trail === undefined || f.trail < f.hp) f.trail = f.hp; else if (f.trail > f.hp) f.trail = Math.max(f.hp, f.trail - 0.5);
   if (f.state === 'air') {
     f.x += f.vx; f.vy += 0.25; f.z += f.vy;
@@ -700,13 +734,19 @@ function tryHit(a){
   const m = MOVES[a.move];
   const pool = a.isPlayer ? enemies : [player];
   let best = null, bd = 1e9;
+  let dodger = null;
   for (const t of pool) {
     if (!vulnerable(t) || Math.abs(t.y - a.y) > 9) continue;
     const dx = (t.x - a.x) * a.face;
     if (dx < -3 || dx > m.reach + t.bulk * 1.5) continue;
+    if (t.state === 'duck' && a.move !== 'body') { dodger = t; continue; } // head shots sail over a ducking fighter
     if (dx < bd) { bd = dx; best = t; }
   }
   if (best) { a.hitDone = true; landHit(a, best, m); return; }
+  if (dodger) {
+    a.hitDone = true; dodger.slipT = 40; sfx.swing(); tone(1400, 0.05, 'square', 0.08, 300);
+    pop(dodger.x, dodger.y - 70, 'SLIP!', '#90d8f8'); return;
+  }
   if (!a.isPlayer) return;
   for (const pr of props) {
     if (pr.dead || Math.abs(pr.y - a.y) > 11) continue;
@@ -733,17 +773,20 @@ function dropFood(x, y){
 }
 function dust(x, y){ for (let i = 0; i < 8; i++) parts.push({ x: x + (Math.random() * 30 - 15), y: y - 2, vx: Math.random() * 2 - 1, vy: -Math.random() * 1.2, life: 22, c: '#a8a0b8', g: 0.04, sz: 3 }); }
 function landHit(a, t, m){
-  const hy = a.y + (a.z || 0) - (a.move === 'jab' ? 54 : 66);
+  const hy = a.y + (a.z || 0) - (a.move === 'body' ? 38 : a.move === 'jab' ? 54 : 66);
   const blocking = t.state === 'block' && t.face === -a.face;
-  if (blocking && a.move !== 'star') {
+  if (blocking && a.move !== 'star' && a.move !== 'body') {
     t.vx = a.face * m.kb * 0.9;
     if (!a.isPlayer) { const chip = Math.ceil(m.dmg * a.power * 0.1); t.hp = Math.max(1, t.hp - chip); }
     else t.blockT = Math.max(t.blockT || 0, t.t + 14);
     sparks.push({ x: t.x - a.face * 9, y: hy, life: 5, big: false, c: '#a8b8f0' });
     sfx.block(); hitstop = 2; return;
   }
-  const counter = t.state === 'atk' && t.t < t.mStart;
-  const dmg = Math.round(m.dmg * a.power * (blocking ? 0.5 : 1) * (counter ? 1.5 : 1) * (t.isPlayer ? t.chin : 1));
+  // counters: hitting during their wind-up, or punching right after slipping a shot
+  const counter = (t.state === 'atk' && t.t < t.mStart) || (a.slipT > 0);
+  a.slipT = 0;
+  if (a.move === 'body') { t.cool = (t.cool || 0) + 30; if (blocking && a.isPlayer) pop(t.x, t.y - 72, 'GUARD BREAK', '#f89040'); }
+  const dmg = Math.round(m.dmg * a.power * (blocking && a.move === 'star' ? 0.5 : 1) * (counter ? 1.5 : 1) * (t.isPlayer ? t.chin : 1));
   t.hp = Math.max(0, t.hp - dmg);
   t.face = -a.face; t.flashT = 3;
   if (a.isPlayer) {
@@ -798,7 +841,8 @@ function enemyAI(e){
   setState(e, moving ? 'walk' : 'idle');
   const diff = 1 + stageIdx * 0.3;
   if (e.attacker && !pDown && dist < 40 && Math.abs(dy) < 6 && e.cool <= 0 && Math.random() < T.aggro * diff) {
-    startMove(e, T.moves[Math.random() * T.moves.length | 0]);
+    const mv = player.state === 'duck' && T.moves.includes('body') && Math.random() < 0.6 ? 'body' : T.moves[Math.random() * T.moves.length | 0];
+    startMove(e, mv);
     e.cool = (30 + Math.random() * 50) / diff;
   }
 }
@@ -884,11 +928,13 @@ function update(){
   // ---- play ----
   if (hitstop > 0) { hitstop--; stepFX(); return; }
   const p = player;
-  if (['idle','walk','block'].includes(p.state)) {
+  if (['idle','walk','block','duck'].includes(p.state)) {
     const q = p.queued; p.queued = null;
     if ((pressed.star || q === 'star') && p.stars > 0) { p.stars--; startMove(p, 'star'); sfx.star(); }
     else if (pressed.hook || q === 'hook') startMove(p, 'hook');
+    else if (pressed.body || q === 'body') startMove(p, 'body');
     else if (pressed.jab || q === 'jab') startMove(p, 'jab');
+    else if (held.duck) { setState(p, 'duck'); }
     else if (held.block) { setState(p, 'block'); }
     else {
       const mv = (held.right ? 1 : 0) - (held.left ? 1 : 0), mvy = (held.down ? 1 : 0) - (held.up ? 1 : 0);
@@ -902,7 +948,7 @@ function update(){
     }
   } else if (p.state === 'atk') {
     const m = MOVES[p.move];
-    if (p.t >= p.mStart + m.active) { if (pressed.jab) p.queued = 'jab'; if (pressed.hook) p.queued = 'hook'; if (pressed.star) p.queued = 'star'; }
+    if (p.t >= p.mStart + m.active) { if (pressed.jab) p.queued = 'jab'; if (pressed.body) p.queued = 'body'; if (pressed.hook) p.queued = 'hook'; if (pressed.star) p.queued = 'star'; }
   }
   stepFighter(p);
 
@@ -1057,6 +1103,7 @@ function drawFace(x, y, P){
     if (hs === 'mohawk') R(x + 8, y, 4, 6, P.hair);
     else if (hs === 'flattop') R(x + 5, y + 1, 10, 5, P.hair);
     else if (hs === 'long') { R(x + 4, y + 3, 12, 4, P.hair); R(x + 4, y + 3, 4, 15, P.hair); }
+    else if (hs === 'afro') { R(x + 4, y, 13, 2, P.hair); R(x + 2, y + 2, 17, 6, P.hair); R(x + 2, y + 8, 5, 4, P.hair); R(x + 7, y + 8, 2, 7, P.hair); }
     else { R(x + 5, y + 3, 10, 4, P.hair); R(x + 5, y + 3, 3, 8, P.hair); }
   }
   if (P.band) R(x + 5, y + 6, 10, 2, P.band);
@@ -1087,7 +1134,7 @@ function drawHUD(){
   ctx.fillStyle = 'rgba(12,6,24,.6)'; ctx.fillRect(0, 0, W, 36); R(0, 36, W, 1, 'rgba(12,6,24,.35)');
   drawFace(6, 5, p.pal);
   txt(p.name, 32, 4, '#fcfcfc');
-  txt(String(score).padStart(6, '0'), 72, 4, '#f8d820');
+  txt(String(score).padStart(6, '0'), 40 + p.name.length * 8, 4, '#f8d820');
   hudBar(32, 15, 96, p.hp / p.maxHp, (p.trail ?? p.hp) / p.maxHp);
   if (low && (frameN >> 3) & 1) R(32, 15, Math.round(96 * p.hp / p.maxHp), 7, '#ff5050');
   txt('x' + lives, 134, 15, '#fcfcfc');
@@ -1177,7 +1224,7 @@ function render(){
   if (state === 'title') {
     const ph = frameN % 90;
     const demo = [
-      makeFighter({ x: camX + 130, y: 196, face: 1, pal: PLAYER_PAL, t: ph < 12 ? ph : frameN, state: ph < 12 ? 'atk' : 'idle', move:'jab', mStart:3, isPlayer:true }),
+      makeFighter({ x: camX + 130, y: 196, face: 1, pal: GOLDIE_PAL, bulk: 1, t: ph < 12 ? ph : frameN, state: ph < 12 ? 'atk' : 'idle', move:'jab', mStart:3, isPlayer:true }),
       makeFighter({ x: camX + 196, y: 196, face: -1, pal: TYPES.boss3.pal, bulk: 3, t: frameN, state: ph >= 12 && ph < 34 ? 'block' : 'idle', isPlayer:true })
     ];
     demo.forEach(drawBoxer);

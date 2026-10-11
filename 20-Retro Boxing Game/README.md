@@ -10,10 +10,12 @@ Pick your fighter after pressing Start:
 
 | Fighter | Style | Power | HP | Speed |
 | --- | --- | --- | --- | --- |
-| Duke | Street brawler | ★★★ | ★★★ | ★★★★ |
+| Goldie Brooks | "Solid Gold": afro, gold robe, orange satin trunks | ★★★★ | ★★★★ | ★★★★ |
 | Jack Johnson | "The Galveston Giant", heavyweight champion 1908–1915 | ★★★★★ | ★★★★ | ★★★ |
 
 Jack Johnson is drawn in his era's style: shaved head, gold-toothed grin, long white trunks with a stars-and-stripes sash, leather gloves and high boots.
+
+![Goldie Brooks sprite sheet](goldie-brooks-sprites.png)
 
 ![Jack Johnson sprite sheet](jack-johnson-sprites.png)
 
@@ -22,7 +24,9 @@ Jack Johnson is drawn in his era's style: shaved head, gold-toothed grin, long w
 | Action | Keyboard | Touch |
 | --- | --- | --- |
 | Move (left, right, up and down the street) | Arrow keys (or WASD) | D-pad |
-| Block | C (or Shift) | BLK |
+| Body punch | C | BDY |
+| Block | V | BLK |
+| Duck | Shift (hold) | DCK |
 | Jab | Z (or J) | JAB |
 | Uppercut | X (or K) | UPP |
 | Star punch | Space (or L) | ★ |
@@ -44,6 +48,9 @@ Crates, barrels and trash cans line every stage. Each one takes a random number 
 | Ice Bath | Refill HP to full | any time |
 
 ## Tips
+
+- **Duck** under jabs and uppercuts. A punch that whiffs over you is a **slip**, and your next punch counts as a counter. Ducking doesn't stop body punches, and enemies throw more of them when you duck.
+- **Body punches** go straight through an opponent's block and make them hesitate before their next attack.
 
 - Punches only land on fighters at the same depth, so line up with your opponent or step up and down out of the way.
 
