@@ -898,12 +898,15 @@ function setupHero(gltf){
   root.traverse(o=>{if(!o.isBone)return;if(!HERO.rootBone&&!(o.parent&&o.parent.isBone))HERO.rootBone=o.name;
     if(!HERO.hand&&/right.?hand|hand.?r(ight)?$|r_?hand/i.test(o.name))HERO.hand=o;});
   HERO.mixer=new THREE.AnimationMixer(root);HERO.root=root;
-  const base=gltf.animations.find(a=>/walk/i.test(a.name))||gltf.animations[0];
-  if(base){addHeroClip('walk',base);if(/idle/i.test(base.name))HERO.acts.idle=HERO.acts.walk;}
+  // clips may ship packed in hero.glb (named idle/walk/back/run/hit/death) or as separate anim/*.glb files
+  const packed=new Set();
+  for(const k of Object.keys(HERO_ANIMS)){const c=gltf.animations.find(a=>a.name===k);if(c){addHeroClip(k,c);packed.add(k);}}
+  if(!HERO.acts.walk){const base=gltf.animations.find(a=>/walk/i.test(a.name))||gltf.animations[0];
+    if(base){addHeroClip('walk',base);if(/idle/i.test(base.name))HERO.acts.idle=HERO.acts.walk;}}
   for(const p of boxParts)if(p!==gun)p.visible=false;
   HERO.ready=true;heroPlay(HERO.acts.idle?'idle':'walk',0);
   const L=new THREE.GLTFLoader();
-  for(const [k,url] of Object.entries(HERO_ANIMS))L.load(url,g=>{if(g.animations[0])addHeroClip(k,g.animations[0]);},undefined,()=>{});
+  for(const [k,url] of Object.entries(HERO_ANIMS))if(!packed.has(k))L.load(url,g=>{if(g.animations[0])addHeroClip(k,g.animations[0]);},undefined,()=>{});
 }
 const _hp=new V3();
 function updateHero(dt,moving,sprint,fwd,sp){
