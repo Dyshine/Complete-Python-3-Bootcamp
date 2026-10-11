@@ -14,4 +14,4 @@ get assets/anim/walk_back_shoot.glb hf_20261011_170717_9735ae9c-19d9-4b2e-aab8-9
 get assets/anim/run.glb             hf_20261011_170718_6f45da2f-907a-4620-8b56-6d989a46f88d.glb  # RunFast
 get assets/anim/hit.glb             hf_20261011_170719_281734fc-bf97-4cc6-a56c-63afc147fcdb.glb  # Face_Punch_Reaction
 get assets/anim/death.glb           hf_20261011_170720_f6aa6cde-a2fb-4096-bc4c-31ffe5ce702b.glb  # Shot_and_Fall_Backward
-# idle (job f65a22aa-5c28-40af-b0e5-2cf722709df5): filename added once the job finishes
+get assets/anim/idle.glb            hf_20261011_170715_f65a22aa-5c28-40af-b0e5-2cf722709df5.glb  # Idle
