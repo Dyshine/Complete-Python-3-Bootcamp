@@ -934,7 +934,7 @@ function updateHero(dt,moving,sprint,fwd,sp){
   // keep the gun in the right hand, pointed where the player aims
   if(HERO.hand){HERO.hand.getWorldPosition(_hp);pl.worldToLocal(_hp);gun.position.set(_hp.x*.6,_hp.y,Math.max(.25,_hp.z+.25)-player.recoil*2);gun.visible=!HERO.dead;}
 }
-if(THREE.GLTFLoader){try{new THREE.GLTFLoader().load('hero.glb',g=>{try{setupHero(g);}catch(e){console.warn('Hero model setup failed; using box survivor.',e);}},undefined,()=>{});}catch(e){}}
+if(THREE.GLTFLoader){try{new THREE.GLTFLoader().load('models/hero.gltf.json',g=>{try{setupHero(g);}catch(e){console.warn('Hero model setup failed; using box survivor.',e);}},undefined,()=>{});}catch(e){}}
 
 /* ================= DEFINITIONS ================= */
 const WEAP={
@@ -1094,7 +1094,7 @@ function updateWeather(dt,cx,cz){
 /* ================= ZOMBIES ================= */
 const eyeMats={};
 /* model-based zombies: rigged GLBs replace the box infected per type when they ship with the page */
-const ZMODEL_FILES={grandma:['zombies/grandma.glb',1.55],trucker:['zombies/trucker.glb',1.9],hulk:['zombies/hulk.glb',1.95]};
+const ZMODEL_FILES={grandma:['models/zombies/grandma.gltf.json',1.55],trucker:['models/zombies/trucker.gltf.json',1.9],hulk:['models/zombies/hulk.gltf.json',1.95]};
 const ZMODEL_FOR={walker:['grandma'],runner:['grandma'],boomer:['trucker'],brute:['hulk']};
 const ZSHARED={}; // shared attack/death clips: {attack:'zombies/anim/attack.glb',death:'zombies/anim/death.glb'} once generated
 const ZM={},ZCLIP={},zOlMats={};
