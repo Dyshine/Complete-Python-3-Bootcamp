@@ -1119,8 +1119,8 @@ function updateWeather(dt,cx,cz){
 /* ================= ZOMBIES ================= */
 const eyeMats={};
 /* model-based zombies: rigged GLBs replace the box infected per type when they ship with the page */
-const ZMODEL_FILES={grandma:['models/zombies/grandma.gltf.json',1.55],trucker:['models/zombies/trucker.gltf.json',1.9],hulk:['models/zombies/hulk.gltf.json',1.95]};
-const ZMODEL_FOR={walker:['grandma'],runner:['grandma'],boomer:['trucker'],brute:['hulk']};
+const ZMODEL_FILES={office:['models/zombies/office.gltf.json',2.05],grandma:['models/zombies/grandma.gltf.json',1.55],trucker:['models/zombies/trucker.gltf.json',1.9],hulk:['models/zombies/hulk.gltf.json',1.95]};
+const ZMODEL_FOR={walker:['office','grandma'],runner:['office','grandma'],boomer:['trucker'],brute:['hulk']};
 const ZSHARED={attack:'models/zombies/anim/attack.gltf.json',death:'models/zombies/anim/death.gltf.json'};
 const ZM={},ZCLIP={},zOlMats={};
 function prepZModel(k,gltf,h){

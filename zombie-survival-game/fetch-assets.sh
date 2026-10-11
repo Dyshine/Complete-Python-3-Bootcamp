@@ -19,6 +19,6 @@ mkdir -p assets/zombies/anim
 get assets/zombies/trucker.glb      hf_20261011_192258_4e790188-b9ee-4b5b-8af6-58af35690278.glb  # boomer, Slow_Orc_Walk
 get assets/zombies/hulk.glb         hf_20261011_192300_2d73ef70-59e6-4a3d-bbf8-cf442b8a8879.glb  # brute, Monster_Walk
 get assets/zombies/grandma.glb      hf_20261011_192301_bcf453af-edd6-4b5f-aff6-f89e3513651a.glb  # walker/runner, Elderly_Shaky_Walk
-# office worker (walker/runner) was rejected by Higgsfield's content filter; shared attack/death clips not generated yet
+get assets/zombies/office.glb       hf_20261011_203740_ebe6f7fe-a969-4d1a-a870-376a2c9cfc48.glb  # walker/runner, Stumble_Walk (milder concept)
 get assets/zombies/anim/attack.glb  hf_20261011_203548_97cdc9b3-698e-402d-9c64-a9c4bc3f04b5.glb  # shared zombie attack: Left_Hook_from_Guard
 get assets/zombies/anim/death.glb   hf_20261011_203549_2287f39c-c8ab-43d0-a49c-c27cf968def4.glb  # shared zombie death: dying_backwards
