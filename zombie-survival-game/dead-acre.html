@@ -78,7 +78,9 @@ button:focus-visible,.padfocus{outline:3px solid var(--toxic)!important;outline-
 .tc{position:absolute;left:50%;transform:translateX(-50%);top:calc(12px + env(safe-area-inset-top,0px));display:flex;gap:8px}
 .res{display:flex;align-items:center;gap:8px;font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;padding:6px 12px}
 .res small{font-size:11px;letter-spacing:.14em;color:var(--mute);font-weight:600}
-.ic-scrap,.ic-parts{display:inline-block;width:12px;height:12px;flex:none}
+.ic-scrap,.ic-parts,.ic-wood,.ic-stone,.ic-food{display:inline-block;width:12px;height:12px;flex:none}
+.ic-wood{background:#b07a3e;clip-path:polygon(0 25%,100% 0,100% 75%,0 100%)}.ic-stone{background:#a8a69a;clip-path:polygon(20% 0,80% 10%,100% 60%,70% 100%,10% 85%,0 35%)}.ic-food{background:#8fd14f;border-radius:50%}
+.dmgn.res{color:#e9e2c8;font-size:20px}
 .ic-scrap{background:var(--hazard);clip-path:polygon(0 30%,40% 0,100% 20%,85% 100%,20% 85%)}
 .ic-parts{background:var(--rare);clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%)}
 
@@ -117,7 +119,7 @@ kbd.k{font-family:var(--f-ui);background:var(--hazard);color:var(--ink);padding:
 kbd.pb{font-family:var(--f-ui);display:inline-grid;place-items:center;width:1.45em;height:1.45em;border-radius:50%;color:#0c0e0b;font-weight:700;margin-right:8px;font-size:.85em;padding:0;border:0}
 kbd.pa{background:var(--pad-a)}kbd.pbb{background:var(--pad-b)}kbd.px{background:var(--pad-x);color:#fff}kbd.py{background:var(--pad-y)}
 kbd.pl{border-radius:3px;width:auto;padding:0 6px;background:var(--bone)}
-#toasts{position:absolute;left:calc(12px + env(safe-area-inset-left,0px));top:210px;display:grid;gap:5px;max-width:min(340px,70vw)}
+#toasts{position:absolute;left:calc(12px + env(safe-area-inset-left,0px));top:calc(246px + env(safe-area-inset-top,0px));display:grid;gap:5px;max-width:min(340px,70vw)}
 .toast{background:var(--panel);border-left:3px solid var(--hazard);padding:6px 10px;font-size:15px;animation:tin .25s ease-out;transition:opacity .5s}
 .toast.bad{border-left-color:var(--blood)}
 .toast.good{border-left-color:var(--toxic)}
@@ -204,7 +206,7 @@ kbd.pl{border-radius:3px;width:auto;padding:0 6px;background:var(--bone)}
   .slots{display:none}
   .tc{top:auto;bottom:calc(296px + env(safe-area-inset-bottom,0px))}
   .res{font-size:16px;padding:4px 8px}
-  #toasts{top:170px}
+  #toasts{top:206px}
   #prompt{bottom:calc(296px + env(safe-area-inset-bottom,0px));font-size:15px}
 }
 @media (prefers-reduced-motion:reduce){.toast{animation:none}#banner{transition:none}}
@@ -230,6 +232,9 @@ kbd.pl{border-radius:3px;width:auto;padding:0 6px;background:var(--bone)}
   <div class="tc">
     <div class="res panel"><i class="ic-scrap"></i><span id="scrapNum">0</span><small>SCRAP</small></div>
     <div class="res panel"><i class="ic-parts"></i><span id="partsNum">0</span><small>PARTS</small></div>
+    <div class="res panel"><i class="ic-wood"></i><span id="woodNum">0</span><small>WOOD</small></div>
+    <div class="res panel"><i class="ic-stone"></i><span id="stoneNum">0</span><small>STONE</small></div>
+    <div class="res panel"><i class="ic-food"></i><span id="foodNum">0</span><small>FOOD</small></div>
   </div>
   <div class="stealth panel" id="stealth" hidden><span id="stealthTxt">HIDDEN</span><span class="meter"><i id="stealthBar"></i></span></div>
   <div class="tr panel">
@@ -288,7 +293,8 @@ kbd.pl{border-radius:3px;width:auto;padding:0 6px;background:var(--bone)}
           <kbd>1–5 / Q</kbd><span>Switch weapon · <b>R</b> reload</span>
           <kbd>E</kbd><span>Loot, gates, doors · takedown from behind</span>
           <kbd>B</kbd><span>Base workshop (inside walls)</span>
-          <kbd>H / G</kbd><span>Use medkit · throw grenade</span>
+          <kbd>H / G / F</kbd><span>Use medkit · throw grenade · eat</span>
+          <kbd>E (hold)</kbd><span>Chop trees, mine rocks, tend the garden</span>
           <kbd>Space</kbd><span>Start the night early</span>
           <kbd>P / M</kbd><span>Pause · mute</span>
         </div>
@@ -1141,12 +1147,16 @@ function treeBody(g,dead){
 }
 function addTree(x,z,s,dead){
   const g=new THREE.Group();g.position.set(x,0,z);g.scale.setScalar(s);g.rotation.y=rand(0,6.28);
-  treeBody(g,dead);track(g);addOb({x,z,r:.55*s});
-  const t={g,ph:rand(0,6.28),k:dead?.6:1/s,kind:dead?'dead':'pine'};trees.push(t);if(CUR)CUR.trees.push(t);
+  if(CUR&&CUR.cut&&CUR.cut.has(cutKey(x,z)))return;
+  treeBody(g,dead);track(g);const ob=addOb({x,z,r:.55*s});
+  const t={g,ph:rand(0,6.28),k:dead?.6:1/s,kind:dead?'dead':'pine',x,z,s,hp:dead?3:4.5,ob,ch:CUR};ob.tree=t;trees.push(t);if(CUR)CUR.trees.push(t);
 }
+const rocks=[];
+const cutKey=(x,z)=>Math.round(x*2)+','+Math.round(z*2);
 function addRock(x,z,s){
+  if(CUR&&CUR.cut&&CUR.cut.has(cutKey(x,z)))return;
   const r=mki(ROCK_G,TM('concrete',1,1,0x6d6a60,pick([0xb8b4a8,0xa8a498,0xc4bfb2])),x,.35*s,z,.07);r.scale.set(s*rand(.9,1.4),s*rand(.5,.9),s);r.rotation.set(rand(0,3),rand(0,3),0);
-  track(r);addOb({x,z,r:1.05*s});
+  track(r);const ob=addOb({x,z,r:1.05*s});const rk={m:r,x,z,s,hp:3+s*1.5,ob,ch:CUR,sc:r.scale.clone()};ob.rock=rk;rocks.push(rk);if(CUR)CUR.rocks.push(rk);
 }
 const barrelM=M(0x8a2e22),bandM=new THREE.MeshStandardMaterial({color:0xf2a516,roughness:.7,emissive:0x3a2200});
 function addBarrel(x,z){
@@ -1231,7 +1241,8 @@ const STREET_V=new THREE.PlaneGeometry(5,CH),STREET_H=new THREE.PlaneGeometry(CH
 onTex('asphalt',()=>{streetM.map=texRep('asphalt',1,7);streetMH.map=texRep('asphalt',7,1);for(const m of [streetM,streetMH]){m.color.setHex(0xc8c8c4);m.needsUpdate=true;}});
 function genChunk(cx,cz){
   const key=cx+','+cz;if(chunks.has(key))return;
-  const ch={cx,cz,key,biome:biomeAt(cx,cz),objs:[],obs:[],inks:[],houses:[],cars:[],trees:[],barrels:[],props:[],doors:[],builds:[],spin:[],geos:[]};
+  const ch={cx,cz,key,biome:biomeAt(cx,cz),objs:[],obs:[],inks:[],houses:[],cars:[],trees:[],rocks:[],barrels:[],props:[],doors:[],builds:[],spin:[],geos:[]};
+  {const m0=chunkMem.get(key);ch.cut=m0&&m0.cut;}
   chunks.set(key,ch);CUR=ch;RNG=mulberry((Math.imul(WORLD_SEED,1000003)^Math.imul(cx,73856093)^Math.imul(cz,19349663))|0);
   const x0=cx*CH,z0=cz*CH,road=(x,z)=>Math.abs(x)<5||Math.abs(z)<5;
   const spot=(r,m,roadOK)=>{for(let i=0;i<40;i++){const x=x0+rand(m,CH-m),z=z0+rand(m,CH-m);if(!roadOK&&road(x,z))continue;if(!blockedSpot(x,z,r))return{x,z};}return null;};
@@ -1297,7 +1308,7 @@ function unloadChunk(ch){
   for(const o of ch.inks)inkHulls.delete(o);
   for(const o of ch.obs)delOb(o);
   const drop=(arr,list)=>{for(const x of list){const i=arr.indexOf(x);if(i>=0)arr.splice(i,1);}};
-  drop(houses,ch.houses);drop(BUILDS,ch.builds);drop(SPIN,ch.spin);for(const g of ch.geos)g.dispose();drop(carSpots,ch.cars);drop(trees,ch.trees);drop(barrels,ch.barrels);drop(sdoors,ch.doors);
+  drop(houses,ch.houses);drop(BUILDS,ch.builds);drop(SPIN,ch.spin);for(const g of ch.geos)g.dispose();drop(carSpots,ch.cars);drop(trees,ch.trees);drop(rocks,ch.rocks);drop(barrels,ch.barrels);drop(sdoors,ch.doors);
   for(let i=props.length-1;i>=0;i--){const p=props[i];if(p.chunk===ch){scene.remove(p.g);props.splice(i,1);}}
   const mem=chunkMem.get(ch.key);if(mem)mem.saved=[];
   for(let i=crates.length-1;i>=0;i--){const c=crates[i];if(c.chunk!==ch)continue;if(!c.opened&&mem)mem.saved.push({x:c.x,z:c.z,rar:c.rar,sp:c.sp});dropCrate(c);crates.splice(i,1);}
@@ -1305,7 +1316,7 @@ function unloadChunk(ch){
 }
 // loot restocks every dawn; unopened crates are remembered while a chunk is unloaded
 function chunkLoot(ch){
-  let mem=chunkMem.get(ch.key);if(!mem)chunkMem.set(ch.key,mem={day:-1,saved:[]});
+  let mem=chunkMem.get(ch.key);if(!mem)chunkMem.set(ch.key,mem={day:-1,saved:[],cut:ch.cut||new Set()});ch.cut=mem.cut;
   if(mem.day===S.wave){for(const c of mem.saved){const cr=spawnCrate(c.x,c.z,c.rar);cr.chunk=ch;cr.sp=c.sp;}mem.saved=[];return;}
   mem.day=S.wave;mem.saved=[];
   let n=ch.biome==='town'?randi(2,4):ch.biome==='forest'?(Math.random()<.35?1:0):(ch.houses.length?randi(1,2):(Math.random()<.4?1:0));
@@ -1494,7 +1505,7 @@ function addProp(kind,x,z,o){
   const p={g,kind,x,y:k.h,z,vx:o.vx||0,vy:o.vy||0,vz:o.vz||0,r:k.r,h:k.h,mass:k.mass,spin:o.spin||0,tx:o.tx||0,tz:o.tz||0,hx:x,hz:z,temp:o.life||0,ground:false,chunk:CUR};
   props.push(p);if(CUR)CUR.props.push(p);return p;
 }
-function seedYardProps(){for(const [x,z] of [[-10,5],[-9.2,6],[9,-9],[8,8.5]])addProp(pick(['carton','crate']),x,z);}
+function seedYardProps(){for(const [x,z] of [[-10,5],[-9.2,6],[10.6,-4.5],[8,8.5]])addProp(pick(['carton','crate']),x,z);}
 function solidSeg(s){return s.alive&&!(s.door&&s.open);}
 function updateProps(dt){
   for(let i=props.length-1;i>=0;i--){
@@ -1829,6 +1840,86 @@ function updateDmgNums(dt){
     d.e.style.opacity=Math.min(1,d.life*2.6);}
 }
 function clearDmgNums(){for(const d of DN){d.life=0;d.e.style.display='none';}}
+
+/* ================= GATHERING & FARMING =================
+   E (hold to repeat) chops trees and mines rocks; both make noise. Garden beds in the yard grow crops from seeds. */
+const FELL=[];
+function gatherTarget(){
+  let best=null,bd=1e9;
+  nearObs(player.x,player.z,1.8,o=>{const t=o.tree||o.rock;if(!t)return;const d=Math.hypot(o.x-player.x,o.z-player.z)-o.r;if(d<1.15&&d<bd){bd=d;best=t;}});
+  return best;
+}
+function floatText(x,y,z,txt,cls){const d=DN[dnI=(dnI+1)%DN.length];Object.assign(d,{tgt:null,amt:0,life:1.2,x,z,y,vx:0,t0:0});d.e.textContent=txt;d.e.className='dmgn '+(cls||'res');d.e.style.display='';}
+function gather(t){
+  if(player.fireCd>0||player.swim||!player.alive)return;
+  const I=curW(),w=I&&wstat(I),melee=w&&w.melee&&!w.saw,axe=melee&&I.tier>=4,saw=w&&w.saw;
+  const isTree=!!t.g;player.fireCd=saw?.25:.5;player.swing=.28;rumble(.25,.2,70);S.shake=Math.max(S.shake,.05);
+  const hit=isTree?(saw?1.5:axe?2:melee?1.4:1):(melee?1.3:1);t.hp-=hit;
+  if(isTree){Sound.play('thud',.8);Sound.play(saw?'saw':'swing',.5);burst(t.x,1.1,t.z,5,'debris',4);t.g.rotation.z=rand(-.06,.06);makeNoise(t.x,t.z,saw?40:18);}
+  else{Sound.play('clink',1);Sound.play('thud',.6);burst(t.x,.8,t.z,6,'spark',5);burst(t.x,.6,t.z,3,'debris',3);makeNoise(t.x,t.z,24);}
+  if(t.hp>0)return;
+  delOb(t.ob);const mem=t.ch&&chunkMem.get(t.ch.key);if(mem){(mem.cut||(mem.cut=new Set())).add(cutKey(t.x,t.z));}
+  const lst=isTree?trees:rocks,i=lst.indexOf(t);if(i>=0)lst.splice(i,1);
+  if(t.ch){const l2=isTree?t.ch.trees:t.ch.rocks,j=l2.indexOf(t);if(j>=0)l2.splice(j,1);}
+  if(isTree){const n=Math.round((t.kind==='dead'?2:3)+t.s*1.5+rand(0,1.5));player.wood=(player.wood||0)+n;floatText(t.x,2.4,t.z,`+${n} wood`);
+    const a=Math.atan2(t.x-player.x,t.z-player.z);FELL.push({g:t.g,t:0,ax:Math.cos(a),az:-Math.sin(a)});Sound.play('crash',.6);}
+  else{const n=Math.round(2+t.s*2);player.stone=(player.stone||0)+n;let txt=`+${n} stone`;
+    if(Math.random()<.3){const sc=randi(4,8);player.scrap+=sc;txt+=` · +${sc} scrap`;}if(Math.random()<.12){player.parts++;txt+=' · +1 part';}
+    floatText(t.x,1.6,t.z,txt);scene.remove(t.m);burst(t.x,.6,t.z,12,'debris',6);Sound.play('crash',.5);}
+}
+function updateFelling(dt){
+  for(let i=FELL.length-1;i>=0;i--){const f=FELL[i];f.t+=dt;const k=Math.min(1,f.t/1.1),a=k*k*1.45;
+    f.g.rotation.x=f.ax*a;f.g.rotation.z=f.az*a;if(f.t>1.1)f.g.position.y=-(f.t-1.1)*1.2;
+    if(f.t>1.1&&f.t-dt<=1.1){burst(f.g.position.x+Math.sin(Math.atan2(f.az,f.ax))*2,.4,f.g.position.z,8,'debris',5);S.shake=Math.max(S.shake,.12);}
+    if(f.t>2.4){scene.remove(f.g);FELL.splice(i,1);}}
+}
+// ----- garden beds in the yard -----
+const CROPS=[{id:'corn',name:'Corn',ready:'Corn is',yield:3},{id:'pumpkin',name:'Pumpkins',ready:'Pumpkins are',yield:4},{id:'cabbage',name:'Cabbages',ready:'Cabbages are',yield:2}];
+const PLOTS=[];const GROW_T=50; // seconds per growth stage (3 stages); rain speeds it up
+(function buildGarden(){
+  const soil=TM('concrete',1,1,0x4a3626,0x6a4a32),frame=TM('wood',1,1,0x5a4430,0xa08a70);
+  for(const [x,z] of [[4.4,-10.3],[7.1,-10.3],[4.4,-7.5],[7.1,-7.5]]){
+    const g=new THREE.Group();g.position.set(x,0,z);scene.add(g);
+    g.add(mk(BOX(2.2,.18,2.2),soil,0,.1,0));
+    for(const [a,b,w,d] of [[0,1.12,2.4,.14],[0,-1.12,2.4,.14],[1.12,0,.14,2.4],[-1.12,0,.14,2.4]])g.add(mki(BOX(w,.3,d),frame,a,.15,b,.04));
+    const crop=new THREE.Group();g.add(crop);PLOTS.push({x,z,g,crop,type:null,stage:0,t:0});
+  }
+})();
+const cropMats={stalk:M(0x5a7a2c),leaf:M(0x4f6e26),corn:M(0xd0a024),pumpkin:M(0xc05a1a),cabbage:M(0x6a9440),sprout:M(0x5f8a32)};
+function cropVisual(pl){
+  pl.crop.clear();if(!pl.type)return;const st=pl.stage,c=pl.type.id;
+  for(const [a,b] of [[-.55,-.55],[.55,-.55],[-.55,.55],[.55,.55]]){
+    if(st===0){pl.crop.add(mk(new THREE.ConeGeometry(.08,.25,4),cropMats.sprout,a,.32,b,false));continue;}
+    const k=st/3;
+    if(c==='corn'){pl.crop.add(mki(CYL(.05,.07,1.6*k+.2,5),cropMats.stalk,a,.2+(1.6*k+.2)/2,b,.03));
+      for(const s of [-1,1]){const l=mk(BOX(.5*k+.1,.04,.12),cropMats.leaf,a+s*.2*k,.25+1.1*k,b,false);l.rotation.z=s*.6;pl.crop.add(l);}
+      if(st===3)pl.crop.add(mki(CYL(.08,.06,.35,6),cropMats.corn,a+.12,1.25,b,.03));}
+    else if(c==='pumpkin'){pl.crop.add(mk(BOX(.6*k+.1,.05,.6*k+.1),cropMats.leaf,a,.24,b,false));if(st>=2)pl.crop.add(mki(new THREE.SphereGeometry(.12+.12*k,8,6),cropMats.pumpkin,a,.3+.08*k,b,.03));}
+    else{pl.crop.add(mki(new THREE.SphereGeometry(.1+.18*k,7,5),st===3?cropMats.cabbage:cropMats.leaf,a,.25+.12*k,b,.03));}
+  }
+}
+function updateGarden(dt){
+  for(const pl of PLOTS){if(!pl.type||pl.stage>=3)continue;pl.t+=dt*(1+W.rain*.8);if(pl.t>=GROW_T){pl.t=0;pl.stage++;cropVisual(pl);if(pl.stage===3)toast(`${pl.type.ready} ready to harvest`,'good');}}
+}
+function nearestPlot(){let best=null,bd=1.9;for(const pl of PLOTS){const d=Math.hypot(pl.x-player.x,pl.z-player.z);if(d<bd){bd=d;best=pl;}}return best;}
+function plotPrompt(pl){
+  if(!pl.type)return player.seeds>0?`Plant seeds (${player.seeds} left)`:'Bed is empty · find seeds in crates';
+  if(pl.stage>=3)return`Harvest ${pl.type.name.toLowerCase()}`;
+  return`${pl.type.name} growing · ${Math.round(((pl.stage+pl.t/GROW_T)/3)*100)}%`;
+}
+function tendPlot(pl){
+  if(!pl.type){if(player.seeds<=0){toast('No seeds. Crates and farmhouses have them.','bad');return;}
+    player.seeds--;pl.type=pick(CROPS);pl.stage=0;pl.t=0;cropVisual(pl);Sound.play('pick');floatText(pl.x,.9,pl.z,`Planted ${pl.type.name.toLowerCase()}`);return;}
+  if(pl.stage<3)return;
+  const f=pl.type.yield+randi(0,1),sd=randi(1,2);player.food=(player.food||0)+f;player.seeds=(player.seeds||0)+sd;
+  floatText(pl.x,1.4,pl.z,`+${f} food · +${sd} seeds`);Sound.play('heal');pl.type=null;pl.stage=0;pl.t=0;cropVisual(pl);
+}
+function resetGarden(){for(const pl of PLOTS){pl.type=null;pl.stage=0;pl.t=0;cropVisual(pl);}for(const f of FELL)scene.remove(f.g);FELL.length=0;}
+function eatFood(){
+  if(!player.alive)return;if(!(player.food>0)){toast('No food. Grow some in the garden beds.','bad');return;}
+  if(player.hp>=player.maxHp&&player.st>=100){toast('Not hungry');return;}
+  player.food--;player.hp=Math.min(player.maxHp,player.hp+25);player.st=100;Sound.play('heal');toast('Ate a meal (+25 HP, full stamina)','good');
+}
 
 /* ================= STEALTH =================
    Daytime infected wander until they notice you: a forward cone of sight (shorter when you crouch, at night and in fog)
@@ -2890,6 +2981,8 @@ function openCrate(c){
   if(ammoP){if(am.length){const k=pick(am);grantAmmo(k,ammoP);out.push(`${AMMO[k].name} ammo`);}else{player.scrap+=6*ammoP;}}
   {const cn=rar==='common'?1:rar==='rare'?2:3;const ks=['SPR','BAR','FUR','OPT','REC','CHM'];const got={};for(let i=0;i<cn;i++)if(Math.random()<.6){const k=pick(i?ks:ks.slice(0,3));comp[k]++;got[k]=(got[k]||0)+1;}
     for(const [k,v] of Object.entries(got))out.push(`${v} ${compN(k,v).toLowerCase()}`);}
+  if(Math.random()<(rar==='common'?.3:.5)){const n=randi(1,2);player.seeds=(player.seeds||0)+n;out.push(`${n} seed${n>1?'s':''}`);}
+  if(Math.random()<(rar==='common'?.2:.4)){const n=randi(1,rar==='common'?1:3);player.food=(player.food||0)+n;out.push(`${n} food`);}
   if(Math.random()<(rar==='common'?.15:rar==='rare'?.35:.9)&&player.med<5){player.med++;out.push('medkit');}
   if(Math.random()<(rar==='common'?.1:rar==='rare'?.3:.9)&&player.gren<6){const g=rar==='epic'?2:1;player.gren=Math.min(6,player.gren+g);out.push(g>1?'2 grenades':'grenade');}
   const wc=rar==='common'?.07:rar==='rare'?.25:.6;
@@ -2929,7 +3022,7 @@ function updateHUD(){
   const I=curW(),w=wstat(I);
   $('hpNum').textContent=Math.ceil(player.hp);$('hpBar').style.width=(player.hp/player.maxHp*100)+'%';$('stBar').style.width=player.st+'%';
   $('medNum').textContent=player.med;$('grenNum').textContent=player.gren;
-  $('scrapNum').textContent=player.scrap;$('partsNum').textContent=player.parts;
+  $('scrapNum').textContent=player.scrap;$('partsNum').textContent=player.parts;$('woodNum').textContent=player.wood|0;$('stoneNum').textContent=player.stone|0;$('foodNum').textContent=player.food|0;
   $('wName').innerHTML=`<span style="color:${w.col}">${w.name}</span>`;
   $('wAmmo').innerHTML=w.saw?`${Math.ceil(I.mag/10)}s <small>fuel · ${comp.CHM} chem</small>`:w.melee?'<small>melee</small>':w.battery?`${Math.floor(I.mag)} <small>/ battery</small>`:`${I.mag} <small>/ ${w.infinite?'∞':ammo[w.ammo]}</small>`;
   $('reloadFill').style.width=player.reloadT>0?((1-player.reloadT/(w.saw?1.5:w.reload||1))*100)+'%':'0';
@@ -2979,7 +3072,7 @@ function drawMinimap(){
 
 /* ================= BASE MENU ================= */
 const UPG=[
-  {id:'walls',name:'Perimeter walls',max:4,lv:()=>base.wallLv,info:l=>`${WALL_NAME[l]}, ${WALL_HP[l]} HP per section`,cost:l=>[null,[120,2],[260,5],[480,10]][l],verb:'Reinforce',buy(){base.wallLv++;applyWalls(true);}},
+  {id:'walls',name:'Perimeter walls',max:4,lv:()=>base.wallLv,info:l=>`${WALL_NAME[l]}, ${WALL_HP[l]} HP per section`,cost:l=>[null,{scrap:120,parts:2,wood:8},{scrap:260,parts:5,stone:10,wood:6},{scrap:480,parts:10,stone:18,wood:10}][l],verb:'Reinforce',buy(){base.wallLv++;applyWalls(true);}},
   {id:'turrets',name:'Auto-turrets',max:4,lv:()=>base.turrets,info:l=>l?`${l} of 4 corners covered`:'No turrets yet',cost:l=>[[80,2],[120,3],[170,5],[230,7]][l],verb:'Build',buy(){base.turrets++;applyTurrets();}},
   {id:'calib',name:'Turret calibration',max:3,lv:()=>base.turretLv,req:()=>base.turrets>0,lockText:'Needs a turret',info:l=>`Mk ${l}: ${TUR[l].dmg} damage, ${(1/TUR[l].rate).toFixed(1)} shots/s, ${TUR[l].range}m`,cost:l=>[null,[150,4],[300,8]][l],buy(){base.turretLv++;}},
   {id:'spikes',name:'Spike barricades',max:3,lv:()=>base.spikeLv,info:l=>l?`${SPIKE_DPS[l]} damage/s to infected at the walls`:'Walls are bare',cost:l=>[[90,2],[180,4],[320,7]][l],verb:'Install',buy(){base.spikeLv++;applyWalls(false);}},
@@ -2987,9 +3080,11 @@ const UPG=[
   {id:'floods',name:'Floodlights',max:1,lv:()=>base.floods,info:l=>l?'Base lit at night, turret range +30%':'Base is dark at night',cost:l=>[[60,1]][l],verb:'Wire up',buy(){base.floods=1;applyFloods();}},
   {id:'radar',name:'Scavenger radio',max:1,lv:()=>base.radar,info:l=>l?'All crates and infected on the map, +4 crates each day':'Map shows only what you have seen',cost:l=>[[110,3]][l],verb:'Tune in',buy(){base.radar=1;}},
 ];
-const afford=c=>c&&player.scrap>=c[0]&&player.parts>=(c[1]||0);
-function pay(c){player.scrap-=c[0];player.parts-=c[1]||0;}
-function costHTML(c){if(!c)return'';return`<span class="cost ${player.scrap>=c[0]?'':'short'}"><i class="ic-scrap"></i>${c[0]}</span>`+(c[1]?`<span class="cost ${player.parts>=c[1]?'':'short'}"><i class="ic-parts"></i>${c[1]}</span>`:'');}
+const RES_KEYS={wood:'Wood',stone:'Stone',food:'Food',seeds:'Seeds'};
+const resHave=k=>k==='scrap'||k==='parts'||k in RES_KEYS?(player[k]||0):(comp[k]||0);
+const afford=c=>!!c&&(Array.isArray(c)?player.scrap>=c[0]&&player.parts>=(c[1]||0):afford2(c));
+function pay(c){if(!Array.isArray(c))return pay2(c);player.scrap-=c[0];player.parts-=c[1]||0;}
+function costHTML(c){if(!c)return'';if(!Array.isArray(c))return costHTML2(c);return`<span class="cost ${player.scrap>=c[0]?'':'short'}"><i class="ic-scrap"></i>${c[0]}</span>`+(c[1]?`<span class="cost ${player.parts>=c[1]?'':'short'}"><i class="ic-parts"></i>${c[1]}</span>`:'');}
 function pips(l,m){let s='';for(let i=1;i<=m;i++)s+=`<i class="${i<=l?'on':''}"></i>`;return`<div class="pips">${s}</div>`;}
 function card(title,lv,max,now,next,cost,act,label,disabled){
   return`<article class="card"><header><h3>${title}</h3>${max?pips(lv,max):''}</header><p class="now">${now}</p>${next?`<p class="next">${next}</p>`:''}<footer>${costHTML(cost)}<button data-act="${act}" ${disabled?'disabled':''}>${label}</button></footer></article>`;
@@ -2998,9 +3093,10 @@ function card(title,lv,max,now,next,cost,act,label,disabled){
 function costHTML2(c){if(!c)return'';let h='';for(const [k,v] of Object.entries(c)){if(!v)continue;
   if(k==='scrap')h+=`<span class="cost ${player.scrap>=v?'':'short'}"><i class="ic-scrap"></i>${v}</span>`;
   else if(k==='parts')h+=`<span class="cost ${player.parts>=v?'':'short'}"><i class="ic-parts"></i>${v}</span>`;
+  else if(k in RES_KEYS)h+=`<span class="cost ${resHave(k)>=v?'':'short'}">${k==='seeds'?'':`<i class="ic-${k}"></i>`}${v}${k==='seeds'?' seeds':''}</span>`;
   else h+=`<span class="cost ${comp[k]>=v?'':'short'}">${v} ${compN(k,v)}</span>`;}return h;}
-const afford2=c=>!!c&&Object.entries(c).every(([k,v])=>!v||(k==='scrap'?player.scrap:k==='parts'?player.parts:comp[k])>=v);
-function pay2(c){for(const [k,v] of Object.entries(c)){if(!v)continue;if(k==='scrap')player.scrap-=v;else if(k==='parts')player.parts-=v;else comp[k]-=v;}}
+const afford2=c=>!!c&&Object.entries(c).every(([k,v])=>!v||resHave(k)>=v);
+function pay2(c){for(const [k,v] of Object.entries(c)){if(!v)continue;if(k==='scrap'||k==='parts'||k in RES_KEYS)player[k]-=v;else comp[k]-=v;}}
 function tierCost(I){
   if(I.sp)return(I.mk||1)<3?{scrap:100,parts:4,RC:1}:null;if(I.tier>=4)return null;
   const c={...{2:{scrap:30,parts:1,SPR:1},3:{scrap:90,parts:4,REC:1,BAR:1},4:{scrap:200,parts:10,REC:2,BAR:1,OPT:1}}[I.tier+1]};
@@ -3063,6 +3159,7 @@ function renderMenu(){
   if(S.menuTab==='def'){
     const rc=repairCost(),broken=segs.filter(s=>!s.alive).length;
     h+=card('Repair crew',0,0,rc?`${broken?broken+' sections down. ':''}Walls need ${rc*5} HP of work.`:'Every wall section and gate is at full strength.','',rc?[rc,0]:null,'repair',rc?'Repair all':'Intact',!rc||player.scrap<rc);
+    if(rc)h+=card('Timber patch',0,0,`Nail planks over the damage: 4 wood repairs 100 HP.`,`You have ${player.wood|0} wood.`,{wood:4},'timber','Patch',!afford({wood:4}));
     const anyOpen=gates.some(g=>g.alive&&g.open);
     h+=card('Gate control',0,0,anyOpen?`Open: ${gates.filter(g=>g.alive&&g.open).map(g=>g.side).join(', ')}.`:'All gates are shut.','Infected walk straight through open gates.',null,'gates',anyOpen?'Shut all':'All shut',!anyOpen);
     for(const u of UPG){const l=u.lv(),maxed=l>=u.max,locked=u.req&&!u.req(),c=maxed?null:u.cost(l);
@@ -3070,6 +3167,10 @@ function renderMenu(){
   }else if(S.menuTab==='arm'){h+=armoryHTML();
   }else if(S.menuTab==='salv'){h+=salvageHTML();
   }else{
+    h+=card('Cook a meal',0,0,`Hot food: +45 HP and full stamina. You have ${player.food|0} food.`,'Or press F to eat 1 food on the go (+25 HP).',{food:2},'buy:cook','Cook',!afford({food:2})||player.hp>=player.maxHp);
+    h+=card('Seed packets',0,0,`Two packets for the garden beds. You have ${player.seeds|0} seeds.`,'Crops are ready after about a day; rain helps.',[20,0],'buy:seeds','Buy',player.scrap<20);
+    h+=card('Sell timber',0,0,'Trade 5 wood for 25 scrap.',`You have ${player.wood|0} wood.`,{wood:5},'buy:timber','Sell',!afford({wood:5}));
+    h+=card('Crush stone',0,0,'Grind 4 stone for 1 part.',`You have ${player.stone|0} stone.`,{stone:4},'buy:stone','Crush',!afford({stone:4}));
     h+=card('Medkit',0,0,`Restores 55 HP. Carrying ${player.med} of 5.`,pad.active?'Use with B.':'Use with H.',[40,0],'buy:med','Buy',player.scrap<40||player.med>=5);
     h+=card('Frag grenade',0,0,`Bounces, then blows. Carrying ${player.gren} of 6.`,pad.active?'Throw with LT.':'Throw with G toward the cursor.',[35,1],'buy:gren','Buy',!afford([35,1])||player.gren>=6);
     h+=card('Salvage parts',0,0,'Strip scrap down into precision parts.','Exchange rate: 45 scrap for 1 part.',[45,0],'buy:part','Convert',player.scrap<45);
@@ -3082,12 +3183,17 @@ $('menu').addEventListener('click',e=>{
   const b=e.target.closest('[data-act]');if(!b||b.disabled)return;const [a,k]=b.dataset.act.split(':');
   if(a==='close'){closeMenu();return;}
   if(a==='tab'){S.menuTab=k;S.armSel=null;renderMenu();Sound.play('ui');return;}
-  if(a==='repair'){const c=repairCost();if(player.scrap<c)return;player.scrap-=c;for(const s of segs){s.hp=s.maxHp;s.alive=true;}applyWalls(false);toast('Walls repaired','good');}
+  if(a==='timber'){if(!afford({wood:4}))return;pay({wood:4});let left=100;for(const sg of segs){if(left<=0)break;const need=sg.maxHp-sg.hp;if(need<=0)continue;const add=Math.min(need,left);sg.hp+=add;sg.alive=true;left-=add;}applyWalls(false);toast('Walls patched with timber','good');}
+  else if(a==='repair'){const c=repairCost();if(player.scrap<c)return;player.scrap-=c;for(const s of segs){s.hp=s.maxHp;s.alive=true;}applyWalls(false);toast('Walls repaired','good');}
   else if(a==='gates'){for(const g of gates)g.open=false;Sound.play('gate');toast('All gates shut','good');}
   else if(a==='up'){const u=UPG.find(x=>x.id===k);const c=u.cost(u.lv());if(!afford(c))return;pay(c);u.buy();toast(`${u.name} upgraded`,'good');}
   else if(a[0]==='w'||a[0]==='s'&&a!=='sup')armoryAct(a,k);
   else if(a==='buy'){
-    if(k==='med'&&player.scrap>=40&&player.med<5){player.scrap-=40;player.med++;}
+    if(k==='cook'&&afford({food:2})){pay({food:2});player.hp=Math.min(player.maxHp,player.hp+45);player.st=100;}
+    else if(k==='seeds'&&player.scrap>=20){player.scrap-=20;player.seeds=(player.seeds||0)+2;}
+    else if(k==='timber'&&afford({wood:5})){pay({wood:5});player.scrap+=25;}
+    else if(k==='stone'&&afford({stone:4})){pay({stone:4});player.parts++;}
+    else if(k==='med'&&player.scrap>=40&&player.med<5){player.scrap-=40;player.med++;}
     else if(k==='gren'&&afford([35,1])&&player.gren<6){pay([35,1]);player.gren++;}
     else if(k==='part'&&player.scrap>=45){player.scrap-=45;player.parts++;}
     else if(k==='food'&&player.scrap>=18){player.scrap-=18;player.hp=Math.min(player.maxHp,player.hp+30);}
@@ -3155,6 +3261,7 @@ window.addEventListener('keydown',e=>{
   if(e.code==='KeyR')startReload();
   if(e.code==='KeyE')interact();
   if(e.code==='KeyH')useMed();
+  if(e.code==='KeyF')eatFood();
   if(e.code==='KeyG')throwGrenade();
   if(e.code==='Space')startNight(true);
 });
@@ -3192,6 +3299,8 @@ function interact(){
   const c=nearestCrate();if(c){openCrate(c);return;}
   const g=nearestGate();if(g){toggleGate(g);return;}
   const d=nearestDoor();if(d){kickDoor(d);return;}
+  const pl=nearestPlot();if(pl){tendPlot(pl);return;}
+  const gt=gatherTarget();if(gt){gather(gt);return;}
   if(inBase(player.x,player.z))openMenu();
 }
 function nearestCrate(){let best=null,bd=2.6;for(const c of crates){if(c.opened)continue;const d=Math.hypot(c.x-player.x,c.z-player.z);if(d<bd){bd=d;best=c;}}return best;}
@@ -3214,9 +3323,9 @@ function navMove(dx,dy){
   if(best){setPadFocus(best);Sound.play('ui');}
 }
 function pollPad(dt){
-  const gp=getPad();if(!gp){pad.lx=pad.ly=pad.rx=pad.ry=pad.rt=0;return;}
+  const gp=getPad();if(!gp){pad.lx=pad.ly=pad.rx=pad.ry=pad.rt=0;pad.aHeld=false;return;}
   pad.connected=true;
-  const b=gp.buttons.map(x=>x&&(x.pressed||x.value>.5));const P=i=>b[i]&&!pad.prev[i];
+  const b=gp.buttons.map(x=>x&&(x.pressed||x.value>.5));const P=i=>b[i]&&!pad.prev[i];pad.aHeld=!!b[PB.A]&&!S.menu&&!S.paused;
   const ax=gp.axes;pad.lx=dz(ax[0]);pad.ly=dz(ax[1]);pad.rx=dz(ax[2]);pad.ry=dz(ax[3]);
   pad.rt=gp.buttons[PB.RT]?gp.buttons[PB.RT].value:0;pad.lt=gp.buttons[PB.LT]?gp.buttons[PB.LT].value:0;
   const any=b.some(Boolean)||Math.abs(pad.lx)+Math.abs(pad.ly)+Math.abs(pad.rx)+Math.abs(pad.ry)>0;
@@ -3241,6 +3350,7 @@ function pollPad(dt){
     if(P(PB.MENU)){togglePause();}
     else{
       if(P(PB.A))interact();
+      if(P(PB.UP))eatFood();
       if(P(PB.X))startReload();
       if(P(PB.Y))openMenu();
       if(P(PB.B))useMed();
@@ -3308,13 +3418,16 @@ function updatePlayer(dt){
   player.swing=Math.max(0,(player.swing||0)-dt);gun.rotation.y=player.swing>0?Math.sin(player.swing/.25*Math.PI)*1.1:0;
   if(HERO.ready)updateHero(dt,moving,sprint,moving?(mx*Math.sin(player.yaw)+mz*Math.cos(player.yaw))/(ml||1):1,sp);
   player.hurtT-=dt;
+  if((keys.KeyE||(pad.active&&pad.aHeld))&&!nearestCrate()){const gt=gatherTarget();if(gt)gather(gt);}
   // prompt
   const c=nearestCrate(),tdn=takedownTarget();let ps='';
   if(tdn)ps=`<span>${glyph('use')}Takedown</span>`;
   else if(c)ps=`<span>${glyph('use')}Open ${c.rar==='drop'?'airdrop':RARITY[c.rar].label.toLowerCase()+' crate'}</span>`;
   else{const g=nearestGate();
     if(g)ps=`<span>${glyph('use')}${g.open?'Close':'Open'} the ${g.side} gate</span>`;
-    else{const d=nearestDoor();if(d)ps=`<span>${glyph('use')}Kick the door</span>`;}}
+    else{const d=nearestDoor();if(d)ps=`<span>${glyph('use')}Kick the door</span>`;
+      else{const pl=nearestPlot();if(pl)ps=`<span>${(!pl.type&&player.seeds>0)||pl.stage>=3?glyph('use'):''}${plotPrompt(pl)}</span>`;
+        else{const gt=gatherTarget();if(gt)ps=`<span>${glyph('use')}${gt.g?'Chop tree':'Mine rock'} · hold</span>`;}}}}
   if(inBase(player.x,player.z))ps+=`<span>${glyph('base')}Workshop</span>`;
   if(ps!==promptState){promptState=ps;$('prompt').innerHTML=ps;$('prompt').hidden=!ps;}
   if(pad.active){projV.copy(aim).project(camera);const c2=$('crosshair');c2.style.left=((projV.x+1)/2*innerWidth)+'px';c2.style.top=((1-projV.y)/2*innerHeight)+'px';}
@@ -3452,12 +3565,12 @@ function resetGame(){
   for(const p of pickups)scene.remove(p.m);pickups.length=0;
   for(const p of projs)scene.remove(p.m);projs.length=0;
   for(const a of acids)scene.remove(a.m);acids.length=0;
-  resetWorld();resetHordes();
+  resetWorld();resetHordes();resetGarden();
   Object.assign(base,{wallLv:1,turrets:0,turretLv:1,spikeLv:0,infLv:0,floods:0,radar:0});
   for(const s of segs){s.maxHp=WALL_HP[1];s.open=false;s.openAmt=0;}applyWalls(true);applyTurrets();applyFloods();
   Object.assign(player,{x:0,z:2,vx:0,vz:0,kx:0,kz:0,yaw:Math.PI,hp:100,maxHp:100,st:100,alive:true,scrap:40,parts:0,med:1,gren:0,weapon:'pistol',fireCd:0,reloadT:0,hurtT:0,acidT:0,recoil:0});
   resetInv();pl.rotation.x=0;heroReset();
-  Object.assign(player,{swim:false,swing:0,drownMsg:0,crouch:false,crouchT:false,sprinting:false,moving:false,lvl:0,lvlY:0});S.takedowns=0;clearStealthHUD();S.armSel=null;clearDmgNums();
+  Object.assign(player,{wood:0,stone:0,food:1,seeds:3,swim:false,swing:0,drownMsg:0,crouch:false,crouchT:false,sprinting:false,moving:false,lvl:0,lvlY:0});S.takedowns=0;clearStealthHUD();S.armSel=null;clearDmgNums();
   Object.assign(S,{paused:false,menu:false,over:false,phase:'day',dayT:75,wave:0,queue:[],spawnT:0,daySpawnT:14,kills:0,looted:0,shake:0,env:0,envT:0});
   updateGroundWindow();updateGrass();updateChunks(true);seedYardProps();spawnHorde(Math.round((GFX==='high'?40:28)*D.horde));
   refreshSlots();toasts.innerHTML='';
@@ -3500,7 +3613,7 @@ function frame(now){
   pollPad(dt);
   if(S.running&&!S.paused&&!S.menu&&!S.over){
     updateTerrain();updateChunks(false);updateGroundWindow();updateGrass();updateRoofs();updateSpin(dt);
-    updatePhase(dt);updatePlayer(dt);updateZombies(dt);updateHordes(dt);updateProps(dt);updateDoors(dt);updateTurrets(dt);updateSpecials(dt);updateWDrops(dt);updateWorld(dt);updateWeather(dt,player.x,player.z-2);updateEnv(dt);updateCamera(dt);
+    updatePhase(dt);updatePlayer(dt);updateZombies(dt);updateHordes(dt);updateProps(dt);updateDoors(dt);updateTurrets(dt);updateSpecials(dt);updateGarden(dt);updateFelling(dt);updateWDrops(dt);updateWorld(dt);updateWeather(dt,player.x,player.z-2);updateEnv(dt);updateCamera(dt);
     hudT-=dt;if(hudT<=0){hudT=.08;updateHUD();}
     mapT-=dt;if(mapT<=0){mapT=.12;drawMinimap();}
     $('vignette').style.opacity=player.hurtT>0?Math.min(1,player.hurtT*2.5):0;
