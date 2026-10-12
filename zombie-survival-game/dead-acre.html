@@ -3899,7 +3899,9 @@ function buildLandmark(lm){
     const wd=LMM.wood(),H=7.5;
     for(const [x,z] of [[-1.5,-1.5],[1.5,-1.5],[-1.5,1.5],[1.5,1.5]]){g.add(mki(BOX(.3,H,.3),wd,x,H/2,z,.05));ob(x,z,.4);}
     for(const y of [2.4,4.8]){g.add(mk(BOX(3.2,.14,.14),wd,0,y,-1.5));g.add(mk(BOX(3.2,.14,.14),wd,0,y,1.5));g.add(mk(BOX(.14,.14,3.2),wd,-1.5,y,0));g.add(mk(BOX(.14,.14,3.2),wd,1.5,y,0));}
-    g.add(mki(BOX(4,.3,4),wd,0,H,0,.06));g.add(mki(BOX(3.4,2.2,3.4),M(0x9a7a52),0,H+1.25,0,.06));
+    g.add(mki(BOX(4,.3,4),wd,0,H,0,.06));
+    for(const [x,z,w,d] of [[0,-1.95,4,.08],[1.95,0,.08,4],[-1.95,0,.08,4],[-1.25,1.95,1.5,.08],[1.25,1.95,1.5,.08]]){g.add(mk(BOX(w,.08,d),wd,x,H+1,z));g.add(mk(BOX(w,.08,d),wd,x,H+.55,z));}
+    for(const [x,z] of [[-1.95,-1.95],[1.95,-1.95],[-1.95,1.95],[1.95,1.95],[-.5,1.95],[.5,1.95]])g.add(mk(BOX(.1,1.05,.1),wd,x,H+.55,z));g.add(mki(BOX(3.4,2.2,3.4),M(0x9a7a52),0,H+1.25,0,.06));
     for(const [x,z,w,d] of [[0,1.71,2.2,.05],[0,-1.71,2.2,.05],[1.71,0,.05,2.2],[-1.71,0,.05,2.2]])g.add(mk(BOX(w,1,d),BASIC(0x9fd8e8),x,H+1.5,z,false));
     const rf=mki(new THREE.ConeGeometry(3.2,1.6,4),M(0x5a3a2a),0,H+3.15,0,.06);rf.rotation.y=Math.PI/4;g.add(rf);
     for(let y=.4;y<H;y+=.5)g.add(mk(BOX(.8,.07,.07),wd,0,y,1.75));g.add(mk(BOX(.07,H,.07),wd,-.4,H/2,1.75));g.add(mk(BOX(.07,H,.07),wd,.4,H/2,1.75));
@@ -4207,7 +4209,7 @@ function mantleTarget(){
   const fx=Math.sin(player.yaw),fz=Math.cos(player.yaw),moveYaw=player.moving?Math.atan2(player.vx,player.vz):player.yaw,mx=Math.sin(moveYaw),mz=Math.cos(moveYaw);
   let best=null;
   for(const [dx,dz] of [[mx,mz],[fx,fz]]){const px=player.x+dx*1.1,pz=player.z+dz*1.1;
-    nearObs(px,pz,.6,o=>{if(o.h===undefined||o.lvl!==undefined||o.h<=player.jy+.4||o.h>player.jy+2.15)return;const d=Math.hypot(o.x-player.x,o.z-player.z);if(d>o.r+1.1)return;if(!best||o.h>best.h)best={o,h:o.h,dx,dz};});
+    nearObs(px,pz,.6,o=>{if(o.h===undefined||o.lvl!==undefined||o.h<=player.jy+.4||o.h>player.jy+2.15)return;const d=Math.hypot(o.x-player.x,o.z-player.z);if(d>o.r+1.1)return;if(!best||o.h>best.h)best={o,h:o.h,dx,dz,d};});
     if(best)break;}
   return best;
 }
@@ -4215,7 +4217,8 @@ function tryJump(){
   if(!player.alive||player.air||player.climb||player.mantle>0||player.swim||S.menu||S.paused||S.panel)return;
   if(player.st<6){toast('Too winded to jump');return;}
   player.crouchT=false;const m=mantleTarget();
-  if(m){player.mantle=.62;player.mT=.62;player.m0=player.jy;player.mH=m.h;player.mx=m.dx;player.mz=m.dz;player.st=Math.max(0,player.st-12);Sound.play('swing',.5);Sound.play('thud',.35);return;}
+  if(m){const o=m.o,k=Math.min(m.d,o.r*.4)/(m.d||1);player.mantle=.62;player.mT=.62;player.m0=player.jy;player.mH=m.h;
+    player.ms={x:player.x,z:player.z};player.me={x:o.x+(player.x-o.x)*k,z:o.z+(player.z-o.z)*k};player.st=Math.max(0,player.st-12);Sound.play('swing',.5);Sound.play('thud',.35);return;}
   player.jvy=7.4;player.air=true;player.st=Math.max(0,player.st-8);player.jumpT=0;Sound.play('swing',.45);
 }
 function nearestLadder(){let best=null,bd=1.5;
@@ -4237,7 +4240,7 @@ function updateClimb(dt,mzIn){
 function updateVertical(dt){
   if(player.climb)return;
   if(player.mantle>0){player.mantle-=dt;const k=1-Math.max(0,player.mantle)/player.mT;
-    player.jy=player.m0+(player.mH-player.m0)*Math.min(1,k*1.6);if(k>.45){player.x+=player.mx*dt*2.2;player.z+=player.mz*dt*2.2;}
+    player.jy=player.m0+(player.mH-player.m0)*Math.min(1,k*1.6);const kk=clamp((k-.35)/.65,0,1);player.x=player.ms.x+(player.me.x-player.ms.x)*kk;player.z=player.ms.z+(player.me.z-player.ms.z)*kk;
     if(player.mantle<=0){player.mantle=0;player.jy=player.mH;player.landT=.15;}return;}
   const sup=supportAt(player.x,player.z,player.jy);
   if(player.air||player.jy>sup+.02){
@@ -4288,9 +4291,9 @@ function heroProcedural(dt,moving){
   HERO.root.updateMatrixWorld(true);heroSave();
   // exhaustion: hunched, heaving chest; standing still it's hands-on-knees
   if(tired>.02){const still=moving?0:1,br=Math.sin(t*(player.winded?7:4.5))*.06*tired;
-    bRot(HB.spine,AX,(.18+.42*still)*tired+br);bRot(HB.spine2,AX,.12*tired-br*.6);bRot(HB.head,AX,(-.25*still+.1)*tired);
-    if(still){bRot(HB.lUp,AX,-.35*tired);bRot(HB.rUp,AX,-.35*tired);bRot(HB.lLeg,AX,.55*tired);bRot(HB.rLeg,AX,.55*tired);
-      bRot(HB.lArm,AX,-.55*tired);bRot(HB.rArm,AX,-.55*tired);bRot(HB.lFore,AX,-.3*tired);bRot(HB.rFore,AX,-.3*tired);}
+    bRot(HB.spine,AX,(.28+.42*still)*tired+br);bRot(HB.spine1,AX,(.1+.25*still)*tired);bRot(HB.spine2,AX,.12*tired-br*.6);bRot(HB.head,AX,(-.45*still+.15)*tired);
+    if(still){bRot(HB.lUp,AX,-.55*tired);bRot(HB.rUp,AX,-.55*tired);bRot(HB.lLeg,AX,.85*tired);bRot(HB.rLeg,AX,.85*tired);bRot(HB.lFoot,AX,-.3*tired);bRot(HB.rFoot,AX,-.3*tired);
+      bRot(HB.lArm,AX,-.95*tired);bRot(HB.rArm,AX,-.95*tired);bRot(HB.lArm,AZ,-.2*tired);bRot(HB.rArm,AZ,.2*tired);bRot(HB.lFore,AX,-.25*tired);bRot(HB.rFore,AX,-.25*tired);}
     else{bRot(HB.lArm,AZ,-.15*tired);bRot(HB.rArm,AZ,.15*tired);}}
   // jumping: tuck the legs, arms up for balance; landing squats
   if(air>.02||land>.02||mant>.02){const up=player.jvy>0?1:.6,a=air*up;
@@ -4481,6 +4484,8 @@ function updatePlayer(dt){
   for(const s of segs){if(!solidSeg(s))continue;if(Math.abs(player.x-s.cx)>4.5||Math.abs(player.z-s.cz)>4.5)continue;collideSeg(player,.5,s);}
   if(!player.lvl&&!player.climb)doorCollide(player,.5,1.2);
   if(player.climb){player.x=player.climb.bx;player.z=player.climb.bz;}
+  else if(player.jy>2)for(const s of SURFS){if(player.jy<s.h-.1)continue;const dx=player.x-s.x,dz=player.z-s.z,c=Math.cos(s.rot),sn=Math.sin(s.rot);let lx=dx*c-dz*sn,lz=dx*sn+dz*c;
+    if(Math.abs(lx)>s.hw+.6||Math.abs(lz)>s.hd+.6)continue;const m=.35;lx=clamp(lx,-s.hw+m,s.hw-m);lz=clamp(lz,-s.hd+m,s.hd-m);player.x=s.x+lx*c+lz*sn;player.z=s.z-lx*sn+lz*c;}
   updateVertical(dt);updateWinded(dt);
   // aim
   if(TP){const ad=aimDist();aim.set(player.x+Math.sin(camYaw)*ad,1.2,player.z+Math.cos(camYaw)*ad);}
@@ -4506,7 +4511,7 @@ function updatePlayer(dt){
   player.recoil=Math.max(0,player.recoil-dt);
   if(player.climb)player.yaw=player.climb.yaw;
   {const pitch=bodyPose(dt),flat=clamp(pitch/1.32,0,1);let ox=0,oz=0;if(player.swim&&flat>.05){ox=-Math.sin(player.yaw)*.95*flat;oz=-Math.cos(player.yaw)*.95*flat;}
-    pl.position.set(player.x+ox,(player.swim?depthAt(player.x,player.z)-lerp(1.35,.42,flat):moving&&!HERO.ready?Math.abs(Math.cos(player.walk))*.07:0)-(player.crouch?.22:0)+(player.lvlY||0)+(player.jy||0)-(player.tired>.5&&!moving?.08:0),player.z+oz);pl.rotation.x=pitch;}
+    pl.position.set(player.x+ox,(player.swim?depthAt(player.x,player.z)-lerp(1.35,.42,flat):moving&&!HERO.ready?Math.abs(Math.cos(player.walk))*.07:0)-(player.crouch?.22:0)+(player.lvlY||0)+(player.jy||0)-(player.tired>.5&&!moving&&!player.swim?.2*player.tired:0),player.z+oz);pl.rotation.x=pitch;}
   gun.visible=!player.swim&&!HERO.dead&&!player.climb&&!(player.mantle>0);pl.rotation.y=player.yaw;gun.position.z=.62-player.recoil*2;
   player.swing=Math.max(0,(player.swing||0)-dt);gun.rotation.y=player.swing>0?Math.sin(player.swing/.25*Math.PI)*1.1:0;
   if(HERO.ready)updateHero(dt,moving,sprint,moving?(mx*Math.sin(player.yaw)+mz*Math.cos(player.yaw))/(ml||1):1,sp);
