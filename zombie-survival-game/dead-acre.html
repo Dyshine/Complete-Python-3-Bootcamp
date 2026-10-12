@@ -31,6 +31,17 @@ button:focus-visible,.padfocus{outline:3px solid var(--toxic)!important;outline-
 
 #vignette{position:fixed;inset:0;pointer-events:none;opacity:0;background:radial-gradient(ellipse at center,transparent 45%,rgba(190,20,10,.75) 100%);transition:opacity .25s}
 #lowhp{position:fixed;inset:0;pointer-events:none;opacity:0;background:radial-gradient(ellipse at center,transparent 55%,rgba(120,0,0,.55) 100%)}
+#dmgLayer{position:fixed;inset:0;pointer-events:none;z-index:4;overflow:hidden}
+.dmgn{position:absolute;left:0;top:0;font-family:var(--f-display);font-size:24px;line-height:1;color:#fff1c8;white-space:nowrap;
+  text-shadow:-2px -2px 0 #0c0e0b,2px -2px 0 #0c0e0b,-2px 2px 0 #0c0e0b,2px 2px 0 #0c0e0b,0 3px 0 #0c0e0b;will-change:transform,opacity}
+.dmgn.crit{color:#ffd23f;font-size:30px}.dmgn.kill{color:#ff5a3a;font-size:30px}.dmgn.burn{color:#ffa040;font-size:18px}.dmgn.sneak{color:#b9f0ff;font-size:28px}
+.diffpick{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;margin:16px 0 6px}
+.diffpick button{flex:1 1 120px;background:transparent;color:var(--bone);border:1px solid var(--line);border-radius:2px;padding:8px 10px;font-family:var(--f-ui);text-align:left;display:grid;gap:2px}
+.diffpick button b{font-size:18px;letter-spacing:.08em;text-transform:uppercase}
+.diffpick button small{font-size:13px;color:var(--mute);line-height:1.25}
+.diffpick button.on{border-color:var(--hazard);background:rgba(242,165,22,.12)}
+.diffpick button.on b{color:var(--hazard)}
+.cta{flex-wrap:wrap}
 #crosshair{position:fixed;width:26px;height:26px;margin:-13px 0 0 -13px;pointer-events:none;left:50%;top:50%;z-index:5}
 #crosshair::before,#crosshair::after{content:"";position:absolute;background:var(--hazard);box-shadow:0 0 4px rgba(0,0,0,.8)}
 #crosshair::before{left:12px;top:0;width:2px;height:26px;clip-path:polygon(0 0,100% 0,100% 35%,0 35%,0 65%,100% 65%,100% 100%,0 100%)}
@@ -197,6 +208,7 @@ kbd.pl{border-radius:3px;width:auto;padding:0 6px;background:var(--bone)}
 <div id="lowhp"></div>
 <div id="vignette"></div>
 <div id="crosshair" hidden></div>
+<div id="dmgLayer"></div>
 
 <div class="hud" id="hud" hidden>
   <div class="tl panel">
@@ -300,6 +312,12 @@ kbd.pl{border-radius:3px;width:auto;padding:0 6px;background:var(--bone)}
         </div>
       </div>
     </div>
+    <div class="diffpick" id="diffPick" role="radiogroup" aria-label="Difficulty">
+      <button data-diff="easy" role="radio"><b>Easy</b><small>Fewer infected, small hordes, softer hits.</small></button>
+      <button data-diff="normal" role="radio"><b>Normal</b><small>The intended balance.</small></button>
+      <button data-diff="hard" role="radio"><b>Hard</b><small>Half again as many infected, bigger hordes.</small></button>
+      <button data-diff="nightmare" role="radio"><b>Nightmare</b><small>Twice the infected. Hordes every night.</small></button>
+    </div>
     <div class="cta">
       <button class="btn" id="startBtn">Enter the zone</button>
       <span class="best" id="bestLine"></span>
@@ -347,7 +365,7 @@ kbd.pl{border-radius:3px;width:auto;padding:0 6px;background:var(--bone)}
       <div><b id="stKills">0</b><span>Infected killed</span></div>
       <div><b id="stCrates">0</b><span>Crates looted</span></div>
     </div>
-    <div class="cta"><button class="btn" id="againBtn">Try again</button><span class="best" id="bestLine2"></span></div>
+    <div class="cta"><button class="btn" id="againBtn">Try again</button><button class="btn ghost" id="diffBtn">Change difficulty</button><span class="best" id="bestLine2"></span></div>
   </div>
 </div>
 
@@ -1275,7 +1293,7 @@ function unloadChunk(ch){
   drop(houses,ch.houses);drop(BUILDS,ch.builds);drop(SPIN,ch.spin);for(const g of ch.geos)g.dispose();drop(carSpots,ch.cars);drop(trees,ch.trees);drop(barrels,ch.barrels);drop(sdoors,ch.doors);
   for(let i=props.length-1;i>=0;i--){const p=props[i];if(p.chunk===ch){scene.remove(p.g);props.splice(i,1);}}
   const mem=chunkMem.get(ch.key);if(mem)mem.saved=[];
-  for(let i=crates.length-1;i>=0;i--){const c=crates[i];if(c.chunk!==ch)continue;if(!c.opened&&mem)mem.saved.push({x:c.x,z:c.z,rar:c.rar,sp:c.sp});scene.remove(c.g);crates.splice(i,1);}
+  for(let i=crates.length-1;i>=0;i--){const c=crates[i];if(c.chunk!==ch)continue;if(!c.opened&&mem)mem.saved.push({x:c.x,z:c.z,rar:c.rar,sp:c.sp});dropCrate(c);crates.splice(i,1);}
   chunks.delete(ch.key);
 }
 // loot restocks every dawn; unopened crates are remembered while a chunk is unloaded
@@ -1772,6 +1790,39 @@ function updateWeather(dt,cx,cz){
   Sound.ambient('rain',W.rain*.32);Sound.ambient('wind',clamp(W.wind-.25,0,1)*.22);
 }
 
+/* ================= DIFFICULTY ================= */
+const DIFFS={
+  easy:{name:'Easy',count:.65,horde:.6,dmg:.7,hp:.85,spec:.6,nightHorde:.25,day:3},
+  normal:{name:'Normal',count:1,horde:1,dmg:1,hp:1,spec:1,nightHorde:.55,day:5},
+  hard:{name:'Hard',count:1.45,horde:1.5,dmg:1.2,hp:1.1,spec:1.4,nightHorde:.85,day:7},
+  nightmare:{name:'Nightmare',count:2,horde:2.2,dmg:1.4,hp:1.25,spec:1.9,nightHorde:1,day:9},
+};
+let diffKey=store.get('deadacre.diff','normal');if(!DIFFS[diffKey])diffKey='normal';let D=DIFFS[diffKey];
+function pickDiff(k){diffKey=k;D=DIFFS[k];store.set('deadacre.diff',k);
+  document.querySelectorAll('#diffPick button').forEach(b=>{const on=b.dataset.diff===k;b.classList.toggle('on',on);b.setAttribute('aria-checked',on);});}
+
+/* ================= DAMAGE NUMBERS ================= */
+const DN=[];let dnI=0,CRITF=false;
+{const L=document.getElementById('dmgLayer');for(let i=0;i<56;i++){const e=document.createElement('div');e.className='dmgn';e.style.display='none';L.appendChild(e);DN.push({e,life:0,x:0,y:0,z:0,vx:0,amt:0,tgt:null,t0:0});}}
+function dmgNum(t,amt,kind,y){
+  if(!S.running||!(amt>0)||!t)return;if(Math.hypot(t.x-player.x,t.z-player.z)>48)return;
+  const now=performance.now();
+  // rapid hits on the same target (SMG, chainsaw, pellets) add up on one rising number
+  if(t._dn&&t._dn.tgt===t&&t._dn.life>0&&now-t._dn.t0<380&&kind!=='kill'){const d=t._dn;d.amt+=amt;d.t0=now;d.life=Math.max(d.life,.8);d.e.textContent=Math.round(d.amt);if(kind)d.e.className='dmgn '+kind;return;}
+  const d=DN[dnI=(dnI+1)%DN.length];
+  Object.assign(d,{tgt:t,amt,life:.95,x:t.x+rand(-.25,.25),z:t.z+rand(-.25,.25),y:y+(t.lvlY||0),vx:rand(-.5,.5),t0:now});
+  d.e.textContent=Math.round(amt);d.e.className='dmgn '+(kind||'');d.e.style.display='';if(kind!=='kill')t._dn=d;else t._dn=null;
+}
+function updateDmgNums(dt){
+  for(const d of DN){if(d.life<=0)continue;d.life-=dt;if(d.life<=0){d.e.style.display='none';continue;}
+    const k=1-d.life/.95;projV.set(d.x+d.vx*k,d.y+gH(d.x,d.z)+k*1.4,d.z).project(camera);
+    if(projV.z>1||Math.abs(projV.x)>1.2||Math.abs(projV.y)>1.2){d.e.style.opacity=0;continue;}
+    const sc=k<.12?1.5-k*4.2:1;
+    d.e.style.transform=`translate(${((projV.x+1)/2*innerWidth).toFixed(1)}px,${((1-projV.y)/2*innerHeight).toFixed(1)}px) translate(-50%,-50%) scale(${sc.toFixed(2)})`;
+    d.e.style.opacity=Math.min(1,d.life*2.6);}
+}
+function clearDmgNums(){for(const d of DN){d.life=0;d.e.style.display='none';}}
+
 /* ================= ZOMBIES ================= */
 const eyeMats={};
 /* model-based zombies: rigged GLBs replace the box infected per type when they ship with the page */
@@ -1847,7 +1898,7 @@ function makeZombie(type){
 }
 function spawnZombie(type,x,z){
   const d=ZT[type];const m=makeZombie(type);m.g.position.set(x,0,z);scene.add(m.g);
-  const hpMul=1+.13*Math.max(0,S.wave-1);
+  const hpMul=(1+.13*Math.max(0,S.wave-1))*D.hp;
   const bw=type==='boss'?3.4:d.r*1.8;
   const bg=new THREE.Sprite(barBg);bg.center.set(0,.5);bg.scale.set(bw,.14,1);bg.visible=false;bg.renderOrder=10;scene.add(bg);
   const fg=new THREE.Sprite(type==='boss'?barFgBoss:barFg);fg.center.set(0,.5);fg.scale.set(bw,.14,1);fg.visible=false;fg.renderOrder=11;scene.add(fg);
@@ -1864,9 +1915,10 @@ function edgeSpawn(){
   return{x:cx+60,z:cz+60};
 }
 function buildWave(n){
-  const list=[],total=8+n*5;
+  const list=[],total=Math.round((8+n*5)*D.count),sp=D.spec;
   for(let i=0;i<total;i++){
-    const w={walker:1,runner:n>=2?.3+.03*n:0,spitter:n>=3?.16:0,boomer:n>=4?.14:0,brute:n>=5?.05+.008*n:0};
+    // night specials arrive earlier and grow every night
+    const w={walker:1,runner:(.25+.05*n)*sp,spitter:n>=2?(.1+.015*n)*sp:0,boomer:n>=3?(.09+.012*n)*sp:0,brute:n>=4?(.035+.01*n)*sp:0};
     let sum=0;for(const k in w)sum+=w[k];let r=Math.random()*sum,t='walker';for(const k in w){r-=w[k];if(r<=0){t=k;break;}}
     list.push(t);
   }
@@ -1885,6 +1937,7 @@ function collideSeg(o,r,s){
 }
 function damageZombie(z,dmg,kx,kz,silent,lift){
   if(z.dying)return;z.hp-=dmg;
+  if(!silent)dmgNum(z,dmg,z.hp<=0?'kill':CRITF?'crit':'',(z.barY||2.35*z.def.scale)+.25);
   if(!silent){bloodUp(z,dmg/z.maxHp*.7);z.flash=.09;if(Math.random()<.3)decal(z.x+rand(-.5,.5),z.z+rand(-.5,.5),rand(.4,.8),z.type==='spitter'?0x3f6a14:0x4a0a08,.7);burst(z.x,1.3*z.def.scale,z.z,3,z.type==='spitter'?'acid':'blood',4);Sound.play('hit',.7);
     const kr=z.type==='boss'?.1:z.type==='brute'?.3:1;z.kx+=(kx||0)*kr;z.kz+=(kz||0)*kr;z.hx=kx||0;z.hz=kz||0;z.lift=lift||0;}
   if(z.hp<=0)killZombie(z);
@@ -2197,7 +2250,7 @@ function alertHorde(h,why){
 }
 function makeNoise(x,z,r){for(const h of hordes)if(h.alive>0&&Math.hypot(h.cx-x,h.cz-z)<r+h.radius)alertHorde(h,'noise');}
 function hitAgent(a,dmg,kx,kz,quiet){
-  if(a.dying)return;a.hp-=dmg;a.blood=Math.min(1,a.blood+.2);a.vx+=(kx||0)*.6;a.vz+=(kz||0)*.6;burst(a.x,1.2,a.z,2,'blood',4);Sound.play('hit',.5);
+  if(a.dying)return;a.hp-=dmg;dmgNum(a,dmg,a.hp<=0?'kill':CRITF?'crit':'',2.3*a.s);a.blood=Math.min(1,a.blood+.2);a.vx+=(kx||0)*.6;a.vz+=(kz||0)*.6;burst(a.x,1.2,a.z,2,'blood',4);Sound.play('hit',.5);
   if(a.h.state!=='hunt'&&!quiet)alertHorde(a.h,'noise');if(a.hp<=0)killAgent(a);
 }
 function killAgent(a){
@@ -2596,7 +2649,8 @@ function tryFire(){
   if(w.projectile){const dist=clamp(Math.hypot(aim.x-player.x,aim.z-player.z),3,w.range);const a=player.yaw;
     lob('gren',mp.x,1.4,mp.z,player.x+Math.sin(a)*dist,player.z+Math.cos(a)*dist,26,{dmg,radius:w.radius,impact:true,siren:w.siren});}
   else{for(let i=0;i<w.pellets;i++){const a=player.yaw+rand(-w.spread,w.spread);
-      const r=hitscan(mp.x,mp.z,Math.sin(a),Math.cos(a),w.range,w.sticky?20:dmg*(w.crit&&Math.random()<w.crit?2:1),w.pierce||1,w.knock||2,w.chain?0x7ad8ff:w.burn?0xffa040:0xffe7a0);
+      CRITF=!!(w.crit&&Math.random()<w.crit);const r=hitscan(mp.x,mp.z,Math.sin(a),Math.cos(a),w.range,w.sticky?20:dmg*(CRITF?2:1),w.pierce||1,w.knock||2,w.chain?0x7ad8ff:w.burn?0xffa040:0xffe7a0);
+      CRITF=false;
       if(w.sticky)STICKY.push({x:r.x,z:r.z,t:2,tgt:r.first,dmg,r:w.radius,m:stickyMesh(r.x,r.z)});}
     if(!w.sticky&&w.cls!=='bow'&&!w.chain)ejectCasing(w.shell);}
   if(w.stacks){if(SHOT.kills)I.stacks=Math.min(5,I.stacks+SHOT.kills);if(I.mag===0&&SHOT.kills){I.mag=2;toast('Last Word: 2 rounds back','epic');}}
@@ -2669,6 +2723,7 @@ function addLure(x,z,dmg,r){const m=new THREE.Mesh(lureGeo,lureMat.clone());m.po
 function burnTick(o,k,dt){
   o.burn-=dt;const mul=1-.5*W.rain,d=o.burnD*dt*mul;
   if(k==='z')damageZombie(o,d,0,0,true);else{o.hp-=d;if(o.hp<=0)killAgent(o);}
+  o._ba=(o._ba||0)+d;if(o._ba>=6||o.dying){dmgNum(o,o._ba,'burn',k==='z'?(o.barY||2.35*o.def.scale):2.3*o.s);o._ba=0;}
   if(Math.random()<dt*7)burst(o.x,1.3+Math.random()*.6,o.z,1,'spark',2);
   if(o.burnSpread&&Math.random()<dt*3*mul){const n=nearestTarget(o.x,o.z,1.6,new Set([o]));if(n&&!(n.t.burn>0)){n.t.burn=3;n.t.burnD=o.burnD;n.t.burnSpread=true;}}
 }
@@ -2730,7 +2785,7 @@ function explode(x,z,r,dmg,o){
   Sound.play('boom',clamp(1-pd/70,.2,1));rumble(clamp(1-pd/35,0,1),clamp(1-pd/50,0,1)*.7,350);
 }
 function hurtPlayer(d){
-  if(!player.alive)return;player.hp-=d;player.hurtT=.35;Sound.play('hurt');heroHit();if(Math.random()<.4)decal(player.x+rand(-.4,.4),player.z+rand(-.4,.4),rand(.4,.7),0x5a0e0a,.7);S.shake=Math.max(S.shake,.2);burst(player.x,1.3,player.z,3,'blood',3);rumble(.6,.3,160);
+  if(!player.alive)return;d*=D.dmg;player.hp-=d;player.hurtT=.35;Sound.play('hurt');heroHit();if(Math.random()<.4)decal(player.x+rand(-.4,.4),player.z+rand(-.4,.4),rand(.4,.7),0x5a0e0a,.7);S.shake=Math.max(S.shake,.2);burst(player.x,1.3,player.z,3,'blood',3);rumble(.6,.3,160);
   if(player.hp<=0){player.hp=0;die();}
 }
 
@@ -2745,7 +2800,9 @@ function spawnCrate(x,z,rar){
   for(const sx of [-.4,.4]){const st=new THREE.Mesh(BOX(.1,.92,.94),strapM);st.position.set(sx,.46,0);g.add(st);}
   let beam=null;
   if(rar!=='common'){beam=new THREE.Mesh(new THREE.CylinderGeometry(.18,.18,rar==='drop'?30:14,6,1,true),new THREE.MeshBasicMaterial({color:R.strap,transparent:true,opacity:.28,blending:THREE.AdditiveBlending,depthWrite:false}));beam.position.y=rar==='drop'?15:7;g.add(beam);}
-  scene.add(g);const c={g,lid,beam,strapM,x,z,rar,opened:false,t:0,seen:false,chunk:null};crates.push(c);return c;
+  scene.add(g);const c={g,lid,beam,strapM,x,z,rar,opened:false,t:0,seen:false,chunk:null,ob:addOb({x,z,r:rar==='drop'?1.05:.78})};crates.push(c);return c;
+}
+function dropCrate(c){scene.remove(c.g);if(c.ob){delOb(c.ob);c.ob=null;}
 }
 function openCrate(c){
   c.opened=true;c.t=0;S.looted++;if(c.beam){c.g.remove(c.beam);c.beam.geometry.dispose();c.beam=null;}c.strapM.color.setHex(0x3a3a34);
@@ -2975,8 +3032,11 @@ function startNight(early){
   S.wave++;S.phase='night';S.queue=buildWave(S.wave);S.spawnT=1;S.envT=1;
   setTimeout(()=>setWeather(rollWeather(true),true),2200);
   banner(`NIGHT ${S.wave}`,UNLOCK[S.wave]||`${S.queue.length} infected incoming. Hold the walls.`,'night');Sound.play('night');rumble(.5,.5,400);
-  if(S.wave>=2&&Math.random()<.5){let hh=null,hd=1e9;for(const h of hordes){if(h.alive>0&&h.state==='roam'){const d=Math.hypot(h.cx,h.cz);if(d<hd){hd=d;hh=h;}}}
+  if(Math.random()<D.nightHorde*(S.wave>=2?1:.4)){let hh=null,hd=1e9;for(const h of hordes){if(h.alive>0&&h.state==='roam'){const d=Math.hypot(h.cx,h.cz);if(d<hd){hd=d;hh=h;}}}
     if(hh){hh.state='siege';hh.siege=true;hh.known=true;setTimeout(()=>banner('HORDE INCOMING',`${hh.alive} infected are marching on the farmstead from the ${compass(Math.atan2(hh.cx,hh.cz))}.`,'night'),3400);}}
+  if((S.wave>=2||diffKey==='nightmare')&&hordes.filter(h=>h.alive>0).length<4&&Math.random()<.35+.4*D.nightHorde){
+    const nh=spawnHorde(Math.round((18+S.wave*7)*D.horde));nh.night=true;nh.known=true;nh.state=Math.hypot(player.x,player.z)<40?'siege':'roam';nh.siege=nh.state==='siege';
+    setTimeout(()=>toast(`A night horde of ${nh.alive} is moving in from the ${compass(Math.atan2(nh.cx-player.x,nh.cz-player.z))}.`,'bad'),5200);}
   const open=gates.filter(g=>g.alive&&g.open);if(open.length)setTimeout(()=>toast(`The ${open.map(g=>g.side).join(' and ')} gate${open.length>1?'s are':' is'} still open`,'bad'),800);
 }
 function endNight(){
@@ -2985,8 +3045,8 @@ function endNight(){
   banner('DAWN',`Night ${S.wave} survived. +${sc} scrap, +${pa} parts.`,'dawn');Sound.play('dawn');
   store.set('deadacre.best',Math.max(store.get('deadacre.best',0),S.wave));
   refreshLoot();
-  for(const h of hordes)if(h.alive>0)addAgents(h,8+S.wave*2,h.cx,h.cz);
-  if(hordes.length<(S.wave>=3?3:2)){const h=spawnHorde(28+S.wave*12);setTimeout(()=>toast(`A new horde of ${h.alive} is roaming the ${compass(Math.atan2(h.cx,h.cz))}.`,'bad'),4200);}
+  for(const h of hordes)if(h.alive>0)addAgents(h,Math.round((8+S.wave*2)*D.horde),h.cx,h.cz);
+  if(hordes.length<(S.wave>=3?3:2)){const h=spawnHorde(Math.round((28+S.wave*12)*D.horde));setTimeout(()=>toast(`A new horde of ${h.alive} is roaming the ${compass(Math.atan2(h.cx,h.cz))}.`,'bad'),4200);}
   setTimeout(()=>setWeather(rollWeather(false),true),2400);
   for(let i=0;i<30;i++){const a=rand(0,6.28),r=rand(70,140),x=Math.cos(a)*r,z=Math.sin(a)*r;if(blockedSpot(x,z,2))continue;
     spawnCrate(x,z,'drop');setTimeout(()=>toast(`Airdrop spotted ${Math.round(r)}m ${compass(Math.atan2(x-player.x,z-player.z))}. Follow the red flare.`,'bad'),1500);break;}
@@ -2995,7 +3055,7 @@ function updatePhase(dt){
   if(S.phase==='day'){
     S.dayT-=dt;if(S.dayT<=0)startNight(false);
     for(let i=zombies.length-1;i>=0;i--){const z=zombies[i];if(!z.dying&&Math.hypot(z.x-player.x,z.z-player.z)>150){removeZombie(z);zombies.splice(i,1);}}
-    S.daySpawnT-=dt;if(S.daySpawnT<=0){S.daySpawnT=rand(7,11);if(zombies.filter(z=>!z.dying).length<5){const p=edgeSpawn();spawnZombie(S.wave>=2&&Math.random()<.3?'runner':'walker',p.x,p.z);}}
+    S.daySpawnT-=dt;if(S.daySpawnT<=0){S.daySpawnT=rand(7,11);if(zombies.filter(z=>!z.dying).length<D.day){const p=edgeSpawn();spawnZombie(S.wave>=2&&Math.random()<.3*D.spec?'runner':'walker',p.x,p.z);}}
   }else{
     S.spawnT-=dt;const alive=zombies.filter(z=>!z.dying).length;
     if(S.queue.length&&S.spawnT<=0&&alive<45){S.spawnT=Math.max(.35,1.4-S.wave*.07);const p=edgeSpawn();spawnZombie(S.queue.shift(),p.x,p.z);}
@@ -3221,8 +3281,8 @@ function updateWorld(dt){
   for(let i=acids.length-1;i>=0;i--){const a=acids[i];a.t-=dt;a.m.material.opacity=Math.min(.6,a.t/2*.6);if(a.t<=0){scene.remove(a.m);a.m.material.dispose();acids.splice(i,1);}}
   for(const b of barrels){if(!b.alive||b.fuse<0)continue;b.fuse-=dt;if(b.fuse<=0){b.alive=false;b.g.visible=false;b.ob.r=0;explode(b.x,b.z,5.5,140,{hurt:35,wall:60,color:0xff7a2a});}}
   for(let i=crates.length-1;i>=0;i--){const c=crates[i];if(c.beam){c.beam.material.opacity=.2+.12*Math.sin(performance.now()/300+i);}
-    if(c.opened){c.t+=dt;c.lid.rotation.x=Math.max(-2,c.lid.rotation.x-dt*8);if(c.t>18){scene.remove(c.g);crates.splice(i,1);}}
-    else if(!c.chunk&&c.rar==='drop'&&S.running&&Math.hypot(c.x-player.x,c.z-player.z)>260){scene.remove(c.g);crates.splice(i,1);}
+    if(c.opened){c.t+=dt;c.lid.rotation.x=Math.max(-2,c.lid.rotation.x-dt*8);if(c.t>18){dropCrate(c);crates.splice(i,1);}}
+    else if(!c.chunk&&c.rar==='drop'&&S.running&&Math.hypot(c.x-player.x,c.z-player.z)>260){dropCrate(c);crates.splice(i,1);}
     else if(c.rar==='drop'&&Math.random()<dt*6)burst(c.x,1.5,c.z,1,'smoke',1);}
   S.groanT-=dt;if(S.groanT<=0){S.groanT=rand(1.2,3);let near=null,nd=30;for(const z of zombies){if(z.dying)continue;const d=Math.hypot(z.x-player.x,z.z-player.z);if(d<nd){nd=d;near=z;}}if(near)Sound.play('groan',1-nd/30);}
   S.breachMsgT-=dt;
@@ -3310,7 +3370,7 @@ function die(){
 function resetGame(){
   camYaw=Math.PI;camPitch=.3;camera.near=TP?.15:.5;camera.updateProjectionMatrix();
   for(const z of zombies)removeZombie(z);zombies.length=0;
-  for(const c of crates)scene.remove(c.g);crates.length=0;
+  for(const c of crates)dropCrate(c);crates.length=0;
   for(const p of pickups)scene.remove(p.m);pickups.length=0;
   for(const p of projs)scene.remove(p.m);projs.length=0;
   for(const a of acids)scene.remove(a.m);acids.length=0;
@@ -3319,8 +3379,9 @@ function resetGame(){
   for(const s of segs){s.maxHp=WALL_HP[1];s.open=false;s.openAmt=0;}applyWalls(true);applyTurrets();applyFloods();
   Object.assign(player,{x:0,z:2,vx:0,vz:0,kx:0,kz:0,yaw:Math.PI,hp:100,maxHp:100,st:100,alive:true,scrap:40,parts:0,med:1,gren:0,weapon:'pistol',fireCd:0,reloadT:0,hurtT:0,acidT:0,recoil:0});
   resetInv();pl.rotation.x=0;heroReset();
+  Object.assign(player,{swim:false,swing:0,drownMsg:0});S.armSel=null;clearDmgNums();
   Object.assign(S,{paused:false,menu:false,over:false,phase:'day',dayT:75,wave:0,queue:[],spawnT:0,daySpawnT:14,kills:0,looted:0,shake:0,env:0,envT:0});
-  updateGroundWindow();updateGrass();updateChunks(true);seedYardProps();spawnHorde(GFX==='high'?40:28);
+  updateGroundWindow();updateGrass();updateChunks(true);seedYardProps();spawnHorde(Math.round((GFX==='high'?40:28)*D.horde));
   refreshSlots();toasts.innerHTML='';
   setWeather('clear');W.rain=W.ash=W.fog=W.cloud=0;W.wet=0;W.flash=0;for(const d of decals)d.m.visible=false;
   camera.position.set(player.x+CAM_OFF.x,CAM_OFF.y,player.z+CAM_OFF.z);
@@ -3329,13 +3390,15 @@ function startGame(){
   Sound.init();resetGame();S.running=true;setPadFocus(null);
   $('startScreen').hidden=true;$('overScreen').hidden=true;$('pauseScreen').hidden=true;$('menu').hidden=true;$('hud').hidden=false;
   if(isTouch&&!pad.active){$('touch').hidden=false;}else{$('crosshair').hidden=false;if(!pad.active)document.body.classList.add('playing');}
-  banner('DAY 1','Scavenge the crates before nightfall. Your base is the walled yard.','dawn');
+  banner('DAY 1',`${D.name}. Scavenge the crates before nightfall. Your base is the walled yard.`,'dawn');
   const u=pad.active?'A':isTouch?'Use':'E';
   setTimeout(()=>toast(pad.active?'Left stick moves, right stick aims, RT fires.':isTouch?'Left stick moves, right stick aims and fires.':'WASD to move, mouse to aim, hold click to fire.'),900);
   setTimeout(()=>toast(`Walk up to a gate and press ${u} to open it. Shut them before night.`),2600);
 }
 $('startBtn').addEventListener('click',startGame);
+document.querySelectorAll('#diffPick button').forEach(b=>b.addEventListener('click',()=>{pickDiff(b.dataset.diff);Sound.init();Sound.play('ui');}));pickDiff(diffKey);
 $('againBtn').addEventListener('click',startGame);
+$('diffBtn').addEventListener('click',()=>{S.running=false;$('overScreen').hidden=true;$('hud').hidden=true;$('crosshair').hidden=true;clearDmgNums();$('startScreen').hidden=false;if(pad.active)setPadFocus($('startBtn'));});
 $('resumeBtn').addEventListener('click',togglePause);
 $('muteBtn').addEventListener('click',toggleMute);
 $('quitBtn').addEventListener('click',()=>{S.paused=false;startGame();});
@@ -3363,7 +3426,7 @@ function frame(now){
     hudT-=dt;if(hudT<=0){hudT=.08;updateHUD();}
     mapT-=dt;if(mapT<=0){mapT=.12;drawMinimap();}
     $('vignette').style.opacity=player.hurtT>0?Math.min(1,player.hurtT*2.5):0;
-    crossT-=dt;$('crosshair').classList.toggle('hit',crossT>0);
+    crossT-=dt;$('crosshair').classList.toggle('hit',crossT>0);updateDmgNums(dt);
   }else if(S.over){if(HERO.ready)HERO.mixer.update(dt);updateZombies(dt);updateHordes(dt);updateProps(dt);updateDoors(dt);updateWorld(dt);updateWeather(dt,player.x,player.z-2);updateEnv(dt);}
   else if(!S.running){idleA+=dt*.05;camera.position.set(Math.sin(idleA)*34,22,Math.cos(idleA)*34);camera.lookAt(0,0,0);updateWorld(dt);updateDoors(dt);updateWeather(dt,0,0);updateEnv(dt);
     sun.position.set(22,40,12);sun.target.position.set(0,0,0);}
