@@ -69,6 +69,12 @@ button:focus-visible,.padfocus{outline:3px solid var(--toxic)!important;outline-
 #gateLine b{color:var(--toxic)}
 #gateLine b.warn{color:var(--blood)}
 
+.stealth{position:absolute;left:50%;transform:translateX(-50%);top:calc(64px + env(safe-area-inset-top,0px));display:flex;align-items:center;gap:8px;
+  font-size:14px;font-weight:700;letter-spacing:.16em;padding:4px 12px;color:var(--bone)}
+.stealth .meter{width:70px;height:5px;background:rgba(255,255,255,.12);border-radius:3px;overflow:hidden}.stealth .meter i{display:block;height:100%;width:0;background:var(--hazard)}
+.stealth.hid{color:#9fe6ff}.stealth.sus{color:var(--hazard)}.stealth.spot{color:var(--blood)}
+.zmark{position:absolute;left:0;top:0;font-family:var(--f-display);font-size:30px;line-height:1;text-shadow:-2px -2px 0 #0c0e0b,2px -2px 0 #0c0e0b,-2px 2px 0 #0c0e0b,2px 2px 0 #0c0e0b;will-change:transform,opacity}
+.zmark.q{color:var(--hazard)}.zmark.x{color:var(--blood);font-size:36px}
 .tc{position:absolute;left:50%;transform:translateX(-50%);top:calc(12px + env(safe-area-inset-top,0px));display:flex;gap:8px}
 .res{display:flex;align-items:center;gap:8px;font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;padding:6px 12px}
 .res small{font-size:11px;letter-spacing:.14em;color:var(--mute);font-weight:600}
@@ -225,6 +231,7 @@ kbd.pl{border-radius:3px;width:auto;padding:0 6px;background:var(--bone)}
     <div class="res panel"><i class="ic-scrap"></i><span id="scrapNum">0</span><small>SCRAP</small></div>
     <div class="res panel"><i class="ic-parts"></i><span id="partsNum">0</span><small>PARTS</small></div>
   </div>
+  <div class="stealth panel" id="stealth" hidden><span id="stealthTxt">HIDDEN</span><span class="meter"><i id="stealthBar"></i></span></div>
   <div class="tr panel">
     <canvas id="minimap" width="340" height="340"></canvas>
     <div class="mapkey"><span><b style="background:#f2a516"></b>You</span><span><b style="background:#e8e2d0"></b>Crate</span><span><b style="background:#d6432f"></b>Infected</span><span><b style="background:#e9c46a"></b>Base</span></div>
@@ -275,11 +282,11 @@ kbd.pl{border-radius:3px;width:auto;padding:0 6px;background:var(--bone)}
       <div>
         <h3>Keyboard &amp; mouse</h3>
         <div class="keys">
-          <kbd>W A S D</kbd><span>Move · <b>Shift</b> to sprint</span>
+          <kbd>W A S D</kbd><span>Move · <b>Shift</b> to sprint · <b>C</b> to crouch</span>
           <kbd>Mouse</kbd><span>Look and aim · hold left button to fire</span>
           <kbd>V</kbd><span>Third-person / top-down camera</span>
           <kbd>1–5 / Q</kbd><span>Switch weapon · <b>R</b> reload</span>
-          <kbd>E</kbd><span>Loot crates, open gates, kick doors</span>
+          <kbd>E</kbd><span>Loot, gates, doors · takedown from behind</span>
           <kbd>B</kbd><span>Base workshop (inside walls)</span>
           <kbd>H / G</kbd><span>Use medkit · throw grenade</span>
           <kbd>Space</kbd><span>Start the night early</span>
@@ -290,7 +297,7 @@ kbd.pl{border-radius:3px;width:auto;padding:0 6px;background:var(--bone)}
         <h3>Xbox controller</h3>
         <div class="keys">
           <kbd>L stick</kbd><span>Move · click to sprint</span>
-          <kbd>R stick</kbd><span>Look and aim</span>
+          <kbd>R stick</kbd><span>Look and aim · click to crouch</span>
           <kbd>RT / LT</kbd><span>Fire · throw grenade</span>
           <kbd class="pb pa">A</kbd><span>Loot, gates, doors</span>
           <kbd class="pb px">X</kbd><span>Reload</span>
@@ -1823,6 +1830,55 @@ function updateDmgNums(dt){
 }
 function clearDmgNums(){for(const d of DN){d.life=0;d.e.style.display='none';}}
 
+/* ================= STEALTH =================
+   Daytime infected wander until they notice you: a forward cone of sight (shorter when you crouch, at night and in fog)
+   and hearing all round (sprinting is loud, crouching is silent). Suspicion fills before they commit.
+   Unaware infected can be taken down silently from behind; melee on them hits three times as hard. */
+let SNEAKF=false;
+function zAlert(z,quiet){if(z.aware||z.dying)return;z.aware=true;z.sus=1;z.alertT=1.3;z.lostT=0;
+  if(!quiet){Sound.play('groan',.9);for(const o of zombies)if(o!==z&&!o.aware&&!o.dying&&Math.hypot(o.x-z.x,o.z-z.z)<9)o.sus=Math.max(o.sus,.75);}}
+function unaware(o,k){return k==='z'?!o.aware:o.h.state!=='hunt'&&!o.h.lured;}
+function takedownTarget(){
+  if(!player.alive||player.swim||player.lvl)return null;
+  const fx=Math.sin(player.yaw),fz=Math.cos(player.yaw);let best=null,bd=2.1;
+  const ok=(o,k,face)=>{const dx=o.x-player.x,dz=o.z-player.z,d=Math.hypot(dx,dz);if(d>bd||d<.05)return;
+    if((dx*fx+dz*fz)/d<.25)return; // has to be in front of you
+    const back=((player.x-o.x)*Math.sin(face)+(player.z-o.z)*Math.cos(face))/d;if(back>.35&&!player.crouch)return; // from behind, or crouched beside it
+    if(!unaware(o,k))return;bd=d;best={t:o,k};};
+  for(const z of zombies){if(z.dying||(z.lvl||0)!==0||z.type==='brute'||z.type==='boss'||z.type==='boomer')continue;ok(z,'z',z.yaw);}
+  nearAgents(player.x,player.z,2.4,a=>ok(a,'a',a.yaw));
+  return best;
+}
+function doTakedown(o){
+  const t=o.t;player.swing=.3;player.fireCd=.6;Sound.play('swing',.6);Sound.play('thud',.7);rumble(.4,.3,120);S.shake=Math.max(S.shake,.1);
+  burst(t.x,1.4,t.z,8,'blood',4);decal(t.x,t.z,rand(1,1.4),0x4a0a08,.8);
+  if(o.k==='z'){dmgNum(t,t.hp,'sneak',(t.barY||2.35*t.def.scale)+.3);t.hp=0;killZombie(t);}
+  else{dmgNum(t,t.hp,'sneak',2.6*t.s);t.hp=0;killAgent(t);}
+  S.takedowns=(S.takedowns||0)+1;if(S.takedowns<=2)toast('Silent takedown','good');
+}
+const ZM_N=10,ZMK=[];
+{const L=document.getElementById('dmgLayer');for(let i=0;i<ZM_N;i++){const e=document.createElement('div');e.className='zmark';e.style.display='none';L.appendChild(e);ZMK.push(e);}}
+// HUD: stealth state plus ? / ! markers over the infected that are onto you
+function updateStealthHUD(){
+  let maxSus=0,spotted=0;const marks=[];
+  for(const z of zombies){if(z.dying)continue;const d=Math.hypot(z.x-player.x,z.z-player.z);if(d>40)continue;
+    if(z.aware){if(d<28)spotted++;if(z.alertT>0)marks.push({z,t:'x',d});}
+    else if(z.sus>.08){maxSus=Math.max(maxSus,z.sus);marks.push({z,t:'q',d});}}
+  marks.sort((a,b)=>a.d-b.d);
+  for(let i=0;i<ZM_N;i++){const e=ZMK[i],m=marks[i];if(!m){e.style.display='none';continue;}
+    projV.set(m.z.x,(m.z.barY||2.35*m.z.def.scale)+.75+gH(m.z.x,m.z.z)+(m.z.lvlY||0),m.z.z).project(camera);
+    if(projV.z>1){e.style.display='none';continue;}
+    e.style.display='';e.className='zmark '+m.t;e.textContent=m.t==='x'?'!':'?';
+    e.style.opacity=m.t==='x'?Math.min(1,m.z.alertT*2):(.35+m.z.sus*.65).toFixed(2);
+    e.style.transform=`translate(${((projV.x+1)/2*innerWidth).toFixed(1)}px,${((1-projV.y)/2*innerHeight).toFixed(1)}px) translate(-50%,-50%)`;}
+  const el=$('stealth'),night=S.phase==='night';
+  let st=null;if(spotted&&!night)st='spot';else if(maxSus>.05)st='sus';else if(player.crouch)st='hid';
+  el.hidden=!st;if(!st)return;
+  el.className='stealth panel '+st;$('stealthTxt').textContent=st==='spot'?'SPOTTED':st==='sus'?'SUSPICIOUS':'HIDDEN';
+  $('stealthBar').style.width=(st==='spot'?100:st==='sus'?maxSus*100:0)+'%';
+}
+function clearStealthHUD(){for(const e of ZMK)e.style.display='none';$('stealth').hidden=true;}
+
 /* ================= ZOMBIES ================= */
 const eyeMats={};
 /* model-based zombies: rigged GLBs replace the box infected per type when they ship with the page */
@@ -1902,7 +1958,8 @@ function spawnZombie(type,x,z){
   const bw=type==='boss'?3.4:d.r*1.8;
   const bg=new THREE.Sprite(barBg);bg.center.set(0,.5);bg.scale.set(bw,.14,1);bg.visible=false;bg.renderOrder=10;scene.add(bg);
   const fg=new THREE.Sprite(type==='boss'?barFgBoss:barFg);fg.center.set(0,.5);fg.scale.set(bw,.14,1);fg.visible=false;fg.renderOrder=11;scene.add(fg);
-  const z0={type,def:d,...m,x,z,y:0,yaw:0,hp:d.hp*hpMul,maxHp:d.hp*hpMul,kx:0,kz:0,atkCd:0,wallT:0,spitCd:rand(1,2),chargeCd:rand(3,6),chargeT:0,slamCd:3,slamT:0,summonCd:10,
+  const hunt=S.phase==='night'||type==='boss';
+  const z0={type,def:d,...m,x,z,y:0,aware:hunt,always:hunt,sus:0,wx:x,wz:z,wT:0,alertT:0,lostT:0,yaw:0,hp:d.hp*hpMul,maxHp:d.hp*hpMul,kx:0,kz:0,atkCd:0,wallT:0,spitCd:rand(1,2),chargeCd:rand(3,6),chargeT:0,slamCd:3,slamT:0,summonCd:10,
     walk:rand(0,6),flash:0,blocked:null,breach:null,reT:0,dying:false,dieT:0,bg,fg,bw,lunge:0,spikeT:0,hx:0,hz:0,lift:0,dvx:0,dvy:0,dvz:0,dspin:0,sink:0};
   zombies.push(z0);
   if(type==='boss'){banner('THE ABOMINATION','It walks with the horde tonight. Aim for the bulk.','night');Sound.play('roar',1);rumble(.8,.8,500);}
@@ -1937,7 +1994,8 @@ function collideSeg(o,r,s){
 }
 function damageZombie(z,dmg,kx,kz,silent,lift){
   if(z.dying)return;z.hp-=dmg;
-  if(!silent)dmgNum(z,dmg,z.hp<=0?'kill':CRITF?'crit':'',(z.barY||2.35*z.def.scale)+.25);
+  if(!silent)dmgNum(z,dmg,z.hp<=0?'kill':SNEAKF?'sneak':CRITF?'crit':'',(z.barY||2.35*z.def.scale)+.25);
+  if(!z.aware&&!silent)zAlert(z);
   if(!silent){bloodUp(z,dmg/z.maxHp*.7);z.flash=.09;if(Math.random()<.3)decal(z.x+rand(-.5,.5),z.z+rand(-.5,.5),rand(.4,.8),z.type==='spitter'?0x3f6a14:0x4a0a08,.7);burst(z.x,1.3*z.def.scale,z.z,3,z.type==='spitter'?'acid':'blood',4);Sound.play('hit',.7);
     const kr=z.type==='boss'?.1:z.type==='brute'?.3:1;z.kx+=(kx||0)*kr;z.kz+=(kz||0)*kr;z.hx=kx||0;z.hz=kz||0;z.lift=lift||0;}
   if(z.hp<=0)killZombie(z);
@@ -1977,6 +2035,7 @@ function updateDying(z,dt){
   z.g.position.set(z.x,z.y*.9+(z.animDeath?0:.15*Math.min(1,z.dieT*3)*z.def.scale)-z.sink,z.z);z.g.rotation.y=z.yaw;
 }
 
+const pd0=z=>Math.hypot(player.x-z.x,player.z-z.z);
 function updateZombies(dt){
   const px=player.x,pz=player.z,pIn=inBase(px,pz);
   for(const z of zombies){
@@ -1985,10 +2044,21 @@ function updateZombies(dt){
     if(z.burn>0){burnTick(z,'z',dt);if(z.dying)continue;}
     z.atkCd-=dt;z.flash-=dt;z.spitCd-=dt;z.chargeCd-=dt;z.slamCd-=dt;z.summonCd-=dt;z.lunge-=dt;
     const zIn=inBase(z.x,z.z);
-    let tx=px,tz=pz;
-    {const lu=lureFor(z.x,z.z,45);if(lu){tx=lu.x;tz=lu.z;}}
+    let tx=px,tz=pz;z.alertT-=dt;
+    const lu=lureFor(z.x,z.z,45);if(lu){tx=lu.x;tz=lu.z;}
+    if(!z.aware&&player.alive){
+      const sdx=px-z.x,sdz=pz-z.z,sd=Math.hypot(sdx,sdz)||1,fwd=(sdx*Math.sin(z.yaw)+sdz*Math.cos(z.yaw))/sd;
+      const vis=(player.crouch?9:17)*(S.phase==='night'?.65:1)*(1-.45*W.fog)*(player.swim?.6:1);
+      const hear=player.crouch?1.5:player.sprinting?13:player.moving?5:2;
+      let gain=0;if(fwd>.35&&sd<vis)gain=(1.35-sd/vis)*(player.crouch?1:2.2);if(sd<hear)gain=Math.max(gain,(1-sd/hear)*3.2);
+      z.sus=clamp(z.sus+(gain>0?gain*dt:-dt*.2),0,1);if(z.sus>=1)zAlert(z);
+    }else if(z.aware&&!z.always&&S.phase==='day'){if(pd0(z)>38){z.lostT+=dt;if(z.lostT>9){z.aware=false;z.sus=.25;z.lostT=0;}}else z.lostT=0;}
+    if(!z.aware&&!lu){
+      z.wT-=dt;if(z.wT<=0||Math.hypot(z.wx-z.x,z.wz-z.z)<1){z.wT=rand(3,7);const a=rand(0,6.28),r=rand(3,9);z.wx=z.x+(px-z.x)*.1+Math.cos(a)*r;z.wz=z.z+(pz-z.z)*.1+Math.sin(a)*r;}
+      if(z.sus>.3){tx=px;tz=pz;}else{tx=z.wx;tz=z.wz;}
+    }
     if(!player.alive){tx=0;tz=0;}
-    else if(pIn!==zIn){
+    else if(z.aware&&pIn!==zIn){
       z.reT-=dt;if(z.reT<=0){z.reT=.8;z.breach=nearestBreach(z.x,z.z);}
       const b=z.breach;
       if(b&&!solidSeg(b.s)&&b.d<Math.hypot(px-z.x,pz-z.z)+30){
@@ -1998,12 +2068,12 @@ function updateZombies(dt){
     }
     let dx=tx-z.x,dz=tz-z.z;const dist=Math.hypot(dx,dz)||1;dx/=dist;dz/=dist;
     const pdx=px-z.x,pdz=pz-z.z,pd=Math.hypot(pdx,pdz);
-    let sp=d.speed*(S.phase==='day'?.8:1)*(1-.15*W.ash);
-    if(z.type==='spitter'&&player.alive){
+    let sp=d.speed*(S.phase==='day'?.8:1)*(1-.15*W.ash)*(z.aware||lu?1:z.sus>.3?.45:.32);
+    if(z.type==='spitter'&&player.alive&&z.aware){
       if(pd<10)sp=0;
       if(pd<16&&z.spitCd<=0){z.spitCd=rand(2.6,3.4);const T=clamp(pd/14,.5,1.2);spitAcid(z.x,z.z,px+player.vx*T*.6,pz+player.vz*T*.6);}
     }
-    if(z.type==='brute'&&player.alive){
+    if(z.type==='brute'&&player.alive&&z.aware){
       if(z.chargeT>0){z.chargeT-=dt;sp*=3.4;burst(z.x,.2,z.z,1,'debris',2);}
       else if(z.chargeCd<=0&&pd<15&&pd>4&&pIn===zIn){z.chargeT=1.1;z.chargeCd=rand(5,8);Sound.play('roar',.5);}
     }
@@ -2028,9 +2098,9 @@ function updateZombies(dt){
       if(base.spikeLv&&!z.blocked.door){damageZombie(z,SPIKE_DPS[base.spikeLv]*dt,0,0,true);z.spikeT-=dt;if(z.spikeT<=0){z.spikeT=.5;burst(z.x,.8,z.z,2,'blood',3);}}
       if(z.dying)continue;
     }
-    if(player.alive&&pd<d.r+.85&&z.atkCd<=0){z.atkCd=z.type==='runner'?.75:1.1;z.lunge=.25;zAttackAnim(z);hurtPlayer(d.dmg*(1+.04*(S.wave-1)));
+    if(player.alive&&z.aware&&pd<d.r+.85&&z.atkCd<=0){z.atkCd=z.type==='runner'?.75:1.1;z.lunge=.25;zAttackAnim(z);hurtPlayer(d.dmg*(1+.04*(S.wave-1)));
       const kf=z.type==='brute'?(z.chargeT>0?20:9):z.type==='boss'?12:2.5;knockPlayer(pdx/(pd||1),pdz/(pd||1),kf);if(z.type==='brute')z.chargeT=0;}
-    const fy=sp>0?Math.atan2(dx,dz):Math.atan2(pdx,pdz);
+    const fy=sp>0?Math.atan2(dx,dz):z.aware?Math.atan2(pdx,pdz):z.yaw;
     let dy=fy-z.yaw;while(dy>Math.PI)dy-=Math.PI*2;while(dy<-Math.PI)dy+=Math.PI*2;z.yaw+=dy*Math.min(1,dt*8);
     z.walk+=dt*(sp+.5)*2.2;const sw=Math.sin(z.walk);
     if(z.mixer){
@@ -2248,9 +2318,10 @@ function alertHorde(h,why){
   if(h.alive<=0)return;const was=h.state==='hunt';h.state='hunt';h.alertT=why==='noise'?16:12;h.known=true;
   if(!was&&S.running){Sound.play('roar',.8);rumble(.5,.4,400);banner('HORDE',`${h.alive} infected ${why==='noise'?'heard you':'spotted you'}. Run, or find a choke point.`,'night');}
 }
-function makeNoise(x,z,r){for(const h of hordes)if(h.alive>0&&Math.hypot(h.cx-x,h.cz-z)<r+h.radius)alertHorde(h,'noise');}
+function makeNoise(x,z,r){for(const h of hordes)if(h.alive>0&&Math.hypot(h.cx-x,h.cz-z)<r+h.radius)alertHorde(h,'noise');
+  for(const zb of zombies)if(!zb.aware&&!zb.dying&&Math.hypot(zb.x-x,zb.z-z)<r*.8)zAlert(zb);}
 function hitAgent(a,dmg,kx,kz,quiet){
-  if(a.dying)return;a.hp-=dmg;dmgNum(a,dmg,a.hp<=0?'kill':CRITF?'crit':'',2.3*a.s);a.blood=Math.min(1,a.blood+.2);a.vx+=(kx||0)*.6;a.vz+=(kz||0)*.6;burst(a.x,1.2,a.z,2,'blood',4);Sound.play('hit',.5);
+  if(a.dying)return;a.hp-=dmg;dmgNum(a,dmg,a.hp<=0?'kill':SNEAKF?'sneak':CRITF?'crit':'',2.3*a.s);a.blood=Math.min(1,a.blood+.2);a.vx+=(kx||0)*.6;a.vz+=(kz||0)*.6;burst(a.x,1.2,a.z,2,'blood',4);Sound.play('hit',.5);
   if(a.h.state!=='hunt'&&!quiet)alertHorde(a.h,'noise');if(a.hp<=0)killAgent(a);
 }
 function killAgent(a){
@@ -2274,7 +2345,7 @@ function updateHordes(dt){
     if(h.n){h.cx=h.sx/h.n;h.cz=h.sz/h.n;}h.sx=h.sz=0;h.n=0;
     const lu=lureFor(h.cx,h.cz,120);h.lured=!!lu;if(lu){h.tx=lu.x;h.tz=lu.z;continue;}
     const dP=Math.hypot(px-h.cx,pz-h.cz);
-    if(h.state!=='hunt'&&player.alive&&S.running&&dP<(night?20:28)*(1-.4*W.fog)+h.radius)alertHorde(h,'spotted');
+    if(h.state!=='hunt'&&player.alive&&S.running&&(dP<(night?20:28)*(1-.4*W.fog)*(player.crouch?.5:1)+h.radius||(player.sprinting&&dP<10+h.radius)))alertHorde(h,'spotted');
     if(h.state==='hunt'){h.alertT-=dt;if(player.alive&&dP<45)h.alertT=Math.max(h.alertT,3);chorus=Math.min(chorus,dP);
       if(h.alertT<=0||!player.alive){h.state=h.siege?'siege':'roam';h.wpT=0;if(player.alive)toast('The horde lost your trail','good');}
       else{h.tx=px;h.tz=pz;}}
@@ -2681,8 +2752,10 @@ function sawTick(w){
   if(T.length){S.shake=Math.max(S.shake,.08);rumble(.3,.5,60);}
 }
 function dmgTarget(o,k,d,kx,kz,quiet){
+  if(SHOT&&unaware(o,k)){const m=SHOT.w.melee&&!SHOT.w.saw?3:SHOT.w.cls==='bow'?2:1;if(m>1){d*=m;SNEAKF=true;}}
   if(k==='z')damageZombie(o,d,kx,kz);
   else{if(SHOT&&SHOT.w.unaware&&o.h.state!=='hunt')d*=2;hitAgent(o,d,kx,kz,quiet||(SHOT&&SHOT.w.quiet));}
+  SNEAKF=false;
 }
 function nearestTarget(x,z,r,skip){
   let best=null,bd=r;
@@ -3076,6 +3149,7 @@ window.addEventListener('keydown',e=>{
   if(e.code==='KeyB'){if(S.menu)closeMenu();else if(!S.paused)openMenu();return;}
   if(S.paused||S.menu)return;
   if(e.code==='KeyV'){setView(!TP);return;}
+  if(e.code==='KeyC'){player.crouchT=!player.crouchT;return;}
   const n=['Digit1','Digit2','Digit3','Digit4','Digit5','Digit6','Digit7','Digit8','Digit9','Digit0'].indexOf(e.code);if(n>=0)setWeapon(SLOTS[n]);
   if(e.code==='KeyQ')cycleWeapon(1);
   if(e.code==='KeyR')startReload();
@@ -3114,6 +3188,7 @@ document.querySelectorAll('.tbtns button').forEach(b=>b.addEventListener('click'
 }));
 
 function interact(){
+  const td=takedownTarget();if(td){doTakedown(td);return;}
   const c=nearestCrate();if(c){openCrate(c);return;}
   const g=nearestGate();if(g){toggleGate(g);return;}
   const d=nearestDoor();if(d){kickDoor(d);return;}
@@ -3175,6 +3250,7 @@ function pollPad(dt){
       if(P(PB.DOWN))useMed();
       if(pad.lt>.5&&!pad.ltPrev)throwGrenade();
       if(P(PB.LS))pad.sprint=!pad.sprint;
+      if(P(PB.RS))player.crouchT=!player.crouchT;
       if(Math.hypot(pad.lx,pad.ly)<.2)pad.sprint=false;
     }
   }
@@ -3195,10 +3271,11 @@ function updatePlayer(dt){
   const dep=depthAt(player.x,player.z),wasSwim=player.swim;player.swim=dep>1.25;
   if(player.swim&&!wasSwim)toast('Swimming: you can\'t shoot, and stamina drains. Infected won\'t follow you into deep water.');
   const sprint=(keys.ShiftLeft||keys.ShiftRight||(isTouch&&ml>.95)||(pad.active&&pad.sprint))&&player.st>0&&moving&&!player.swim;
+  if(sprint)player.crouchT=false;player.crouch=!player.swim&&!!player.crouchT;player.sprinting=sprint;player.moving=moving;
   if(sprint)player.st=Math.max(0,player.st-28*(1+.45*W.rain)*dt);else player.st=Math.min(100,player.st+16*dt);
   if(player.swim){player.st=Math.max(0,player.st-19*dt);if(Math.random()<dt*(moving?6:2))splash(player.x+rand(-.6,.6),player.z+rand(-.6,.6),WL-gH(player.x,player.z)+.03);
     if(player.st<=0){player.hp-=9*dt;player.hurtT=Math.max(player.hurtT,.12);if(!player.drownMsg){player.drownMsg=1;toast('Drowning. Get to shore.','bad');}if(player.hp<=0){player.hp=0;die();return;}}else player.drownMsg=0;}
-  const sp=(sprint?10.5:6.5)*(player.acidT>0?.6:1)*(player.swim?.45:dep>.3?1-.35*Math.min(1,(dep-.3)/.95):1);
+  const sp=(sprint?10.5:6.5)*(player.acidT>0?.6:1)*(player.swim?.45:dep>.3?1-.35*Math.min(1,(dep-.3)/.95):1)*(player.crouch?.45:1);
   player.vx=mx*sp;player.vz=mz*sp;
   player.x+=(player.vx+player.kx)*dt;player.z+=(player.vz+player.kz)*dt;
   const kd=Math.pow(.004,dt);player.kx*=kd;player.kz*=kd;
@@ -3227,13 +3304,14 @@ function updatePlayer(dt){
   player.walk+=dt*(moving?sp*1.6:0);const sw=moving?Math.sin(player.walk):0;
   plLegs[0].rotation.x=sw*.7;plLegs[1].rotation.x=-sw*.7;
   player.recoil=Math.max(0,player.recoil-dt);
-  pl.position.set(player.x,player.swim?depthAt(player.x,player.z)-1.35:moving&&!HERO.ready?Math.abs(Math.cos(player.walk))*.07:0,player.z);gun.visible=!player.swim&&!HERO.dead;pl.rotation.y=player.yaw;gun.position.z=.62-player.recoil*2;
+  pl.position.set(player.x,(player.swim?depthAt(player.x,player.z)-1.35:moving&&!HERO.ready?Math.abs(Math.cos(player.walk))*.07:0)-(player.crouch?.22:0)+(player.lvlY||0),player.z);pl.rotation.x=player.crouch?.22:0;gun.visible=!player.swim&&!HERO.dead;pl.rotation.y=player.yaw;gun.position.z=.62-player.recoil*2;
   player.swing=Math.max(0,(player.swing||0)-dt);gun.rotation.y=player.swing>0?Math.sin(player.swing/.25*Math.PI)*1.1:0;
   if(HERO.ready)updateHero(dt,moving,sprint,moving?(mx*Math.sin(player.yaw)+mz*Math.cos(player.yaw))/(ml||1):1,sp);
   player.hurtT-=dt;
   // prompt
-  const c=nearestCrate();let ps='';
-  if(c)ps=`<span>${glyph('use')}Open ${c.rar==='drop'?'airdrop':RARITY[c.rar].label.toLowerCase()+' crate'}</span>`;
+  const c=nearestCrate(),tdn=takedownTarget();let ps='';
+  if(tdn)ps=`<span>${glyph('use')}Takedown</span>`;
+  else if(c)ps=`<span>${glyph('use')}Open ${c.rar==='drop'?'airdrop':RARITY[c.rar].label.toLowerCase()+' crate'}</span>`;
   else{const g=nearestGate();
     if(g)ps=`<span>${glyph('use')}${g.open?'Close':'Open'} the ${g.side} gate</span>`;
     else{const d=nearestDoor();if(d)ps=`<span>${glyph('use')}Kick the door</span>`;}}
@@ -3332,7 +3410,7 @@ function updateCameraTP(dt){
   const fx=Math.sin(camYaw),fz=Math.cos(camYaw),rx=-Math.cos(camYaw),rz=Math.sin(camYaw);
   const gy=gH(player.x,player.z)+(player.swim?depthAt(player.x,player.z)-1.35:0);
   camGY+=(gy-camGY)*Math.min(1,dt*8);
-  _ct.set(player.x+rx*.75,camGY+1.75,player.z+rz*.75);
+  _ct.set(player.x+rx*.75,camGY+(player.crouch?1.35:1.75)+(player.lvlY||0),player.z+rz*.75);
   const cp=Math.cos(camPitch),sp=Math.sin(camPitch);_cd.set(fx*cp,-sp,fz*cp);
   // pull the camera in front of walls, trees and hillsides
   let d=TPD;for(let t=.6;t<=TPD;t+=.3){if(camBlocked(_ct.x-_cd.x*t,_ct.y-_cd.y*t,_ct.z-_cd.z*t)){d=Math.max(.6,t-.35);break;}}
@@ -3379,7 +3457,7 @@ function resetGame(){
   for(const s of segs){s.maxHp=WALL_HP[1];s.open=false;s.openAmt=0;}applyWalls(true);applyTurrets();applyFloods();
   Object.assign(player,{x:0,z:2,vx:0,vz:0,kx:0,kz:0,yaw:Math.PI,hp:100,maxHp:100,st:100,alive:true,scrap:40,parts:0,med:1,gren:0,weapon:'pistol',fireCd:0,reloadT:0,hurtT:0,acidT:0,recoil:0});
   resetInv();pl.rotation.x=0;heroReset();
-  Object.assign(player,{swim:false,swing:0,drownMsg:0});S.armSel=null;clearDmgNums();
+  Object.assign(player,{swim:false,swing:0,drownMsg:0,crouch:false,crouchT:false,sprinting:false,moving:false,lvl:0,lvlY:0});S.takedowns=0;clearStealthHUD();S.armSel=null;clearDmgNums();
   Object.assign(S,{paused:false,menu:false,over:false,phase:'day',dayT:75,wave:0,queue:[],spawnT:0,daySpawnT:14,kills:0,looted:0,shake:0,env:0,envT:0});
   updateGroundWindow();updateGrass();updateChunks(true);seedYardProps();spawnHorde(Math.round((GFX==='high'?40:28)*D.horde));
   refreshSlots();toasts.innerHTML='';
@@ -3426,7 +3504,7 @@ function frame(now){
     hudT-=dt;if(hudT<=0){hudT=.08;updateHUD();}
     mapT-=dt;if(mapT<=0){mapT=.12;drawMinimap();}
     $('vignette').style.opacity=player.hurtT>0?Math.min(1,player.hurtT*2.5):0;
-    crossT-=dt;$('crosshair').classList.toggle('hit',crossT>0);updateDmgNums(dt);
+    crossT-=dt;$('crosshair').classList.toggle('hit',crossT>0);updateDmgNums(dt);updateStealthHUD();
   }else if(S.over){if(HERO.ready)HERO.mixer.update(dt);updateZombies(dt);updateHordes(dt);updateProps(dt);updateDoors(dt);updateWorld(dt);updateWeather(dt,player.x,player.z-2);updateEnv(dt);}
   else if(!S.running){idleA+=dt*.05;camera.position.set(Math.sin(idleA)*34,22,Math.cos(idleA)*34);camera.lookAt(0,0,0);updateWorld(dt);updateDoors(dt);updateWeather(dt,0,0);updateEnv(dt);
     sun.position.set(22,40,12);sun.target.position.set(0,0,0);}
