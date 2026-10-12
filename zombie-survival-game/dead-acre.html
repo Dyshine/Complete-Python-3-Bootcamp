@@ -3901,9 +3901,12 @@ function buildLandmark(lm){
     for(const y of [2.4,4.8]){g.add(mk(BOX(3.2,.14,.14),wd,0,y,-1.5));g.add(mk(BOX(3.2,.14,.14),wd,0,y,1.5));g.add(mk(BOX(.14,.14,3.2),wd,-1.5,y,0));g.add(mk(BOX(.14,.14,3.2),wd,1.5,y,0));}
     g.add(mki(BOX(4,.3,4),wd,0,H,0,.06));
     for(const [x,z,w,d] of [[0,-1.95,4,.08],[1.95,0,.08,4],[-1.95,0,.08,4],[-1.25,1.95,1.5,.08],[1.25,1.95,1.5,.08]]){g.add(mk(BOX(w,.08,d),wd,x,H+1,z));g.add(mk(BOX(w,.08,d),wd,x,H+.55,z));}
-    for(const [x,z] of [[-1.95,-1.95],[1.95,-1.95],[-1.95,1.95],[1.95,1.95],[-.5,1.95],[.5,1.95]])g.add(mk(BOX(.1,1.05,.1),wd,x,H+.55,z));g.add(mki(BOX(3.4,2.2,3.4),M(0x9a7a52),0,H+1.25,0,.06));
-    for(const [x,z,w,d] of [[0,1.71,2.2,.05],[0,-1.71,2.2,.05],[1.71,0,.05,2.2],[-1.71,0,.05,2.2]])g.add(mk(BOX(w,1,d),BASIC(0x9fd8e8),x,H+1.5,z,false));
-    const rf=mki(new THREE.ConeGeometry(3.2,1.6,4),M(0x5a3a2a),0,H+3.15,0,.06);rf.rotation.y=Math.PI/4;g.add(rf);
+    for(const [x,z] of [[-1.95,-1.95],[1.95,-1.95],[-1.95,1.95],[1.95,1.95],[-.5,1.95],[.5,1.95]])g.add(mk(BOX(.1,1.05,.1),wd,x,H+.55,z));
+    // open lookout cab: corner posts, waist-high panels, a gap where the ladder comes up
+    {const cab=M(0x9a7a52);for(const [x,z] of [[-1.7,-1.7],[1.7,-1.7],[-1.7,1.7],[1.7,1.7]])g.add(mki(BOX(.16,2.3,.16),cab,x,H+1.3,z,.04));
+      for(const [x,z,w,d] of [[0,-1.7,3.4,.1],[1.7,0,.1,3.4],[-1.7,0,.1,3.4],[-1.15,1.7,1.1,.1],[1.15,1.7,1.1,.1]])g.add(mki(BOX(w,.95,d),cab,x,H+.62,z,.03));
+      g.add(mk(BOX(.9,.8,.6),M(0x5a4430),-1,H+.55,-1.2));}
+    const rf=mki(new THREE.ConeGeometry(3.2,1.6,4),M(0x5a3a2a),0,H+3.15,0,.06);rf.rotation.y=Math.PI/4;g.add(rf);live.roof=rf;
     for(let y=.4;y<H;y+=.5)g.add(mk(BOX(.8,.07,.07),wd,0,y,1.75));g.add(mk(BOX(.07,H,.07),wd,-.4,H/2,1.75));g.add(mk(BOX(.07,H,.07),wd,.4,H/2,1.75));
     {const c=Math.cos(g.rotation.y),s=Math.sin(g.rotation.y),w=(lx,lz)=>({x:lm.x+lx*c+lz*s,z:lm.z-lx*s+lz*c}),b=w(0,2.3),t=w(0,.9),ld=w(0,1.75);
       live.ladder={bx:b.x,bz:b.z,tx:t.x,tz:t.z,h:H+.15,yaw:Math.atan2(ld.x-b.x,ld.z-b.z),ch:CUR};live.surf={x:lm.x,z:lm.z,rot:g.rotation.y,hw:1.95,hd:1.95,h:H+.15,ch:CUR};
@@ -3942,7 +3945,7 @@ function buildLandmark(lm){
 }
 function updateLandmarks(dt){
   const bl=(performance.now()/600|0)%2===0;blinkM.color.setHex(bl?0xff3020:0x401008);
-  for(const L of LM_LIVE){const d=Math.hypot(L.lm.x-player.x,L.lm.z-player.z);if(d>90)continue;
+  for(const L of LM_LIVE){const d=Math.hypot(L.lm.x-player.x,L.lm.z-player.z);if(L.roof)L.roof.visible=!(d<6&&(player.jy>4||player.climb));if(d>90)continue;
     if(L.fire){const f=.85+Math.sin(performance.now()/90+L.lm.x)*.15;L.fire.scale.set(f,1+(1-f)*2,f);if(Math.random()<dt*3)burst(L.lm.x+rand(-.2,.2),1,L.lm.z+rand(-.2,.2),1,'spark',2);}
     if(L.smoke){L.smokeT-=dt;if(L.smokeT<=0){L.smokeT=.25;burst(L.lm.x+rand(-.5,.5),L.fire?1.4:2.4,L.lm.z+rand(-.5,.5),1,'smoke',1);}}}
 }
