@@ -367,7 +367,7 @@ kbd.pl{border-radius:3px;width:auto;padding:0 6px;background:var(--bone)}
           <kbd>Mouse</kbd><span>Look · left button fires · <b>right button aims down sights</b></span>
           <kbd>V</kbd><span>Third-person / top-down camera</span>
           <kbd>1–5 / Q</kbd><span>Switch weapon · <b>R</b> reload</span>
-          <kbd>E</kbd><span>Loot, gates, doors · takedown from behind</span>
+          <kbd>E</kbd><span>Loot, doors, board up windows · takedown from behind</span>
           <kbd>B</kbd><span>Workshop (inside the house)</span>
           <kbd>H / G / F</kbd><span>Use medkit · throw grenade · eat</span>
           <kbd>E (hold)</kbd><span>Chop trees, mine rocks, tend the garden</span>
@@ -384,9 +384,9 @@ kbd.pl{border-radius:3px;width:auto;padding:0 6px;background:var(--bone)}
           <kbd>L stick</kbd><span>Move · click to sprint</span>
           <kbd>R stick</kbd><span>Look and aim · click to crouch</span>
           <kbd>RT / LT</kbd><span>Fire · aim down sights</span>
-          <kbd class="pb pa">A</kbd><span>Loot, gates, doors</span>
+          <kbd class="pb pa">A</kbd><span>Loot, doors, board up windows</span>
           <kbd class="pb px">X</kbd><span>Reload</span>
-          <kbd class="pb py">Y</kbd><span>Base workshop · crafting outside the walls</span>
+          <kbd class="pb py">Y</kbd><span>Workshop at home · crafting anywhere else</span>
           <kbd class="pb pbb">B</kbd><span>Use medkit · back in menus</span>
           <kbd>LB / RB</kbd><span>Switch weapon · menu tabs</span>
           <kbd>D-pad</kbd><span>▲ use item · ◀ switch item · ▼ grenade · ▶ survivor sheet</span>
@@ -2177,7 +2177,7 @@ function homeWalls(){const L=HOME.lv,W=[
   return W;}
 const HM={};
 function homeMats(){if(HM.wall)return;Object.assign(HM,{wall:TM('wood',2,1,0x7a5a3a,0xd8c4a4),trim:FLAT(0xe8e0cc),floor:TM('wood',3,3,0x4a3626,0x9a7a5a),roof:M(0x4e3a30),gable:TM('wood',2,1,0x6a4e34,0xc8b090),
-  door:TM('wood',1,1,0x5e4632,0xb89878),steel:TM('metal',1,1,0x5a6066,0xb0b8c0),board:M(0x6a5038),plate:M(0x6a7076,{metalness:.5,roughness:.5}),iron:M(0x2a2826,{metalness:.4})});}
+  door:TM('wood',1,1,0x5e4632,0xb89878),steel:TM('metal',1,1,0x5a6066,0xb0b8c0),board:M(0x6a5038),plate:M(0x6a7076,{metalness:.5,roughness:.5}),iron:M(0x2a2826,{metalness:.4})});Object.assign(HM.floor,{polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});}
 function hseg(kind,axis,fixed,a,b,out,o){if(b-a<.02)return null;const horiz=axis==='x',t=HOME_T/2;
   const s=Object.assign({home:true,kind,horiz,cx:horiz?(a+b)/2:fixed,cz:horiz?fixed:(a+b)/2,nx:horiz?0:out,nz:horiz?out:0,w:b-a,h:HOME_H,
     x0:horiz?a:fixed-t,x1:horiz?b:fixed+t,z0:horiz?fixed-t:a,z1:horiz?fixed+t:b},o||{});hsegs.push(s);return s;}
@@ -2220,7 +2220,7 @@ function buildHome(){homeMats();
   HC.out=0;
   // a floor and a gable roof per room; roofs lift away while you're inside, like any other building
   HROOMS.slice(0,HOME.lv).forEach(([x0,x1,z0,z1],i)=>{const cx=(x0+x1)/2,cz=(z0+z1)/2,w=x1-x0,d=z1-z0;
-    G.add(mk(BOX(w-.1,.05,d-.1),HM.floor,cx,.025,cz,false));
+    G.add(mk(BOX(w-.1,.07,d-.1),HM.floor,cx,.035,cz,false));
     const roof=new THREE.Group();G.add(roof);const rise=i?1.1:1.5,span=d/2+.35,sl=Math.hypot(span,rise)+.1,a=Math.atan2(rise,span);
     for(const s of [-1,1]){const p=mki(BOX(w+.7,.16,sl),HM.roof,cx,HOME_H+rise/2-.05,cz+s*span/2,.05);p.rotation.x=s*a;roof.add(p);}
     const sh=new THREE.Shape();sh.moveTo(-d/2,0);sh.lineTo(d/2,0);sh.lineTo(0,rise);sh.closePath();const tg=new THREE.ExtrudeGeometry(sh,{depth:HOME_T,bevelEnabled:false});
@@ -2270,7 +2270,8 @@ function rayBox(ox,oz,dx,dz,x0,x1,z0,z1){let a=0,b=1e9;
 function homeRay(ox,oz,dx,dz,block,brk){let b=block;const wins=[];
   for(const s of hsegs){if(s.kind==='furn')continue;const t=rayBox(ox,oz,dx,dz,s.x0,s.x1,s.z0,s.z1);if(t==null||t>b)continue;
     if(s.kind==='win'){if(s.st.glass&&!s.st.boards)wins.push([t,s]);continue;}if(homeSolid(s))b=t;}
-  if(brk)for(const [t,s] of wins)if(t<b)shatter(s);return b;}
+  HRAY.length=0;if(brk)for(const w of wins)if(w[0]<b)HRAY.push(w);return b;}
+const HRAY=[];
 function homeLOS(ax,az,bx,bz){const dx=bx-ax,dz=bz-az,l=Math.hypot(dx,dz)||1e-6,ux=dx/l,uz=dz/l;
   for(const s of hsegs){if(s.kind==='furn'||!homeSolid(s))continue;const t=rayBox(ax,az,ux,uz,s.x0,s.x1,s.z0,s.z1);if(t!=null&&t<l)return false;}return true;}
 // where the infected try to get in (or out): the cheapest opening on the way to you
@@ -3164,9 +3165,13 @@ function zClimb(z,dt,pd){
   if(z.climbT>0){z.climbT-=dt;const k=1-Math.max(0,z.climbT)/z.climbD,kk=clamp((k-.5)/.5,0,1);z.jy=z.cy0+(z.cyH-z.cy0)*Math.min(1,k*1.5);
     z.x+=(z.cx-z.x)*kk*Math.min(1,dt*8);z.z+=(z.cz-z.z)*kk*Math.min(1,dt*8);if(z.climbT<=0){z.jy=z.cyH;z.climbT=0;}return true;}
   const o=PERCH;if(!o||!z.aware||!player.alive||(z.jy||0)>=o.h-.3)return false;
-  const od=Math.hypot(z.x-o.x,z.z-o.z);if(od>o.r+z.def.r+.5)return false;
+  // climb whatever part of that object is in reach (a car's hood, then its roof), not only the circle you stand on
+  let t=o,od=Math.hypot(z.x-o.x,z.z-o.z);
+  if(od>o.r+z.def.r+.5){t=null;nearObs(z.x,z.z,1.6,q=>{if(t||q.h===undefined||q.lvl!==undefined||q.h<(z.jy||0)+.3||q.h>o.h+.05)return;
+      if(Math.hypot(q.x-z.x,q.z-z.z)>q.r+z.def.r+.5||Math.hypot(q.x-o.x,q.z-o.z)>q.r+o.r+.6)return;t=q;});
+    if(!t)return false;od=Math.hypot(z.x-t.x,z.z-t.z);}
   const c=CLIMB[z.type];
-  if(c&&o.h<=c[0]){const n=od||1;z.climbD=z.climbT=c[1]*clamp(o.h/1.2,.7,1.4);z.cy0=z.jy||0;z.cyH=o.h;z.cx=o.x+(z.x-o.x)/n*o.r*.45;z.cz=o.z+(z.z-o.z)/n*o.r*.45;z.lunge=.3;zAttackAnim(z);Sound.play('thud',.45,z.x,z.z);
+  if(c&&t.h<=c[0]){const n=od||1;z.climbD=z.climbT=c[1]*clamp(t.h/1.2,.7,1.4);z.cy0=z.jy||0;z.cyH=t.h;z.cx=t.x+(z.x-t.x)/n*t.r*.45;z.cz=t.z+(z.z-t.z)/n*t.r*.45;z.lunge=.3;zAttackAnim(z);Sound.play('thud',.45,z.x,z.z);
     if(!S.climbMsg){S.climbMsg=1;toast('They\'re climbing up after you!','bad');}return true;}
   // too heavy to climb: brutes and the Abomination shake you off instead
   if((z.type==='brute'||z.type==='boss')&&z.atkCd<=0){z.atkCd=1.7;z.lunge=.3;zAttackAnim(z);S.shake=Math.max(S.shake,.45);Sound.play('crash',.8,z.x,z.z);rumble(.6,.5,250);burst(o.x,o.h,o.z,6,'debris',4);
@@ -3998,6 +4003,7 @@ function hitscan(ox,oz,dx,dz,range,dmg,pierce,knock,color,fromTurret){
     if(h.p){const f=(knock*.9+dmg*.04);impulseProp(h.p,dx*f,dz*f,f*.35);burst(ox+dx*h.t,h.p.y+.2,oz+dz*h.t,2,'debris',3);Sound.play('thud',.4);end=h.t;n=pierce;break;}
     const o=h.a||h.z,k=h.a?'a':'z';dmgTarget(o,k,dmg,dx*knock,dz*knock);onHit(o,k,dmg);if(!first)first={t:o,k};n++;end=h.t;if(!fromTurret)crossHit();if(n>=pierce)break;
   }
+  for(const [t,s] of HRAY)if(t<=end+.01)shatter(s);HRAY.length=0;
   if(n<pierce&&end===block&&block<range)burst(ox+dx*block,1.2,oz+dz*block,2,'spark',3);
   tracer(ox,oz,ox+dx*end,oz+dz*end,color,fromTurret?2:1.38);
   if(SHOT&&SHOT.w.chain&&first)chainFrom(first.t,first.k,dmg);
@@ -4270,7 +4276,7 @@ function renderMenu(){
   }else{
     h+=card('Cook a meal',0,0,`Hot food: +45 HP and full stamina. You have ${player.food|0} food.`,'Or press F to eat 1 food on the go (+25 HP).',{food:2},'buy:cook','Cook',!afford({food:2})||player.hp>=player.maxHp);
     h+=card('Seed packets',0,0,`Two packets for the garden beds. You have ${player.seeds|0} seeds.`,'Crops are ready after about a day; rain helps.',[20,0],'buy:seeds','Buy',player.scrap<20);
-    h+=card('Crafting bench',0,0,'Armor, coats, tools, traps, throwables, medicine and ammo are made at the crafting bench.',pad.active?'Press Y outside the walls, or from here.':'Press I anywhere.',null,'craftopen','Open crafting',false);
+    h+=card('Crafting bench',0,0,'Armor, coats, tools, traps, throwables, medicine and ammo are made at the crafting bench.',pad.active?'Press Y away from the house, or from here.':'Press I anywhere.',null,'craftopen','Open crafting',false);
     h+=card('Sell hides',0,0,'Trade 2 hides for 30 scrap.',`You have ${player.hide|0} hide.`,{hide:2},'buy:hides','Sell',!afford({hide:2}));
     h+=card('Sell timber',0,0,'Trade 5 wood for 25 scrap.',`You have ${player.wood|0} wood.`,{wood:5},'buy:timber','Sell',!afford({wood:5}));
     h+=card('Crush stone',0,0,'Grind 4 stone for 1 part.',`You have ${player.stone|0} stone.`,{stone:4},'buy:stone','Crush',!afford({stone:4}));
@@ -5056,7 +5062,7 @@ function haptic(strong,weak,ms,trig){
 }
 
 /* ================= CRAFTING =================
-   Recipes need materials and a place to work: by hand anywhere, at a lit campfire, at the workbench inside the walls, or at a
+   Recipes need materials and a place to work: by hand anywhere, at a lit campfire, at the workbench in the house, or at a
    forge you build there. Some recipes are blueprints you have to find first (relic and landmark caches, epic crates, jobs, levels).
    Crafted things are consumables (quick slot: Z to use, X to switch), placeables (campfires, snares, traps, barricades),
    tools (better axe and pick), gear (armor, warm clothes, boots, binoculars) and ammunition. */
@@ -5161,7 +5167,7 @@ function craft(id){
 }
 function applyGear(){const g=player.gear;player.armor=Math.max(g.plate?3:g.padded?2:g.jacket?1:0);player.insul=(g.coat?.45:0)+(g.plate?.15:g.padded?.25:g.jacket?.2:0);}
 function learnBP(src){const pool=RECIPES.filter(r=>r.bp&&!BP.has(r.id));if(!pool.length)return false;const r=pick(pool);BP.add(r.id);
-  setTimeout(()=>toast(`Blueprint learned${src?' ('+src+')':''}: ${r.name}. Craft it with ${pad.active?'Y outside the walls':'I'}.`,'epic'),900);return true;}
+  setTimeout(()=>toast(`Blueprint learned${src?' ('+src+')':''}: ${r.name}. Craft it with ${pad.active?'Y away from the house':'I'}.`,'epic'),900);return true;}
 function addRegen(n,t){player.regen=(player.regen||[]);player.regen.push({n,t,rate:n/t});Sound.play('heal');}
 function updateRegen(dt){if(!player.regen||!player.regen.length)return;for(let i=player.regen.length-1;i>=0;i--){const r=player.regen[i];const d=Math.min(r.t,dt);r.t-=dt;player.hp=Math.min(player.maxHp,player.hp+r.rate*d);if(r.t<=0)player.regen.splice(i,1);}}
 // ---- quick slot ----
@@ -6071,7 +6077,7 @@ function startGame(){
   Sound.init();resetGame();S.running=true;setPadFocus(null);
   $('startScreen').hidden=true;$('overScreen').hidden=true;$('pauseScreen').hidden=true;$('menu').hidden=true;$('hud').hidden=false;
   if(isTouch&&!pad.active){$('touch').hidden=false;}else{$('crosshair').hidden=false;if(!pad.active)document.body.classList.add('playing');}
-  banner('DAY 1',`${D.name}. Scavenge the crates before nightfall. Your base is the walled yard.`,'dawn');
+  banner('DAY 1',`${D.name}. Scavenge the crates before nightfall. Home is the cabin: board up its windows before dark.`,'dawn');
   const u=pad.active?'A':isTouch?'Use':'E';
   setTimeout(()=>toast(pad.active?'Left stick moves, right stick aims, RT fires.':isTouch?'Left stick moves, right stick aims and fires.':'WASD to move, mouse to aim, hold click to fire.'),900);
   setTimeout(()=>toast(`This cabin is home. Press ${u} at a window to nail boards over it (1 wood each) before night.`),2600);
