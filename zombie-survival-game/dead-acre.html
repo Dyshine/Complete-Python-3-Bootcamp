@@ -855,8 +855,8 @@ function carGlass(g,w,h,r){
   g.strokeStyle=INKC;g.lineWidth=7;g.strokeRect(0,0,w,h);g.lineWidth=5;g.beginPath();g.moveTo(w*.5,0);g.lineTo(w*.5,h);g.stroke();
 }
 function carRust(g,w,h,r){
-  g.fillStyle='#5a3b26';g.fillRect(0,0,w,h);
-  for(let k=0;k<120;k++){g.fillStyle=`rgba(${r(120,170)|0},${r(60,90)|0},${r(20,40)|0},${r(.3,.8)})`;g.beginPath();g.arc(r(0,w),r(0,h),r(2,12),0,6.28);g.fill();}
+  g.fillStyle='#3e2e24';g.fillRect(0,0,w,h);
+  for(let k=0;k<90;k++){g.fillStyle=`rgba(${r(95,130)|0},${r(50,66)|0},${r(24,36)|0},${r(.25,.55)})`;g.beginPath();g.arc(r(0,w),r(0,h),r(2,12),0,6.28);g.fill();}
   g.fillStyle='rgba(20,12,8,.6)';for(let k=0;k<14;k++){g.beginPath();g.ellipse(r(0,w),r(0,h),r(3,10),r(2,6),r(0,3),0,6.28);g.fill();}
   g.strokeStyle=INKC;g.lineWidth=6;g.strokeRect(0,0,w,h);
 }
@@ -1736,7 +1736,12 @@ function swayMaterial(mat,amp){
   };
   return mat;
 }
-let grass=null;const GTILE=64;
+let grass=null;const GTILE=64,GMASK=Array.from({length:32},()=>new THREE.Vector4(1e9,1e9,-1e9,-1e9));let gmaskT=0;
+// no grass through asphalt, sidewalks, rails or floors: the nearest 32 such rectangles are cut out in the grass shader
+function updateGrassMask(){const px=player.x,pz=player.z,L=[];
+  for(const P of TPLAN.values()){if(Math.hypot(P.C.x-px,P.C.z-pz)>260)continue;for(const r of [...P.streets,...P.walks,...P.rails]){const dx=Math.max(r.x0-px,0,px-r.x1),dz=Math.max(r.z0-pz,0,pz-r.z1),d=Math.hypot(dx,dz);if(d<70)L.push([d,r.x0-.3,r.z0-.3,r.x1+.3,r.z1+.3]);}}
+  for(const h of houses){if(h.ex==null)continue;const d=Math.hypot(h.x-px,h.z-pz)-Math.max(h.ex,h.ez);if(d<60)L.push([d,h.x-h.ex,h.z-h.ez,h.x+h.ex,h.z+h.ez]);}
+  L.sort((a,b)=>a[0]-b[0]);for(let i=0;i<32;i++){const r=L[i];if(r)GMASK[i].set(r[1],r[2],r[3],r[4]);else GMASK[i].set(1e9,1e9,-1e9,-1e9);}}
 // sprite atlas: four hand-painted tufts (lush grass, foxtail, wildflowers, dry prairie grass), drawn on crossed cards
 const GRASS_ATLAS=(()=>{const c=document.createElement('canvas');c.width=512;c.height=128;const g=c.getContext('2d'),R=mulberry(4242),r=(a,b)=>a+R()*(b-a);
   const blade=(cx,col,h,lean,w)=>{const tx=cx+lean,ty=128-h;g.fillStyle=col;g.beginPath();g.moveTo(cx-w,128);g.quadraticCurveTo(cx-w*.4+lean*.3,128-h*.55,tx,ty);g.quadraticCurveTo(cx+w*.4+lean*.3,128-h*.55,cx+w,128);g.closePath();g.fill();
@@ -1760,7 +1765,10 @@ const GRASS_ATLAS=(()=>{const c=document.createElement('canvas');c.width=512;c.h
   geo.translate(0,.4,0);{const nn=new Float32Array(geo.attributes.position.count*3);for(let i=0;i<nn.length;i+=3)nn[i+1]=1;geo.setAttribute('normal',new THREE.BufferAttribute(nn,3));}
   const cell=new Float32Array(N);
   const mat=swayMaterial(new THREE.MeshStandardMaterial({color:0xffffff,map:GRASS_ATLAS,roughness:1,side:THREE.DoubleSide,alphaTest:.45}),.9);
-  {const sway=mat._obc;mat.onBeforeCompile=function(sh){sway.call(this,sh);sh.vertexShader=sh.vertexShader.replace('void main() {','attribute float aCell;\nvoid main() {').replace('#include <uv_vertex>','#include <uv_vertex>\n#ifdef USE_UV\n vUv.x=(vUv.x+aCell)*.25;\n#endif');};}
+  {const sway=mat._obc;mat.onBeforeCompile=function(sh){sway.call(this,sh);sh.uniforms.uMask={value:GMASK};
+    sh.fragmentShader=sh.fragmentShader.replace('#include <normal_fragment_begin>','#include <normal_fragment_begin>\n normal=normalize(vNormal);');
+    sh.vertexShader=sh.vertexShader.replace('ip=wp;','for(int i=0;i<32;i++){vec4 r=uMask[i];if(wp.x>r.x&&wp.x<r.z&&wp.y>r.y&&wp.y<r.w)transformed*=0.;}\n ip=wp;')
+      .replace('void main() {','attribute float aCell;\nuniform vec4 uMask[32];\nvoid main() {').replace('#include <uv_vertex>','#include <uv_vertex>\n#ifdef USE_UV\n vUv.x=(vUv.x+aCell)*.25;\n#endif');};}
   const tmpl=new THREE.InstancedMesh(geo,mat,N);
   const m4=new THREE.Matrix4(),q=new THREE.Quaternion(),sc=new V3(),pos=new V3(),col=new THREE.Color();
   const tints=[0xffffff,0xe8f0d0,0xf4ecd0,0xdce8c0,0xffffff];
@@ -1776,6 +1784,7 @@ const GRASS_ATLAS=(()=>{const c=document.createElement('canvas');c.width=512;c.h
   scene.add(grass);
 })();
 function updateGrass(){
+  gmaskT-=1;if(gmaskT<=0){gmaskT=20;updateGrassMask();}
   const bx=Math.floor(player.x/GTILE),bz=Math.floor(player.z/GTILE);let i=0;
   for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++)grass.children[i++].position.set((bx+a)*GTILE,0,(bz+b)*GTILE);
 }
@@ -3943,7 +3952,7 @@ function reveal(x,z,r){
     EXP.grid[o]=1;fctx.fillStyle=cellCol((ci-FOG_N/2+.5)*FOG_C,(cj-FOG_N/2+.5)*FOG_C);fctx.fillRect(ci,cj,1,1);}
 }
 const revealed=(x,z)=>{const ci=Math.floor(x/FOG_C)+FOG_N/2,cj=Math.floor(z/FOG_C)+FOG_N/2;return ci>=0&&cj>=0&&ci<FOG_N&&cj<FOG_N&&EXP.grid[cj*FOG_N+ci]===1;};
-function resetExplore(){EXP.grid.fill(0);fctx.clearRect(0,0,FOG_N,FOG_N);EXP.found.clear();EXP.names.clear();EXP.here='';LM_CACHE.clear();TOWN_REP.clear();EXP.t=0;}
+function resetExplore(){EXP.grid.fill(0);fctx.clearRect(0,0,FOG_N,FOG_N);EXP.found.clear();EXP.names.clear();EXP.here='';LM_CACHE.clear();TOWN_REP.clear();TPLAN.clear();EXP.t=0;}
 function discover(p,kind){
   if(EXP.found.has(p.key))return;EXP.found.set(p.key,{key:p.key,name:p.name,x:p.x,z:p.z,kind,type:p.type});
   const xp=kind==='town'?60:LM_T[p.type].xp;
