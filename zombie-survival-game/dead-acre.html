@@ -2231,6 +2231,7 @@ if(THREE.GLTFLoader){try{new THREE.GLTFLoader().load('models/hero.gltf.json',g=>
 const ZT={
   walker:{name:'Walker',hp:45,speed:2.2,dmg:9,wall:7,r:.55,scale:1,skin:0x7c9a6a,shirt:0x4b5a6b,eye:0xffd23f,drop:[2,4],score:10},
   runner:{name:'Runner',hp:28,speed:5.4,dmg:7,wall:4,r:.5,scale:.92,skin:0x9aa77a,shirt:0x7a3b2e,eye:0xff5a3a,drop:[2,4],score:15},
+  crawler:{name:'Crawler',hp:32,speed:1.35,dmg:6,wall:3,r:.5,scale:1,skin:0x8a9670,shirt:0x5a5040,eye:0xffd23f,drop:[2,4],score:12,crawl:1},
   spitter:{name:'Spitter',hp:55,speed:2.0,dmg:14,wall:5,r:.55,scale:1.05,skin:0x6aa03a,shirt:0x2f3d2a,eye:0x9bff5a,drop:[4,7],score:25},
   boomer:{name:'Boomer',hp:70,speed:2.6,dmg:50,wall:140,r:.85,scale:1.15,skin:0xb08a5a,shirt:0x6a4a3a,eye:0xffa03a,drop:[4,8],score:25},
   brute:{name:'Brute',hp:380,speed:1.7,dmg:28,wall:45,r:1.0,scale:1.75,skin:0x6d7a5e,shirt:0x3a2f2a,eye:0xff3030,drop:[12,20],parts:1,score:60},
@@ -2544,6 +2545,8 @@ function updateFelling(dt){
 // ----- garden beds in the yard -----
 const CROPS=[{id:'corn',name:'Corn',ready:'Corn is',yield:3},{id:'pumpkin',name:'Pumpkins',ready:'Pumpkins are',yield:4},{id:'cabbage',name:'Cabbages',ready:'Cabbages are',yield:2}];
 const PLOTS=[];const GROW_T=50; // seconds per growth stage (3 stages); rain speeds it up
+const GSPOT={pump:[2.1,-8.9],crow:[5.75,-12.7],cellar:[11,-12]},GARDEN={scare:false,cellar:false,stored:0,can:0},GM={},CAN_MAX=4,CELLAR_MAX=60;
+const GCOST={crow:{wood:6,scrap:10},cellar:{wood:10,stone:8}},gcTxt=c=>Object.entries(c).map(([k,v])=>`${v} ${k}`).join(', ');
 (function buildGarden(){
   const soil=TM('soil',1,1,0x4a3626,0xe8e0d8),frame=TM('wood',1,1,0x5a4430,0xa08a70),straw=TM('straw',1,1,0xb8963a,0xffffff);
   for(const [x,z] of [[4.4,-10.3],[7.1,-10.3],[4.4,-7.5],[7.1,-7.5]]){
@@ -2551,15 +2554,60 @@ const PLOTS=[];const GROW_T=50; // seconds per growth stage (3 stages); rain spe
     g.add(mk(BOX(2.2,.18,2.2),soil,0,.1,0));
     for(const [a,b,w,d] of [[0,1.12,2.4,.14],[0,-1.12,2.4,.14],[1.12,0,.14,2.4],[-1.12,0,.14,2.4]])g.add(mki(BOX(w,.3,d),frame,a,.15,b,.04));
     g.add(mk(BOX(2.6,.04,2.6),straw,0,.02,0,false));
-    const crop=new THREE.Group();g.add(crop);PLOTS.push({x,z,g,crop,type:null,stage:0,t:0});
+    const crop=new THREE.Group();g.add(crop);
+    const wet=new THREE.Mesh(new THREE.PlaneGeometry(2.1,2.1),new THREE.MeshBasicMaterial({color:0x140c06,transparent:true,opacity:0,depthWrite:false}));wet.rotation.x=-Math.PI/2;wet.position.y=.196;g.add(wet);
+    PLOTS.push({x,z,g,crop,wet,type:null,stage:0,t:0,water:0,pest:rand(40,80)});
   }
   // straw bales stacked by the beds
   const bale=TM('straw',1,1,0xb8963a,0xffffff);for(const [x,y,z,r] of [[9.2,.35,-9.6,.1],[9.2,.35,-8.4,-.05],[9.2,1.05,-9,.3]]){const b=mki(BOX(1.1,.7,.7),bale,x,y,z,.05);b.rotation.y=Math.PI/2+r;scene.add(b);}
   addOb({x:9.2,z:-9,r:.75,h:1.4});
+  const iron=M(0x3a3f44,{metalness:.5,roughness:.5}),stone=M(0x6e6b63),cloth=M(0x9e2b25),dark=M(0x2a231c);
+  // hand pump and trough: fill the watering can here
+  {const [x,z]=GSPOT.pump,p=new THREE.Group();p.position.set(x,0,z);scene.add(p);
+    p.add(mki(CYL(.11,.14,1.15,8),iron,0,.57,0,.04));const h=mki(BOX(.62,.07,.07),iron,.2,1.16,0,.03);h.rotation.z=.25;p.add(h);
+    const sp=mki(CYL(.045,.045,.34,6),iron,0,.92,.18,.03);sp.rotation.x=1.25;p.add(sp);
+    p.add(mki(BOX(.9,.32,.5),frame,0,.16,.62,.04));p.add(mk(BOX(.8,.02,.4),M(0x3a5a6a,{metalness:.2,roughness:.2}),0,.3,.62,false));
+    const can=new THREE.Group();can.position.set(-.55,0,.1);can.add(mki(CYL(.13,.15,.3,10),M(0x6f8a7a,{metalness:.4}),0,.15,0,.03));const cs=mki(CYL(.025,.035,.36,6),M(0x6f8a7a,{metalness:.4}),.18,.28,0,.02);cs.rotation.z=-1;can.add(cs);p.add(can);GM.can=can;
+    addOb({x,z,r:.35});addOb({x,z:z+.62,r:.4,h:.32});}
+  // build spots: a stake and a sign until something is built there
+  const stake=(x,z)=>{const s=new THREE.Group();s.position.set(x,0,z);s.add(mki(BOX(.08,.8,.08),frame,0,.4,0,.03));s.add(mki(BOX(.5,.3,.04),frame,0,.72,.05,.03));scene.add(s);return s;};
+  {const [x,z]=GSPOT.crow;GM.crowMark=stake(x,z);const s=new THREE.Group();s.position.set(x,0,z);
+    s.add(mki(CYL(.06,.07,2.1,6),frame,0,1.05,0,.03));s.add(mki(BOX(1.5,.08,.08),frame,0,1.55,0,.03));
+    s.add(mki(BOX(.62,.72,.28),cloth,0,1.3,0,.04));for(const sx of [-1,1]){s.add(mki(BOX(.42,.2,.2),cloth,sx*.48,1.55,0,.03));const t=mk(new THREE.ConeGeometry(.09,.22,5),straw,sx*.78,1.5,0,false);t.rotation.z=sx*2.2;s.add(t);}
+    s.add(mki(new THREE.SphereGeometry(.21,10,8),straw,0,1.98,0,.03));s.add(mki(CYL(.34,.34,.03,12),dark,0,2.12,0,.02));s.add(mki(CYL(.16,.2,.2,10),dark,0,2.22,0,.02));
+    s.visible=false;scene.add(s);GM.scare=s;addOb({x,z,r:.3});}
+  {const [x,z]=GSPOT.cellar;GM.cellarMark=stake(x,z);const c=new THREE.Group();c.position.set(x,0,z);
+    c.add(mki(BOX(1.9,.36,1.5),stone,0,.18,0,.04));for(const sx of [-1,1]){const dr=mki(BOX(.86,.07,1.3),frame,sx*.44,.43,0,.03);dr.rotation.z=-sx*.2;c.add(dr);c.add(mk(BOX(.06,.05,.25),iron,sx*.25,.5,0,false));}
+    c.visible=false;scene.add(c);GM.cellar=c;addOb({x,z,r:.85,h:.5});}
 })();
+function gardenMeshes(){GM.scare.visible=GARDEN.scare;GM.crowMark.visible=!GARDEN.scare;GM.cellar.visible=GARDEN.cellar;GM.cellarMark.visible=!GARDEN.cellar;}
+function nearestGardenSpot(){for(const k in GSPOT){if(k==='crow'&&GARDEN.scare)continue;const [x,z]=GSPOT[k];if(Math.hypot(x-player.x,z-player.z)<1.8)return k;}return null;}
+function gardenSpotPrompt(k){
+  if(k==='pump')return GARDEN.can>=CAN_MAX?`Watering can is full (${CAN_MAX}/${CAN_MAX})`:`Fill the watering can (${GARDEN.can}/${CAN_MAX})`;
+  if(k==='crow')return`Build a scarecrow · ${gcTxt(GCOST.crow)}`;
+  if(!GARDEN.cellar)return`Dig a root cellar · ${gcTxt(GCOST.cellar)}`;
+  return(player.food|0)>2?`Store ${Math.min((player.food|0)-2,CELLAR_MAX-GARDEN.stored)} food in the cellar · ${GARDEN.stored}/${CELLAR_MAX}`:GARDEN.stored>0?`Take food from the cellar · ${GARDEN.stored} stored`:'Root cellar is empty';
+}
+function useGardenSpot(k){const [x,z]=GSPOT[k];
+  if(k==='pump'){if(GARDEN.can>=CAN_MAX){toast('The watering can is already full.');return;}GARDEN.can=CAN_MAX;Sound.play('clink',.6);for(let i=0;i<4;i++)splash(x+rand(-.3,.3),z+.62+rand(-.15,.15),.31);toast(`Watering can filled: enough for ${CAN_MAX} beds.`,'good');return;}
+  if(k==='crow'||!GARDEN.cellar){const c=GCOST[k];if(!afford2(c)){toast(`You need ${gcTxt(c)}.`,'bad');return;}pay2(c);Sound.play('build');gainXP(15);burst(x,.5,z,8,'debris',3);
+    if(k==='crow'){GARDEN.scare=true;toast('Scarecrow up. Crows and deer will mostly leave your beds alone.','good');}else{GARDEN.cellar=true;toast('Root cellar dug. Food stored down here never spoils.','good');}gardenMeshes();return;}
+  const f=player.food|0;
+  if(f>2){const n=Math.min(f-2,CELLAR_MAX-GARDEN.stored);if(n<=0){toast('The cellar is full.');return;}player.food=f-n;GARDEN.stored+=n;Sound.play('door',.6);floatText(x,1,z,`Stored ${n} food`);}
+  else if(GARDEN.stored>0){const n=Math.min(GARDEN.stored,capOf('food')-f);if(n<=0){toast('You can\'t carry any more food.');return;}GARDEN.stored-=n;player.food=f+n;Sound.play('door',.6);floatText(x,1,z,`Took ${n} food`);}
+  else toast('The cellar is empty. Store food here so it won\'t spoil.');
+}
+// carried food goes off overnight in the warm months; the cellar keeps it
+function spoilFood(){const r=[.12,.25,.1,0][S.season||0],ex=(player.food|0)-3;if(!r||ex<=0)return;const n=Math.max(1,Math.round(ex*r));player.food-=n;
+  setTimeout(()=>toast(`${n} food spoiled overnight${S.season===1?' in the heat':''}. ${GARDEN.cellar?'Keep spare food in the root cellar.':'A root cellar would keep it fresh.'}`,'bad'),2600);}
+function pestHit(pl,night){const who=night?'Deer':'Crows',nm=pl.type.name.toLowerCase();
+  if(pl.stage>=3)pl.pecked=Math.min(pl.type.yield-1,(pl.pecked||0)+1);else{pl.t=0;if(pl.stage>1){pl.stage--;cropVisual(pl);}}
+  if(!night){Sound.play('caw',.8,pl.x,pl.z);burst(pl.x,.8,pl.z,6,'debris',3);}
+  if(!(S.time-(S.pestMsgT||-1e9)<60)){S.pestMsgT=S.time;toast(`${who} got into the ${nm}${GARDEN.scare?'':'. A scarecrow would keep them off'}.`,'bad');}}
+const plotActionable=pl=>pl.dead||(!pl.type&&player.seeds>0)||pl.stage>=3||(!!pl.type&&pl.water<=.6&&GARDEN.can>0);
 const leafMat=(name,col,tint)=>{const m=new THREE.MeshToonMaterial({color:col,gradientMap:TOON_GRAD,side:THREE.DoubleSide});onTex(name,()=>{m.map=texRep(name,1,1);m.color.setHex(tint);m.needsUpdate=true;});return m;};
 const cropMats={stalk:TM('cornleaf',1,3,0x5a7a2c,0xb8d098),leaf:leafMat('cornleaf',0x4f6e26,0xffffff),vine:leafMat('cabbage',0x3e6a2a,0x7aa060),corn:TM('kernels',1,2,0xd0a024,0xffffff),husk:leafMat('cornleaf',0xb8b070,0xe8d890),
-  pumpkin:TM('pumpkin',2,1,0xc05a1a,0xffffff),cabbage:TM('cabbage',1,1,0x6a9440,0xffffff),cabOut:leafMat('cabbage',0x5a8a3a,0xc8e0b0),sprout:M(0x5f8a32),stem:M(0x4a5a22)};
+  pumpkin:TM('pumpkin',2,1,0xc05a1a,0xffffff),cabbage:TM('cabbage',1,1,0x6a9440,0xffffff),cabOut:leafMat('cabbage',0x5a8a3a,0xc8e0b0),sprout:M(0x5f8a32),stem:M(0x4a5a22),dead:M(0x6a5236)};
 const LEAF_G=(()=>{const g=new THREE.PlaneGeometry(.13,.95,1,4);const p=g.attributes.position;for(let i=0;i<p.count;i++){const y=p.getY(i)+.475;p.setZ(i,y*y*.55);p.setX(i,p.getX(i)*(1-y*.6));}g.translate(0,.475,0);g.computeVertexNormals();return g;})();
 const PAD_G=new THREE.CircleGeometry(.3,9);
 function cropVisual(pl){
@@ -2576,26 +2624,48 @@ function cropVisual(pl){
     else{const r=.08+.16*k;pl.crop.add(mki(new THREE.SphereGeometry(r,12,9),st===3?cropMats.cabbage:cropMats.cabOut,a,.2+r,b,.03));
       for(let i=0;i<3+st;i++){const l=mk(PAD_G,cropMats.cabOut,a+Math.cos(i*2.1)*r*.8,.24+r*.3,b+Math.sin(i*2.1)*r*.8,false);l.rotation.x=-Math.PI/2+.7;l.rotation.z=i*2.1;l.lookAt&&0;l.scale.setScalar(.5+.6*k);pl.crop.add(l);}}
   }
+  // killed by frost: brown, slumped
+  if(pl.dead){pl.crop.traverse(o=>{if(o.isMesh&&o.material!==INK&&!inkHulls.has(o))o.material=cropMats.dead;});pl.crop.scale.y=.7;}else pl.crop.scale.y=1;
 }
 function updateSeasonTick(dt){S.thunderT=Math.max(0,(S.thunderT||0)-dt);}
 function updateGarden(dt){updateSeasonTick(dt);
-  for(const pl of PLOTS){if(!pl.type||pl.stage>=3)continue;pl.t+=dt*(1+W.rain*.8)*SEASONS[S.season||0].grow;if(pl.t>=GROW_T){pl.t=0;pl.stage++;cropVisual(pl);if(pl.stage===3)toast(`${pl.type.ready} ready to harvest`,'good');}}
+  const si=S.season||0,night=S.phase==='night',dry=[.005,.009,.004,.002][si]*(W.type==='heat'?1.8:1),wetting=Math.max(W.rain,W.snow*.5);let frost=false;
+  for(const pl of PLOTS){
+    // beds dry out, faster in summer; rain waters them for you
+    pl.water=clamp(pl.water+(wetting>.15?dt*.06*wetting:-dt*dry),0,1);pl.wet.material.opacity=pl.water*.42;
+    if(!pl.type||pl.dead)continue;
+    // a hard frost in fall or winter kills what's still growing and bites what's left unpicked
+    if(si>=2&&SEA.temp<-1){if(pl.stage<3){pl.dead=true;cropVisual(pl);frost=true;}else pl.frost=1;continue;}
+    // crows by day, deer by night
+    if(pl.stage>=1){pl.pest-=dt;if(pl.pest<=0){pl.pest=rand(50,95);if(Math.random()<(GARDEN.scare?.06:.32))pestHit(pl,night);}}
+    if(pl.stage>=3)continue;
+    pl.t+=dt*(1+W.rain*.8)*SEASONS[si].grow*(pl.water>.05?1:.2);if(pl.t>=GROW_T){pl.t=0;pl.stage++;cropVisual(pl);if(pl.stage===3)toast(`${pl.type.ready} ready to harvest`,'good');}}
+  if(frost&&!S.frostMsg){S.frostMsg=1;toast('A hard frost killed the crops still growing. Clear the beds and replant in spring.','bad');}
+  if(SEA.temp>2)S.frostMsg=0;
+  const dIn=Math.max(0,S.wave-(night?1:0))%3+1;
+  if(si===2&&dIn===3&&!S.frostWarn&&PLOTS.some(p=>p.type&&!p.dead)){S.frostWarn=1;toast('First frost is coming. Harvest what you can before winter.','bad');}
+  if(si!==2)S.frostWarn=0;
 }
 function nearestPlot(){let best=null,bd=1.9;for(const pl of PLOTS){const d=Math.hypot(pl.x-player.x,pl.z-player.z);if(d<bd){bd=d;best=pl;}}return best;}
 function plotPrompt(pl){
-  if(!pl.type)return player.seeds>0?`Plant seeds (${player.seeds} left)`:'Bed is empty · find seeds in crates';
-  if(pl.stage>=3)return`Harvest ${pl.type.name.toLowerCase()}`;
-  return`${pl.type.name} growing · ${Math.round(((pl.stage+pl.t/GROW_T)/3)*100)}%`;
+  if(pl.dead)return'Clear the frost-killed plants';
+  if(!pl.type)return player.seeds>0?(S.season===3?'Ground is frozen until spring':`Plant seeds (${player.seeds} left)`):'Bed is empty · find seeds in crates';
+  if(pl.stage>=3)return`Harvest ${pl.type.name.toLowerCase()}${pl.frost?' · frost-bitten':''}`;
+  const pct=Math.round(((pl.stage+pl.t/GROW_T)/3)*100);
+  if(pl.water<=.05)return`${pl.type.name} ${pct}% · dry, barely growing · ${GARDEN.can?'water it':'fill the can at the pump'}`;
+  return`${pl.type.name} growing · ${pct}% · ${pl.water>.6?'well watered':GARDEN.can?'water it':'needs water soon'}`;
 }
 function tendPlot(pl){
+  if(pl.dead){pl.dead=false;pl.type=null;pl.stage=0;pl.t=0;cropVisual(pl);Sound.play('pick');floatText(pl.x,.9,pl.z,'Cleared the dead plants');return;}
   if(!pl.type){if(player.seeds<=0){toast('No seeds. Crates and farmhouses have them.','bad');return;}
-    if(S.season===3)toast('The ground is frozen: nothing grows until spring.','bad');
-    player.seeds--;pl.type=pick(CROPS);pl.stage=0;pl.t=0;cropVisual(pl);Sound.play('pick');floatText(pl.x,.9,pl.z,`Planted ${pl.type.name.toLowerCase()}`);return;}
-  if(pl.stage<3)return;
-  const f=pl.type.yield+randi(0,1)+PERK('forager'),sd=randi(1,2);gainXP(8);player.food=(player.food||0)+f;player.seeds=(player.seeds||0)+sd;
+    if(S.season===3||SEA.temp<0){toast('The ground is frozen. Nothing can be planted until spring.','bad');return;}
+    player.seeds--;pl.type=pick(CROPS);pl.stage=0;pl.t=0;pl.pecked=0;pl.frost=0;pl.water=Math.max(pl.water,.5);cropVisual(pl);Sound.play('pick');floatText(pl.x,.9,pl.z,`Planted ${pl.type.name.toLowerCase()}`);return;}
+  if(pl.stage<3){if(pl.water>.6){toast(`The ${pl.type.name.toLowerCase()} bed is well watered.`);return;}if(GARDEN.can<=0){toast('The watering can is empty. Fill it at the hand pump.','bad');return;}
+    GARDEN.can--;pl.water=1;Sound.play('clink',.4);for(let i=0;i<5;i++)splash(pl.x+rand(-.9,.9),pl.z+rand(-.9,.9),.22);floatText(pl.x,.9,pl.z,`Watered · can ${GARDEN.can}/${CAN_MAX}`);return;}
+  const f=Math.max(1,Math.round((pl.type.yield-(pl.pecked||0)+randi(0,1))*(pl.frost?.5:1))+PERK('forager')),sd=randi(1,2);gainXP(8);player.food=(player.food||0)+f;player.seeds=(player.seeds||0)+sd;
   floatText(pl.x,1.4,pl.z,`+${f} food · +${sd} seeds`);Sound.play('heal');pl.type=null;pl.stage=0;pl.t=0;cropVisual(pl);
 }
-function resetGarden(){for(const pl of PLOTS){pl.type=null;pl.stage=0;pl.t=0;cropVisual(pl);}for(const f of FELL)scene.remove(f.g);FELL.length=0;}
+function resetGarden(){for(const pl of PLOTS){Object.assign(pl,{type:null,stage:0,t:0,water:0,dead:false,frost:0,pecked:0});cropVisual(pl);}Object.assign(GARDEN,{scare:false,cellar:false,stored:0,can:0});gardenMeshes();S.frostMsg=S.frostWarn=0;for(const f of FELL)scene.remove(f.g);FELL.length=0;}
 function eatFood(){
   if(!player.alive)return;
   if(!(player.food>0)&&player.meat>0){if(!useCD('food'))return;player.meat--;player.hp=Math.min(player.maxHp,player.hp+8);if(!PERK('irongut')&&Math.random()<.45){player.sick=60;toast('Raw meat: food poisoning. Stamina recovers slowly for a minute.','bad');}else toast('Ate raw meat (+8 HP). Cook it next time.');return;}
@@ -2660,7 +2730,7 @@ function clearStealthHUD(){for(const e of ZMK)e.style.display='none';$('stealth'
 const eyeMats={};
 /* model-based zombies: rigged GLBs replace the box infected per type when they ship with the page */
 const ZMODEL_FILES={office:['models/zombies/office.gltf.json',2.05],grandma:['models/zombies/grandma.gltf.json',1.55],trucker:['models/zombies/trucker.gltf.json',1.9],hulk:['models/zombies/hulk.gltf.json',1.95]};
-const ZMODEL_FOR={walker:['office','grandma'],runner:['office','grandma'],boomer:['trucker'],brute:['hulk']};
+const ZMODEL_FOR={walker:['office','grandma'],crawler:['office','grandma'],runner:['office','grandma'],boomer:['trucker'],brute:['hulk']};
 const ZSHARED={attack:'models/zombies/anim/attack.gltf.json',death:'models/zombies/anim/death.gltf.json'};
 const ZM={},ZCLIP={},zOlMats={};
 function prepZModel(k,gltf,h){
@@ -2737,7 +2807,7 @@ function spawnZombie(type,x,z){
   const fg=new THREE.Sprite(type==='boss'?barFgBoss:barFg);fg.center.set(0,.5);fg.scale.set(bw,.14,1);fg.visible=false;fg.renderOrder=11;scene.add(fg);
   const hunt=S.phase==='night'||type==='boss';
   const z0={type,def:d,...m,x,z,y:0,aware:hunt,always:hunt,sus:0,wx:x,wz:z,wT:0,alertT:0,lostT:0,yaw:0,hp:d.hp*hpMul,maxHp:d.hp*hpMul,kx:0,kz:0,atkCd:0,wallT:0,spitCd:rand(1,2),chargeCd:rand(3,6),chargeT:0,slamCd:3,slamT:0,summonCd:10,
-    walk:rand(0,6),flash:0,blocked:null,breach:null,reT:0,dying:false,dieT:0,bg,fg,bw,lunge:0,spikeT:0,hx:0,hz:0,lift:0,dvx:0,dvy:0,dvz:0,dspin:0,sink:0};
+    walk:rand(0,6),flash:0,blocked:null,breach:null,reT:0,dying:false,dieT:0,bg,fg,bw,lunge:0,jy:0,spikeT:0,hx:0,hz:0,lift:0,dvx:0,dvy:0,dvz:0,dspin:0,sink:0};
   zombies.push(z0);
   if(type==='boss'){banner('THE ABOMINATION','It walks with the horde tonight. Aim for the bulk.','night');Sound.play('roar',1);rumble(.8,.8,500);}
   return z0;
@@ -2749,10 +2819,10 @@ function edgeSpawn(){
   return{x:cx+60,z:cz+60};
 }
 function buildWave(n){
-  const list=[],total=Math.round((6+n*3.5)*D.count),sp=D.spec;
+  const list=[],total=Math.round((5+n*2.6+n*n*.12)*D.count),sp=D.spec;
   for(let i=0;i<total;i++){
     // night specials arrive earlier and grow every night
-    const w={walker:1,runner:(.25+.05*n)*sp,spitter:n>=2?(.1+.015*n)*sp:0,boomer:n>=3?(.09+.012*n)*sp:0,brute:n>=4?(.035+.01*n)*sp:0};
+    const w={walker:1,runner:(n>=2?.15+.06*n:.06)*sp,crawler:n>=2?(.1+.02*n)*sp:0,spitter:n>=2?(.1+.015*n)*sp:0,boomer:n>=3?(.09+.012*n)*sp:0,brute:n>=4?(.035+.01*n)*sp:0};
     let sum=0;for(const k in w)sum+=w[k];let r=Math.random()*sum,t='walker';for(const k in w){r-=w[k];if(r<=0){t=k;break;}}
     list.push(t);
   }
@@ -2778,7 +2848,7 @@ function damageZombie(z,dmg,kx,kz,silent,lift){
   if(z.hp<=0)killZombie(z);
 }
 function killZombie(z){
-  if(z.dying)return;z.dying=true;z.dieT=0;S.kills++;z.bg.visible=z.fg.visible=false;gainXP(z.def.score*.8);jobProg('kill',1);
+  if(z.dying)return;z.dying=true;z.dieT=0;z.y=z.jy||0;S.kills++;z.bg.visible=z.fg.visible=false;gainXP(z.def.score*.8);jobProg('kill',1);
   const d=z.def;burst(z.x,1,z.z,10,z.type==='spitter'?'acid':'gore',5);
   if(z.type!=='boomer')decal(z.x+z.hx*.12,z.z+z.hz*.12,rand(1.3,2.1)*Math.sqrt(d.scale),z.type==='spitter'?0x3f6a14:0x4a0a08,.85);
   // ragdoll fling
@@ -2815,8 +2885,31 @@ function updateDying(z,dt){
 }
 
 const pd0=z=>Math.hypot(player.x-z.x,player.z-z.z);
+let PERCH=null;
+// the object the player is standing on, if it's one the dead could climb or shake
+function perchOf(){if(!player.alive||!(player.jy>.3)||player.climb||player.lvl||player.mantle>0)return null;let best=null;
+  nearObs(player.x,player.z,.1,o=>{if(o.h===undefined||o.lvl!==undefined||Math.abs(o.h-player.jy)>.35)return;if(Math.hypot(o.x-player.x,o.z-player.z)<o.r+.2&&(!best||o.h>best.h))best=o;});return best;}
+const CLIMB={walker:[1.85,1.15],runner:[1.85,.6],spitter:[1.3,1.4]}; // [highest perch they can scale, seconds to climb]
+function zClimb(z,dt,pd){
+  if(z.climbT>0){z.climbT-=dt;const k=1-Math.max(0,z.climbT)/z.climbD,kk=clamp((k-.5)/.5,0,1);z.jy=z.cy0+(z.cyH-z.cy0)*Math.min(1,k*1.5);
+    z.x+=(z.cx-z.x)*kk*Math.min(1,dt*8);z.z+=(z.cz-z.z)*kk*Math.min(1,dt*8);if(z.climbT<=0){z.jy=z.cyH;z.climbT=0;}return true;}
+  const o=PERCH;if(!o||!z.aware||!player.alive||(z.jy||0)>=o.h-.3)return false;
+  const od=Math.hypot(z.x-o.x,z.z-o.z);if(od>o.r+z.def.r+.5)return false;
+  const c=CLIMB[z.type];
+  if(c&&o.h<=c[0]){const n=od||1;z.climbD=z.climbT=c[1]*clamp(o.h/1.2,.7,1.4);z.cy0=z.jy||0;z.cyH=o.h;z.cx=o.x+(z.x-o.x)/n*o.r*.45;z.cz=o.z+(z.z-o.z)/n*o.r*.45;z.lunge=.3;zAttackAnim(z);Sound.play('thud',.45,z.x,z.z);
+    if(!S.climbMsg){S.climbMsg=1;toast('They\'re climbing up after you!','bad');}return true;}
+  // too heavy to climb: brutes and the Abomination shake you off instead
+  if((z.type==='brute'||z.type==='boss')&&z.atkCd<=0){z.atkCd=1.7;z.lunge=.3;zAttackAnim(z);S.shake=Math.max(S.shake,.45);Sound.play('crash',.8,z.x,z.z);rumble(.6,.5,250);burst(o.x,o.h,o.z,6,'debris',4);
+    if(!S.rockMsg){S.rockMsg=1;toast('It\'s rocking your perch. Hold on, or jump clear!','bad');}
+    if(Math.random()<.5){const n=pd||1;knockPlayer((player.x-z.x)/n,(player.z-z.z)/n,9);player.air=true;player.jvy=5;player.fall0=player.jy;}}
+  return false;
+}
+// up on top of something: walk off an edge and you fall, like anyone else
+function zVertical(z,dt){if(z.climbT>0||!(z.jy>0))return;const s=supportAt(z.x,z.z,z.jy);
+  if(s<z.jy-.02){z.jvy=(z.jvy||0)-GRAV*dt;z.jy=Math.max(s,z.jy+z.jvy*dt);if(z.jy<=s)z.jvy=0;}else{z.jy=s;z.jvy=0;}}
+const zLift=z=>(z.jy||0)+(z.def.crawl?.2:0);
 function updateZombies(dt){
-  const px=player.x,pz=player.z,pIn=inBase(px,pz);
+  const px=player.x,pz=player.z,pIn=inBase(px,pz);PERCH=perchOf();
   for(const z of zombies){
     const d=z.def;
     if(z.dying){updateDying(z,dt);continue;}
@@ -2870,6 +2963,7 @@ function updateZombies(dt){
       else if(z.slamCd<=0&&pd<6){z.slamT=.7;z.slamCd=4.5;}
       if(z.summonCd<=0){z.summonCd=12;for(let i=0;i<3;i++)spawnZombie('runner',z.x+rand(-3,3),z.z+rand(-3,3));}
     }
+    if(zClimb(z,dt,pd))sp=0;
     if(z.type==='boomer'&&player.alive&&(pd<2.1||z.blocked)){z.hp=0;killZombie(z);continue;}
     const ozx=z.x,ozz=z.z;z.x+=dx*sp*dt+z.kx*dt;z.z+=dz*sp*dt+z.kz*dt;
     if(depthAt(z.x,z.z)>1.15){z.x=ozx;z.z=ozz;}else{z.dryX=z.x;z.dryZ=z.z;}
@@ -2877,6 +2971,7 @@ function updateZombies(dt){
     updateLevel(z);
     collideCircles(z,d.r);
     doorCollide(z,d.r,d.scale);
+    zVertical(z,dt);
     z.blocked=null;
     for(const s of segs){if(!solidSeg(s))continue;if(Math.abs(z.x-s.cx)>5.5||Math.abs(z.z-s.cz)>5.5)continue;if(collideSeg(z,d.r,s))z.blocked=s;}
     if(z.blocked){
@@ -2884,30 +2979,32 @@ function updateZombies(dt){
       if(base.spikeLv&&!z.blocked.door){damageZombie(z,SPIKE_DPS[base.spikeLv]*dt,0,0,true);z.spikeT-=dt;if(z.spikeT<=0){z.spikeT=.5;burst(z.x,.8,z.z,2,'blood',3);}}
       if(z.dying)continue;
     }
-    if(player.alive&&z.aware&&pd<d.r+.85&&z.atkCd<=0&&Math.abs((z.lvlY||0)-(player.lvlY||0))<1.3&&!playerHigh()){z.atkCd=z.type==='runner'?.75:1.1;z.lunge=.25;zAttackAnim(z);hurtPlayer(d.dmg*(1+.04*(S.wave-1)));
+    if(player.alive&&z.aware&&pd<d.r+.85&&z.atkCd<=0&&Math.abs((z.lvlY||0)-(player.lvlY||0))<1.3&&Math.abs((player.jy||0)-(z.jy||0))<1.25&&!(z.climbT>0)){z.atkCd=z.type==='runner'?.75:1.1;z.lunge=.25;zAttackAnim(z);hurtPlayer(d.dmg*(1+.04*(S.wave-1)));
+      if(d.crawl){player.grabT=1.2;if(!S.grabMsg){S.grabMsg=1;toast('A crawler has your ankle! Shake it off.','bad');}}
       const kf=z.type==='brute'?(z.chargeT>0?20:9):z.type==='boss'?12:2.5;knockPlayer(pdx/(pd||1),pdz/(pd||1),kf);if(z.type==='brute')z.chargeT=0;}
     const fy=sp>0?Math.atan2(dx,dz):z.aware?Math.atan2(pdx,pdz):z.yaw;
     let dy=fy-z.yaw;while(dy>Math.PI)dy-=Math.PI*2;while(dy<-Math.PI)dy+=Math.PI*2;z.yaw+=dy*Math.min(1,dt*8);
     z.walk+=dt*(sp+.5)*2.2;const sw=Math.sin(z.walk);
     if(z.mixer){
       if(z.acts.walk)z.acts.walk.timeScale=clamp(sp/(d.speed*.8),.25,2.4)*(z.type==='runner'?1.5:1);
-      z.mixer.update(dt);z.g.position.set(z.x,z.lvlY||0,z.z);
+      z.mixer.update(dt);z.g.position.set(z.x,(z.lvlY||0)+zLift(z),z.z);
     }else{
       z.legs[0].rotation.x=sw*.6;z.legs[1].rotation.x=-sw*.6;
       z.arms[0].rotation.x=-1.4+Math.sin(z.walk*.7)*.15-(z.lunge>0?.5:0);z.arms[1].rotation.x=-1.4-Math.sin(z.walk*.7)*.15-(z.lunge>0?.5:0);
-      z.g.position.set(z.x,Math.abs(Math.cos(z.walk))*.06+(z.lvlY||0),z.z);
+      z.g.position.set(z.x,Math.abs(Math.cos(z.walk))*.06+(z.lvlY||0)+zLift(z),z.z);
     }
     z.g.rotation.y=z.yaw;
-    z.g.rotation.x=z.type==='boss'&&z.slamT>0?-.35:0;
+    z.g.rotation.x=z.type==='boss'&&z.slamT>0?-.35:d.crawl?1.32:z.climbT>0?.55*Math.sin(Math.PI*(1-z.climbT/z.climbD)):0;
+    if(d.crawl){z.g.position.x-=Math.sin(z.yaw)*.75;z.g.position.z-=Math.cos(z.yaw)*.75;}
     const fl=z.flash>0?.7:0;for(const m of z.mats)if(m.emissive)m.emissive.setRGB(fl,fl*.2,fl*.1);
     const dmgd=z.hp<z.maxHp;z.bg.visible=z.fg.visible=dmgd;
-    if(dmgd){const y=(z.barY||(z.type==='boss'?2.6:2.35)*d.scale)+gH(z.x,z.z)+(z.lvlY||0);z.bg.position.set(z.x-z.bw/2,y,z.z);z.fg.position.set(z.x-z.bw/2,y,z.z+.01);z.fg.scale.x=z.bw*Math.max(0,z.hp/z.maxHp);}
+    if(dmgd){const y=(d.crawl?.95:(z.barY||(z.type==='boss'?2.6:2.35)*d.scale))+gH(z.x,z.z)+(z.lvlY||0)+(z.jy||0);z.bg.position.set(z.x-z.bw/2,y,z.z);z.fg.position.set(z.x-z.bw/2,y,z.z+.01);z.fg.scale.x=z.bw*Math.max(0,z.hp/z.maxHp);}
   }
   for(let i=0;i<zombies.length;i++){const a=zombies[i];if(a.dying)continue;
     for(let j=i+1;j<zombies.length;j++){const b=zombies[j];if(b.dying)continue;const dx=b.x-a.x,dz=b.z-a.z,rr=a.def.r+b.def.r;if(Math.abs(dx)>rr||Math.abs(dz)>rr)continue;
       const d2=dx*dx+dz*dz;if(d2<rr*rr&&d2>1e-6){const d=Math.sqrt(d2),o=(rr-d)/2,ux=dx/d,uz=dz/d;const wa=a.def.r>b.def.r?.25:a.def.r<b.def.r?.75:.5;
         a.x-=ux*o*2*wa;a.z-=uz*o*2*wa;b.x+=ux*o*2*(1-wa);b.z+=uz*o*2*(1-wa);}}
-    if(player.alive){const dx=a.x-player.x,dz=a.z-player.z,rr=a.def.r+.5,d2=dx*dx+dz*dz;if(d2<rr*rr&&d2>1e-6){const d=Math.sqrt(d2);a.x=player.x+dx/d*rr;a.z=player.z+dz/d*rr;}}
+    if(player.alive&&Math.abs((a.jy||0)-(player.jy||0))<1){const dx=a.x-player.x,dz=a.z-player.z,rr=a.def.r+.5,d2=dx*dx+dz*dz;if(d2<rr*rr&&d2>1e-6){const d=Math.sqrt(d2);a.x=player.x+dx/d*rr;a.z=player.z+dz/d*rr;}}
   }
   for(const z of zombies)if(!z.dying&&z.dryX!==undefined&&depthAt(z.x,z.z)>1.15){z.x=z.dryX;z.z=z.dryZ;} // shoves can't push anyone into deep water
   for(let i=zombies.length-1;i>=0;i--){const z=zombies[i];if(z.dying&&z.dieT>3){removeZombie(z);zombies.splice(i,1);}}
@@ -3160,7 +3257,7 @@ function updateHordes(dt){
         for(const sg of segs){if(!solidSeg(sg)||Math.abs(a.x-sg.cx)>4||Math.abs(a.z-sg.cz)>4)continue;if(collideSeg(a,.38,sg))blk=sg;}
         if(blk){a.wallT-=dt;if(a.wallT<=0){a.wallT=1.3;damageSeg(blk,4+S.wave*.4);}}}
       a.atk-=dt;
-      if(player.alive&&!player.lvl&&!playerHigh()&&pd<.95&&a.atk<=0){a.atk=1.3;hurtPlayer(4+S.wave*.35);knockPlayer((px-a.x)/(pd||1),(pz-a.z)/(pd||1),1.6);}
+      if(player.alive&&!player.lvl&&(PERCH?player.jy<1.7&&pd<PERCH.r+1:!playerHigh()&&pd<.95)&&a.atk<=0){a.atk=1.3;hurtPlayer(4+S.wave*.35);knockPlayer((px-a.x)/(pd||1),(pz-a.z)/(pd||1),1.6);}
       if(!player.lvl&&pd<.85&&pd>1e-4){a.x=px-(px-a.x)/pd*.85;a.z=pz-(pz-a.z)/pd*.85;}
     }
     const v=Math.hypot(a.vx,a.vz);if(v>.3)a.yaw=Math.atan2(a.vx,a.vz);
@@ -3606,10 +3703,10 @@ function knockPlayer(nx,nz,f){player.kx+=nx*f;player.kz+=nz*f;}
 function hitscan(ox,oz,dx,dz,range,dmg,pierce,knock,color,fromTurret){
   let block=range;
   const seenOb=new Set();
-  for(let st=0;st<=block;st+=OGC*.75){nearObs(ox+dx*st,oz+dz*st,0,o=>{if(seenOb.has(o))return;if(o.lvl!==undefined&&o.lvl!==(fromTurret?0:(player.lvl||0)))return;seenOb.add(o);const vx=o.x-ox,vz=o.z-oz,t=vx*dx+vz*dz;if(t<.5||t>block)return;const px=vx-dx*t,pz=vz-dz*t;if(px*px+pz*pz<o.r*o.r*.6)block=t;});}
+  for(let st=0;st<=block;st+=OGC*.75){nearObs(ox+dx*st,oz+dz*st,0,o=>{if(seenOb.has(o))return;if(o.lvl!==undefined&&o.lvl!==(fromTurret?0:(player.lvl||0)))return;seenOb.add(o);if(o.h!=null&&o.h<1.25+(fromTurret?1:(player.jy||0)))return;const vx=o.x-ox,vz=o.z-oz,t=vx*dx+vz*dz;if(t<.5||t>block)return;const px=vx-dx*t,pz=vz-dz*t;if(px*px+pz*pz<o.r*o.r*.6)block=t;});}
   const hits=[];
   const shLvl=fromTurret?0:(player.lvl||0);
-  for(const z of zombies){if(z.dying||(z.lvl||0)!==shLvl)continue;const vx=z.x-ox,vz=z.z-oz,t=vx*dx+vz*dz;if(t<0||t>block)continue;const px=vx-dx*t,pz=vz-dz*t,r=z.def.r*1.05+.12;if(px*px+pz*pz<r*r)hits.push({z,t});}
+  for(const z of zombies){if(z.dying||(z.lvl||0)!==shLvl)continue;const vx=z.x-ox,vz=z.z-oz,t=vx*dx+vz*dz;if(t<0||t>block+((z.jy||0)>.5?2.5:0))continue;const px=vx-dx*t,pz=vz-dz*t,r=z.def.r*1.05+.12;if(px*px+pz*pz<r*r)hits.push({z,t});}
   for(const b of barrels){if(!b.alive)continue;const vx=b.x-ox,vz=b.z-oz,t=vx*dx+vz*dz;if(t<0||t>block+.6)continue;const px=vx-dx*t,pz=vz-dz*t;if(px*px+pz*pz<.36)hits.push({b,t});}
   if(!fromTurret)for(const p of props){const vx=p.x-ox,vz=p.z-oz,t=vx*dx+vz*dz;if(t<.3||t>block)continue;const px=vx-dx*t,pz=vz-dz*t;if(px*px+pz*pz<p.r*p.r*.8)hits.push({p,t});}
   const seenA=new Set();
@@ -3927,7 +4024,7 @@ function openMenu(){if(!S.running||S.over||S.panel)return;if(!inBase(player.x,pl
 function closeMenu(){S.menu=false;$('menu').hidden=true;setPadFocus(null);if(!isTouch&&!pad.active)document.body.classList.add('playing');}
 
 /* ================= PHASES ================= */
-const UNLOCK={2:'Runners are fast. Keep moving.',3:'Spitters lob acid over walls.',4:'Boomers explode on contact.',5:'Brutes charge. The Abomination walks.'};
+const UNLOCK={2:'Runners are fast, and crawlers hide low in the grass.',3:'Spitters lob acid over walls.',4:'Boomers explode on contact.',5:'Brutes charge. The Abomination walks.'};
 function startNight(early){
   if(S.phase!=='day')return;
   if(early&&S.dayT>3){const b=Math.floor(S.dayT/10);player.scrap+=b;toast(`Skipped to nightfall: +${b} scrap`);}
@@ -3939,7 +4036,7 @@ function startNight(early){
   if(Math.random()<D.nightHorde*(S.wave>=2?.55:.2)){let hh=null,hd=1e9;for(const h of hordes){if(h.alive>0&&h.state==='roam'){const d=Math.hypot(h.cx,h.cz);if(d<hd){hd=d;hh=h;}}}
     if(hh){hh.state='siege';hh.siege=true;hh.known=true;setTimeout(()=>banner('HORDE INCOMING',`${hh.alive} infected are marching on the farmstead from the ${compass(Math.atan2(hh.cx,hh.cz))}.`,'night'),3400);}}
   if((S.wave>=2||diffKey==='nightmare')&&hordes.filter(h=>h.alive>0).length<4&&Math.random()<.2+.35*D.nightHorde){
-    const nh=spawnHorde(Math.round((18+S.wave*7)*D.horde));nh.night=true;nh.known=true;nh.state=Math.hypot(player.x,player.z)<40?'siege':'roam';nh.siege=nh.state==='siege';
+    const nh=spawnHorde(Math.round((12+S.wave*6)*D.horde));nh.night=true;nh.known=true;nh.state=Math.hypot(player.x,player.z)<40?'siege':'roam';nh.siege=nh.state==='siege';
     setTimeout(()=>toast(`A night horde of ${nh.alive} is moving in from the ${compass(Math.atan2(nh.cx-player.x,nh.cz-player.z))}.`,'bad'),5200);}
   const open=gates.filter(g=>g.alive&&g.open);if(open.length)setTimeout(()=>toast(`The ${open.map(g=>g.side).join(' and ')} gate${open.length>1?'s are':' is'} still open`,'bad'),800);
 }
@@ -3950,9 +4047,9 @@ function endNight(){
   const sc=20+S.wave*10,pa=1+Math.floor(S.wave/2);player.scrap+=sc;player.parts+=pa;
   banner('DAWN',`Night ${S.wave} survived. +${sc} scrap, +${pa} parts.`,'dawn');Sound.play('dawn');
   store.set('deadacre.best',Math.max(store.get('deadacre.best',0),S.wave));
-  refreshLoot();
-  for(const h of hordes)if(h.alive>0)addAgents(h,Math.round((8+S.wave*2)*D.horde),h.cx,h.cz);
-  if(hordes.length<(S.wave>=3?3:2)){const h=spawnHorde(Math.round((28+S.wave*12)*D.horde));setTimeout(()=>toast(`A new horde of ${h.alive} is roaming the ${compass(Math.atan2(h.cx,h.cz))}.`,'bad'),4200);}
+  refreshLoot();spoilFood();
+  for(const h of hordes)if(h.alive>0)addAgents(h,Math.round((5+S.wave*2)*D.horde),h.cx,h.cz);
+  if(hordes.length<(S.wave>=3?3:2)){const h=spawnHorde(Math.round((20+S.wave*9)*D.horde));setTimeout(()=>toast(`A new horde of ${h.alive} is roaming the ${compass(Math.atan2(h.cx,h.cz))}.`,'bad'),4200);}
   setTimeout(()=>setWeather(rollWeather(false),true),2400);
   for(let i=0;i<30;i++){const a=rand(0,6.28),r=rand(70,140),x=Math.cos(a)*r,z=Math.sin(a)*r;if(blockedSpot(x,z,2))continue;
     spawnCrate(x,z,'drop');setTimeout(()=>toast(`Airdrop spotted ${Math.round(r)}m ${compass(Math.atan2(x-player.x,z-player.z))}. Follow the red flare.`,'bad'),1500);break;}
@@ -5356,6 +5453,7 @@ function interact(){
   const car=nearestCar();if(car){stripCar(car);return true;}
   const pp=nearestPlaced();if(pp){usePlaced(pp);return true;}
   const hb=nearestHerb();if(hb){pickHerb(hb);return true;}
+  const gs=nearestGardenSpot();if(gs){useGardenSpot(gs);return true;}
   const pl=nearestPlot();if(pl){tendPlot(pl);return true;}
   const gt=gatherTarget();if(gt){gather(gt);return true;}
   if(inBase(player.x,player.z)){openMenu();return true;}
@@ -5450,7 +5548,7 @@ function updatePlayer(dt){
   updateRegen(dt);
   if(player.swim){player.st=Math.max(0,player.st-19*dt);if(Math.random()<dt*(moving?6:2))splash(player.x+rand(-.6,.6),player.z+rand(-.6,.6),WL-gH(player.x,player.z)+.03);
     if(player.st<=0){player.hurtT=Math.max(player.hurtT,.12);if(!player.drownMsg){player.drownMsg=1;toast('Drowning. Get to shore.','bad');}if(loseHP(9*dt))return;}else player.drownMsg=0;}
-  const sp=(sprint?10.5:6.5)*(player.acidT>0?.6:1)*(player.swim?.45:dep>.3?1-.35*Math.min(1,(dep-.3)/.95):1)*(player.crouch?.45:1)*(1-player.ads*(.48-.1*PERK('steady')))*(1+.06*PERK('path'))*(player.winded?.8:1)*(1+.02*ATTR('agi'))*(PERK('laststand')&&player.hp<player.maxHp*.25?1.2:1);
+  if(player.grabT>0)player.grabT-=dt;const sp=(sprint?10.5:6.5)*(player.acidT>0?.6:1)*(player.grabT>0?.45:1)*(player.swim?.45:dep>.3?1-.35*Math.min(1,(dep-.3)/.95):1)*(player.crouch?.45:1)*(1-player.ads*(.48-.1*PERK('steady')))*(1+.06*PERK('path'))*(player.winded?.8:1)*(1+.02*ATTR('agi'))*(PERK('laststand')&&player.hp<player.maxHp*.25?1.2:1);
   {const snowSlow=1-(player.gear&&player.gear.boots?0:.14*SEA.blend.snowCover)-(W.type==='blizzard'?.07:0),tx=mx*sp*snowSlow,tz=mz*sp*snowSlow;
     if(ICE&&depthAt(player.x,player.z)>.05&&!player.climb){const k=Math.min(1,dt*2.2);player.vx+=(tx-player.vx)*k;player.vz+=(tz-player.vz)*k;}else{player.vx=tx;player.vz=tz;}}
   player.x+=(player.vx+player.kx)*dt;player.z+=(player.vz+player.kz)*dt;
@@ -5510,7 +5608,7 @@ function updatePlayer(dt){
   else{const g=nearestGate();
     if(g)ps=`<span>${glyph('use')}${g.open?'Close':'Open'} the ${g.side} gate</span>`;
     else{const d=nearestDoor();if(d)ps=`<span>${glyph('use')}Kick the door</span>`;
-      else{const pl=nearestPlot();if(pl)ps=`<span>${(!pl.type&&player.seeds>0)||pl.stage>=3?glyph('use'):''}${plotPrompt(pl)}</span>`;
+      else{const gs=nearestGardenSpot(),pl=nearestPlot();if(gs)ps=`<span>${glyph('use')}${gardenSpotPrompt(gs)}</span>`;else if(pl)ps=`<span>${plotActionable(pl)?glyph('use'):''}${plotPrompt(pl)}</span>`;
         else{const gt=gatherTarget();if(gt)ps=`<span>${glyph('use')}${gt.g?'Chop tree':'Mine rock'} · hold</span>`;}}}}
   if(inBase(player.x,player.z))ps+=`<span>${glyph('base')}Workshop</span>`;
   if(ps!==promptState){promptState=ps;$('prompt').innerHTML=ps;$('prompt').hidden=!ps;}
@@ -5600,10 +5698,16 @@ function tpLook(dx,dy){const k=TP_SENS*adsSens();camYaw-=dx*k;camPitch=clamp(cam
 function scoped(){const I=curW();return!!I&&(I.cls==='hunt'||(I.mods&&I.mods.optic==='scope'));}
 function camBlocked(x,y,z){
   if(y<gH(x,z)+.35)return true;let hit=false;
-  nearObs(x,z,.3,o=>{if(!hit&&Math.hypot(o.x-x,o.z-z)<o.r+.3)hit=true;});
+  nearObs(x,z,.3,o=>{if(!hit&&!(o.h!=null&&o.lvl===undefined&&y>gH(x,z)+o.h+.25)&&Math.hypot(o.x-x,o.z-z)<o.r+.3)hit=true;});
   if(!hit&&Math.abs(x)<BR+2&&Math.abs(z)<BR+2&&y<WALL_H[base.wallLv]+.6)for(const sg of segs)if(solidSeg(sg)&&segDist(sg,x,z)<.45){hit=true;break;}
   return hit;
 }
+// hide a tree while the camera is inside its leaves (up on a car or a roof), like roofs hide when you're upstairs
+const CANOPY_HID=new Set(),_canNow=new Set();
+function canopyFade(){const c=camera.position;_canNow.clear();
+  nearObs(c.x,c.z,2.6,o=>{const t=o.tree;if(!t||t.kind==='dead')return;if(Math.hypot(t.x-c.x,t.z-c.z)<1.9*t.s+.4&&c.y>gH(c.x,c.z)+1.9*t.s)_canNow.add(t);});
+  for(const t of CANOPY_HID)if(!_canNow.has(t)){t.g.visible=true;CANOPY_HID.delete(t);}
+  for(const t of _canNow){t.g.visible=false;CANOPY_HID.add(t);}}
 function updateCameraTP(dt){
   if(!document.pointerLockElement&&!pad.active){const ex=mouse.x/innerWidth;if(ex<.05)camYaw+=dt*2.2;else if(ex>.95)camYaw-=dt*2.2;}
   if(pad.active){const k=adsSens();camYaw-=pad.rx*2.8*dt*k;camPitch=clamp(camPitch+pad.ry*1.8*dt*k,-.12,.95);}
@@ -5617,7 +5721,7 @@ function updateCameraTP(dt){
   const D=lerp(lerp(TPD,2.15,ad),6.2,INDOOR*(1-ad*.6));let d=D;
   if(INDOOR<.5){for(let t=.6;t<=D;t+=.3){if(camBlocked(_ct.x-_cd.x*t,_ct.y-_cd.y*t,_ct.z-_cd.z*t)){d=Math.max(.6,t-.35);break;}}}
   _cp.set(_ct.x-_cd.x*d,_ct.y-_cd.y*d,_ct.z-_cd.z*d);
-  camera.position.lerp(_cp,Math.min(1,dt*14));
+  camera.position.lerp(_cp,Math.min(1,dt*14));canopyFade();
   if(S.shake>0){camera.position.x+=rand(-1,1)*S.shake*.22;camera.position.y+=rand(-1,1)*S.shake*.18;S.shake=Math.max(0,S.shake-dt*2.2);}
   camera.lookAt(camera.position.x+_cd.x,camera.position.y+_cd.y,camera.position.z+_cd.z);
   // the crosshair marks where the gun is actually pointing
