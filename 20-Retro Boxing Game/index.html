@@ -79,6 +79,7 @@ kbd{font-family:inherit;font-size:8px;color:var(--ink);background:var(--text);pa
   <div class="sys">
     <button data-k="start" id="b-start">START</button>
     <button data-k="mute" id="b-mute">SOUND</button>
+    <button data-k="read" id="b-read">READ ALOUD</button>
   </div>
   <div class="legend">
     <span><kbd>&larr;</kbd> <kbd>&uarr;</kbd> <kbd>&darr;</kbd> <kbd>&rarr;</kbd> MOVE</span>
@@ -92,6 +93,7 @@ kbd{font-family:inherit;font-size:8px;color:var(--ink);background:var(--text);pa
     <span><kbd>ENTER</kbd> START</span>
     <span><kbd>P</kbd> PAUSE</span>
     <span><kbd>M</kbd> SOUND</span>
+    <span><kbd>R</kbd> READ ALOUD</span>
   </div>
 </div>
 
@@ -120,7 +122,7 @@ const KEYMAP = {
   KeyA:'dodgeL', KeyQ:'dodgeL', KeyD:'dodgeR', KeyE:'dodgeR', KeyS:'duck', ShiftLeft:'duck', ShiftRight:'duck',
   KeyC:'body', KeyV:'block',
   KeyZ:'jab', KeyJ:'jab', KeyX:'hook', KeyK:'hook',
-  Space:'star', KeyL:'star', Enter:'start', KeyP:'pause', Escape:'pause', KeyM:'mute'
+  Space:'star', KeyL:'star', Enter:'start', KeyP:'pause', Escape:'pause', KeyM:'mute', KeyR:'read'
 };
 function press(a){ if(!held[a]) pressed[a] = true; held[a] = true; }
 addEventListener('keydown', e => {
@@ -319,9 +321,62 @@ function shade(hex, k){
   else { r += (255 - r) * k; g += (255 - g) * k; b += (240 - b) * k; }
   return shadeCache[key] = '#' + ((1 << 24) | (Math.round(r) << 16) | (Math.round(g) << 8) | Math.round(b)).toString(16).slice(1);
 }
+/* ---------- read aloud: canvas text remembers where it was drawn; hovering speaks it ---------- */
+const textBoxes = new Map();
+let renderN = 0, hoverKey = null, hoverBox = null, readToast = 0;
+let readAloud = true;
+try { const v = localStorage.getItem('ko-alley-read'); if (v !== null) readAloud = v === '1'; } catch (_) {}
+function recordText(s, x, y, w, h){
+  if (!/[A-Za-z0-9]/.test(s)) return;
+  const key = Math.round(x) + ',' + Math.round(y) + ':' + s.replace(/\d/g, '#');
+  textBoxes.set(key, { key, s, x, y, w, h, seen: renderN });
+}
+function sayable(s){
+  if (/^\d+$/.test(s)) return String(Number(s));
+  const clk = s.match(/^(\d):(\d\d)$/);
+  if (clk) return clk[1] + (clk[1] === '1' ? ' minute' : ' minutes') + (clk[2] === '00' ? '' : ' ' + Number(clk[2]) + ' seconds');
+  return s.replace(/\u2190/g, ' left ').replace(/\u2192/g, ' right ').replace(/\u2191/g, ' up ').replace(/\u2193/g, ' down ')
+    .replace(/\u2605/g, ' star ').replace(/\u00ab/g, ' dodge left ').replace(/\u00bb/g, ' dodge right ')
+    .replace(/^R(\d)$/, 'round $1').replace(/(\d+)\/(\d+)/g, '$1 of $2').replace(/\//g, ' or ')
+    .replace(/\$(\d+)/g, '$1 dollars').replace(/\bVS\./g, 'versus')
+    .replace(/\bHP\b/g, 'H P').replace(/\bPWR\b/g, 'power').replace(/\bSPD\b/g, 'speed').replace(/\bKA\b/g, 'knockout alley')
+    .toLowerCase().replace(/\s+/g, ' ').trim();
+}
+function say(s, force){
+  if ((!readAloud && !force) || !('speechSynthesis' in window)) return;
+  const t = sayable(s); if (!t) return;
+  try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); u.rate = 1.05; speechSynthesis.speak(u); } catch (_) {}
+}
+function textAt(px, py){
+  let best = null;
+  for (const b of textBoxes.values()) {
+    if (renderN - b.seen > 45) continue;
+    if (px >= b.x - 2 && px <= b.x + b.w + 2 && py >= b.y - 2 && py <= b.y + b.h + 2 && (!best || b.w * b.h < best.w * best.h)) best = b;
+  }
+  return best;
+}
+cv.addEventListener('mousemove', e => {
+  const r = cv.getBoundingClientRect(), b = textAt((e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height);
+  cv.style.cursor = b && readAloud ? 'help' : 'pointer';
+  if (!b) { hoverKey = null; hoverBox = null; return; }
+  hoverBox = b;
+  if (b.key !== hoverKey) { hoverKey = b.key; say(b.s); }
+});
+cv.addEventListener('mouseleave', () => { hoverKey = null; hoverBox = null; });
+// legend items read as "key: action"
+document.querySelectorAll('.legend span').forEach(sp => {
+  const keys = [...sp.querySelectorAll('kbd')].map(k => k.textContent).join(' ');
+  const rest = [...sp.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join(' ').trim();
+  sp.setAttribute('aria-label', keys + ': ' + rest);
+});
+document.addEventListener('mouseover', e => {
+  const el = e.target.closest && e.target.closest('.legend span, .marquee, .pad button, .sys button');
+  if (el && !el.contains(e.relatedTarget)) say(el.getAttribute('aria-label') || el.textContent);
+});
 function txt(s, x, y, c = '#fcfcfc', align = 'left', size = 8, sh = '#140c1c') {
   ctx.font = size + 'px "Press Start 2P", ui-monospace, monospace';
   ctx.textAlign = align; ctx.textBaseline = 'top';
+  { const w = ctx.measureText(s).width; recordText(s, align === 'center' ? x - w / 2 : align === 'right' ? x - w : x, y, w, size); }
   if (sh) {
     ctx.fillStyle = sh;
     for (const [dx, dy] of [[-1,0],[1,0],[0,-1],[0,1],[1,1]]) ctx.fillText(s, x + dx, y + dy);
@@ -405,6 +460,7 @@ function hudBar(x, y, w, frac, trail, rtl){
 }
 function bigTitle(s, y, size){
   ctx.font = size + 'px "Press Start 2P", ui-monospace, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  { const w = ctx.measureText(s).width; recordText(s, W / 2 - w / 2, y, w, size); }
   ctx.fillStyle = '#140c1c';
   for (let dx = -2; dx <= 2; dx++) for (let dy = -2; dy <= 4; dy++) ctx.fillText(s, W / 2 + dx, y + dy);
   ctx.fillStyle = '#a01828'; ctx.fillText(s, W / 2 + 2, y + 2);
@@ -951,6 +1007,11 @@ function update(){
   frameN++;
   if (crowdHype > 0) crowdHype--;
   if (pressed.mute) { muted = !muted; if (master) master.gain.value = muted ? 0 : 0.22; }
+  if (pressed.read) {
+    readAloud = !readAloud; readToast = 120;
+    try { localStorage.setItem('ko-alley-read', readAloud ? '1' : '0'); } catch (_) {}
+    if (readAloud) say('read aloud on', true); else { try { speechSynthesis.cancel(); } catch (_) {} say('read aloud off', true); }
+  }
   switch (state) {
     case 'title':
       if (pressed.start || pressed.jab) { state = 'select'; timer = 0; sfx.tick(); playSong(0); }
@@ -1240,7 +1301,19 @@ function frame(now){
   acc += Math.min(100, now - last); last = now;
   let ran = false;
   while (acc >= STEP) { update(); acc -= STEP; if (!ran) { for (const k in pressed) pressed[k] = false; ran = true; } }
+  renderN++;
   render();
+  if (renderN % 60 === 0) for (const [k, b] of textBoxes) if (renderN - b.seen > 90) textBoxes.delete(k);
+  if (readAloud && hoverBox && renderN - hoverBox.seen <= 45) {
+    const b = hoverBox; ctx.fillStyle = (frameN >> 3) & 1 ? '#f8d020' : '#fcf8b0';
+    ctx.fillRect(Math.round(b.x), Math.round(b.y + b.h + 2), Math.round(b.w), 1);
+  }
+  if (readToast > 0) {
+    readToast--;
+    const msg = readAloud ? 'READ ALOUD ON' : 'READ ALOUD OFF';
+    ctx.fillStyle = 'rgba(12,6,24,.85)'; ctx.fillRect(4, 202, 118, 16);
+    txt(msg, 10, 206, readAloud ? '#58f898' : '#8c84a0');
+  }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

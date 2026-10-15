@@ -4,6 +4,12 @@ A Punch-Out-style boxing game drawn in a 16-bit, Streets of Rage-inspired style.
 
 You see your boxer from behind and face one opponent at a time. Work your way up a six-fight circuit, from the Minor Circuit to a title bout against the world champion.
 
+## Read aloud
+
+Hover the mouse over any words in the game (menus, the HUD, fighter names, tips) or over the controls list below the screen, and they are read out loud. The text you're hovering gets a gold underline. Press **R** to turn read aloud on or off; your choice is remembered.
+
+It uses your browser's built-in speech (the Web Speech API), so the voice depends on your system. Browsers only allow speech after you've clicked or pressed a key on the page once.
+
 ## Fighters
 
 | Fighter | Style | Power | HP | Speed |
@@ -41,6 +47,7 @@ You see your boxer from behind and face one opponent at a time. Work your way up
 | Start / get up | Enter (mash punches to get up) | START |
 | Pause | P / Esc | — |
 | Sound on/off | M | SOUND |
+| Read aloud on/off | R | READ ALOUD |
 
 ## How to fight
 
