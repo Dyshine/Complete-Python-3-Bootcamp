@@ -1504,6 +1504,86 @@ function drinkWell(x,z){if((S.time||0)<(S.wellT||0))return false;S.wellT=(S.time
 function useWell(o){const had=GARDEN.can,drank=drinkWell(o.x,o.z);GARDEN.can=CAN_MAX;
   if(!drank)toast(had<CAN_MAX?`Watering can filled. You've drunk your fill for now (${Math.ceil(S.wellT-S.time)} s).`:`You've drunk your fill for now (${Math.ceil(S.wellT-S.time)} s).`);
   else if(had<CAN_MAX)toast('Drank deep and filled the watering can','good');}
+/* ================= SUBURBAN HOUSES (City Kit Suburban by Kenney, CC0) =================
+   21 house shells, restyled in a shader so the toy-bright kit fits a ruined Midwest: the palette swatch a face samples says
+   what it is (roof, wall, trim, cladding, glass), and each style swaps those colours and adds a surface: clapboard siding,
+   brick courses or board-and-batten on walls, shingle rows on roofs, grime creeping up from the ground, dark broken glass.
+   They are solid shells: loot spawns on the porch and in the yard, not inside. */
+const SUB={ready:false,types:[],mats:{}};
+const SUB_STYLES={
+  farmhouse:{wall:0xe8e2d2,roof:0x7a2e22,trim:0xf2eee4,dark:0x4a3a30,wallFx:1,roofFx:2},
+  craftsman:{wall:0x8a9a72,roof:0x4a3a30,trim:0xe8dcc0,dark:0x3a3028,wallFx:3,roofFx:1},
+  colonial:{wall:0x9fb4c8,roof:0x4a4e56,trim:0xf2f2ee,dark:0x2e3a4a,wallFx:1,roofFx:1},
+  brick:{wall:0x8e4a36,roof:0x33302e,trim:0xd8d0c0,dark:0x2a2624,wallFx:2,roofFx:1},
+  victorian:{wall:0xd8bc62,roof:0x3c3a40,trim:0xf0ece2,dark:0x5a2e30,wallFx:1,roofFx:1},
+  weathered:{wall:0x8a8680,roof:0x5a4a3a,trim:0x6a6560,dark:0x3a3634,wallFx:3,roofFx:2},
+  capecod:{wall:0xe6dcc4,roof:0x26282c,trim:0x2f4a3a,dark:0x2a2a2a,wallFx:1,roofFx:1},
+};
+const SUB_GLSL=`
+float sH(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float sN(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(sH(i),sH(i+vec2(1,0)),f.x),mix(sH(i+vec2(0,1)),sH(i+vec2(1,1)),f.x),f.y);}
+vec3 subStyle(vec3 tex,vec2 uv,vec3 p,vec3 n){
+  float lum=dot(tex,vec3(.299,.587,.114));
+  float wall=step(.375,uv.x)*step(uv.x,.5)*step(.5,uv.y)*step(uv.y,.75);
+  float roof=step(uv.x,.125)*step(.25,uv.y)*step(uv.y,.5);
+  float trim=step(uv.x,.125)*step(.5,uv.y)*step(uv.y,.75);
+  float dark=step(.125,uv.x)*step(uv.x,.25)*step(.5,uv.y)*step(uv.y,.75);
+  float glass=step(.625,uv.x)*step(uv.x,.75)*step(.25,uv.y)*step(uv.y,.5);
+  float bush=step(.125,uv.x)*step(uv.x,.25)*step(.75,uv.y);
+  vec3 c=tex;
+  float h=p.y*uScale;vec2 side=abs(n.x)>abs(n.z)?vec2(p.z,p.y):vec2(p.x,p.y);side*=uScale;
+  if(wall>.5){float sh=lum/.93;c=uWall*sh;
+    if(uWallFx<1.5){c*=1.-.22*smoothstep(.78,.97,fract(h*3.4));}                                   // clapboard
+    else if(uWallFx<2.5){vec2 b=vec2(side.x*2.1+step(.5,fract(side.y*4.6))*.5,side.y*4.6);float m=max(smoothstep(.88,.97,fract(b.x)),smoothstep(.82,.95,fract(b.y)));
+      c*=.88+.24*sH(floor(b));c=mix(c,vec3(.62,.6,.56),m*.75);}                                       // brick courses
+    else{c*=1.-.25*smoothstep(.86,.97,fract(side.x*2.4));c*=.9+.2*sN(vec2(side.x*2.4,side.y*.3));}     // board and batten
+  }
+  else if(roof>.5){c=uRoof*(lum/.6);
+    float row=fract(h*5.);c*=1.-.28*smoothstep(.72,.98,row);c*=.85+.3*sH(vec2(floor(side.x*3.+floor(h*5.)*.5),floor(h*5.)));
+    if(uRoofFx>1.5)c=mix(c,vec3(.35,.4,.24),.35*smoothstep(.55,.85,sN(side*1.3)));}                    // moss
+  else if(trim>.5)c=uTrim*(lum/.6);
+  else if(dark>.5)c=uDark*(lum/.36);
+  else if(bush>.5)c=vec3(.26,.32,.17)*(lum/.55)*(.8+.4*sN(side*2.5));
+  else if(glass>.5){c=mix(vec3(.08,.1,.12),vec3(.3,.38,.44),smoothstep(.2,.9,lum))*(.7+.3*sN(side*3.));}
+  // grime: rising damp, streaks under the eaves, general wear
+  float g=sN(side*.9+uSeed);c*=1.-.35*smoothstep(.55,0.,h)*(.6+.4*g);c*=.9+.12*g;
+  c*=1.-.18*smoothstep(.6,.9,sN(vec2(side.x*4.,h*.6)))*(1.-roof);
+  return c;}
+`;
+function subMat(key,base){if(SUB.mats[key])return SUB.mats[key];const S=SUB_STYLES[key];
+  const m=new THREE.MeshToonMaterial({map:base.map,gradientMap:TOON_GRAD,side:THREE.FrontSide});
+  const u={uWall:{value:new THREE.Color(S.wall)},uRoof:{value:new THREE.Color(S.roof)},uTrim:{value:new THREE.Color(S.trim)},uDark:{value:new THREE.Color(S.dark)},
+    uWallFx:{value:S.wallFx},uRoofFx:{value:S.roofFx},uScale:{value:SUB.scale},uSeed:{value:Object.keys(SUB_STYLES).indexOf(key)*7.3}};
+  m.onBeforeCompile=sh=>{Object.assign(sh.uniforms,u);
+    sh.vertexShader='varying vec3 vSP;varying vec3 vSN;\n'+sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n vSP=position;vSN=normal;');
+    sh.fragmentShader='varying vec3 vSP;varying vec3 vSN;uniform vec3 uWall,uRoof,uTrim,uDark;uniform float uWallFx,uRoofFx,uScale,uSeed;\n'+SUB_GLSL+
+      sh.fragmentShader.replace('#include <map_fragment>','#include <map_fragment>\n diffuseColor.rgb=subStyle(diffuseColor.rgb,vUv,vSP,normalize(vSN));');};
+  m.customProgramCacheKey=()=>'sub|'+key;return SUB.mats[key]=m;}
+const SUB_OL=(()=>{const m=new THREE.MeshBasicMaterial({color:0x0b0a09,side:THREE.BackSide});m.onBeforeCompile=sh=>{sh.vertexShader=sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n transformed+=normal*.006;');};m.customProgramCacheKey=()=>'subol';return m;})();
+if(THREE.GLTFLoader){try{new THREE.GLTFLoader().load('models/houses/suburban.gltf.json',g=>{try{
+  let base=null;g.scene.traverse(o=>{if(o.isMesh){if(!base)base=o.material;o.geometry.computeBoundingBox();const bb=o.geometry.boundingBox;
+    SUB.types.push({name:o.name||o.parent.name,geo:o.geometry,min:bb.min.clone(),max:bb.max.clone()});}});
+  // one scale for the whole kit: the widest house becomes 13 m across
+  let mx=0;for(const t of SUB.types)mx=Math.max(mx,t.max.x-t.min.x,t.max.z-t.min.z);SUB.scale=13/mx;
+  for(const k in SUB_STYLES)subMat(k,base);SUB.ready=SUB.types.length>0;
+}catch(e){console.warn('Suburban houses failed; using built-in houses.',e);}},undefined,()=>{});}catch(e){}}
+// a kit house on a lot, facing local +z (the street); returns false when the kit isn't loaded yet
+const subOrHouse=(x,z,r)=>addSuburb(x,z,r)||addHouse(x,z,r);
+function addSuburb(x,z,rot,styleKey){
+  if(!SUB.ready)return false;const T=SUB.types[Math.floor(RNG()*SUB.types.length)],keys=Object.keys(SUB_STYLES),key=styleKey||keys[Math.floor(RNG()*keys.length)],s=SUB.scale;
+  const g=new THREE.Group();g.position.set(x,0,z);g.rotation.y=rot;
+  const m=new THREE.Mesh(T.geo,SUB.mats[key]);m.scale.setScalar(s);m.position.set(-(T.min.x+T.max.x)/2*s,0,-(T.min.z+T.max.z)/2*s);m.castShadow=true;m.receiveShadow=true;g.add(m);
+  if(GFX==='high'){const o=new THREE.Mesh(T.geo,SUB_OL);o.scale.copy(m.scale);o.position.copy(m.position);g.add(o);}
+  track(g);
+  // solid footprint: a ring of obstacles round the walls and a fill inside so nothing spawns in the shell
+  const hw=(T.max.x-T.min.x)/2*s,hd=(T.max.z-T.min.z)/2*s;
+  for(let lx=-hw+.8;lx<=hw-.8+.01;lx+=1.5)for(let lz=-hd+.8;lz<=hd-.8+.01;lz+=1.5){const p=l2w(x,z,rot,lx,lz);addOb({x:p.x,z:p.z,r:1.05});}
+  const c=Math.abs(Math.cos(rot)),sn=Math.abs(Math.sin(rot)),rec={x,z,rot,hw,hd,h:(T.max.y-T.min.y)*s,kind:'house',solid:true,style:key,type:T.name,ex:c*hw+sn*hd,ez:sn*hw+c*hd};
+  houses.push(rec);if(CUR)CUR.houses.push(rec);
+  // a porch light that stays on, now and then, and junk in the yard
+  if(RNG()<.5){const p=l2w(x,z,rot,rand(-hw+2,hw-2),hd+rand(2,4));addProp(pick(['carton','crate','tire','can']),p.x,p.z);}
+  return rec;
+}
 function bApartment(x,z,rot){
   const K=Kit(x,z,rot),hw=6,hd=5,fh=3.2,floors=randi(3,4),R=RNG;
   const wall=R()<.6?CTM('brick',pick([0xffffff,0xd8c8b8,0xb8a898]),2):ITM('plaster',0x7d7466,pick([0xe8e0d0,0xd0d8e0]));
@@ -1897,8 +1977,8 @@ function genTown(ch){
       case 'depot':bDepot(p.x,p.z,p.rot,p.name);break;
       case 'tower':bTownTower(p.x,p.z,p.rot,p.name);break;
       case 'block':bMainBlock(p.x,p.z,p.rot,p);break;
-      case 'foursquare':bTownhouse(p.x,p.z,p.rot);break;
-      case 'bungalow':addHouse(p.x,p.z,p.rot);break;
+      case 'foursquare':{const r=RNG();if(!(r<.3&&addSuburb(p.x,p.z,p.rot)))bTownhouse(p.x,p.z,p.rot);break;}
+      case 'bungalow':{const r=RNG();if(!(r<.65&&addSuburb(p.x,p.z,p.rot)))addHouse(p.x,p.z,p.rot);break;}
       case 'porch':bFarmhouse2(p.x,p.z,p.rot);break;
       case 'church':bChurch(p.x,p.z,p.rot);break;
       case 'well':addWell(p.x,p.z,p.rot);break;
@@ -2026,8 +2106,8 @@ function genChunk(cx,cz){
             if(lotFlat(bx,bz,hx?e+5:e+3,hx?e+3:e+5)&&!blockedSpot(bx,bz,e*.5)){(sup?bSupercenter:bGrocery)(bx,bz,rot);big=true;break;}}}}
       const fr=big?1:RNG(),r0=randi(0,3)*Math.PI/2;
       if(fr<.35){const p=spot(10,18);if(p)addFarmstead(p.x,p.z,r0,clear);}
-      else if(fr<.7){const f=pickW([[bFarmhouse,18],[bFarmhouse2,18],[addHouse,16],[bBarn,20],[bSilo,10],[bWindmill,10],[bWaterTower,6],[bShed,4],[addWell,7]]);
-        const e=f===bBarn?8:f===bFarmhouse||f===bFarmhouse2?6.7:f===addHouse?5:f===addWell?1.4:3.5,p=spot(e+1,e+2);if(p&&clear(p.x,p.z,e))f(p.x,p.z,r0);}
+      else if(fr<.7){const f=pickW([[bFarmhouse,18],[bFarmhouse2,18],[addHouse,10],[subOrHouse,14],[bBarn,20],[bSilo,10],[bWindmill,10],[bWaterTower,6],[bShed,4],[addWell,7]]);
+        const e=f===bBarn?8:f===bFarmhouse||f===bFarmhouse2||f===subOrHouse?6.7:f===addHouse?5:f===addWell?1.4:3.5,p=spot(e+1,e+2);if(p&&clear(p.x,p.z,e))f(p.x,p.z,r0);}
       for(let i=big?0:randi(4,8);i>0;i--){const p=spot(1.2,2);if(p)addTree(p.x,p.z,rand(.8,1.45),RNG()<.4);}
       for(let i=big?0:randi(2,4);i>0;i--){const p=spot(1.6,2);if(p)addRock(p.x,p.z,rand(.6,1.5));}
       for(let i=randi(0,2);i>0;i--){const p=spot(.6,2);if(p)addHerb(p.x,p.z);}
@@ -2076,7 +2156,7 @@ function chunkLoot(ch){
   for(let i=0;i<n;i++){
     let p=null;
     let hk=null;
-    if(ch.houses.length&&Math.random()<.7){const h=pick(ch.houses);hk=h.kind||'house';p=l2w(h.x,h.z,h.rot,rand(-(h.hw||4)+1.5,(h.hw||4)-1.5),rand(-(h.hd||4)+1.5,(h.hd||4)-1.5));if(blockedSpot(p.x,p.z,.6))p=null;
+    if(ch.houses.length&&Math.random()<.7){const h=pick(ch.houses);hk=h.kind||'house';p=h.solid?l2w(h.x,h.z,h.rot,rand(-h.hw+1.5,h.hw-1.5),h.hd+rand(1.6,3.2)):l2w(h.x,h.z,h.rot,rand(-(h.hw||4)+1.5,(h.hw||4)-1.5),rand(-(h.hd||4)+1.5,(h.hd||4)-1.5));if(blockedSpot(p.x,p.z,.6))p=null;
       if(p&&h.stair){const [lx,lz]=bLocal(h,p.x,p.z),st=h.stair;if(lx>st.x0-.8&&lx<st.x1+.8&&lz>st.z0-1.2&&lz<st.z1+1.4)p=null;}}
     else if(ch.cars.length&&Math.random()<.5){hk='car';const c=pick(ch.cars);const a=rand(0,6.28);p={x:c.x+Math.cos(a)*3,z:c.z+Math.sin(a)*3};if(blockedSpot(p.x,p.z,.8))p=null;}
     if(!p){for(let k=0;k<20&&!p;k++){const x=ch.cx*CH+rand(3,CH-3),z=ch.cz*CH+rand(3,CH-3);if(!blockedSpot(x,z,1))p={x,z};}}
