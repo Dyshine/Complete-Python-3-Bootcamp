@@ -6,7 +6,71 @@ const AN={
   rabbit:{name:'Rabbit',hp:8,run:8.5,walk:1.3,r:.28,flee:10,meat:1,hide:0,xp:8,h:.7},
   wolf:{name:'Wolf',hp:65,run:8.3,walk:2.1,r:.5,meat:1,hide:2,xp:32,dmg:10,aggro:24,h:1.35},
   crow:{name:'Crow',hp:3,run:7,walk:.5,r:.18,flee:11,meat:0,hide:0,xp:2,h:.45},
+  fox:{name:'Red fox',hp:18,run:9.2,walk:1.4,r:.35,flee:16,meat:1,hide:1,xp:14,h:.75},
 };
+/* ---- animated models (CC0): Quaternius' wolf, bird (as the crow), red fox, and his horse rebuilt as a white-tailed deer;
+   Čestmír Dammer's rabbit. Coats are painted into vertex colours from each model's own shape (dark back, pale belly, dark
+   legs and hooves). Until they load, or if they fail, the drawn animals stand in. ---- */
+// file, height in metres, turn so the head faces +z, coat [top, base, belly, legs, hooves], walk/run speeds the clips were made for
+const ANM_FILES={
+  wolf:['models/animals/wolf.gltf.json',.98,-Math.PI/2,['#3e3c3a','#77736e','#cfcac0','#4a4744','#26241f'],1.6,1.6],
+  deer:['models/animals/deer.gltf.json',1.8,0,['#5e3a20','#9a6a3e','#ece2cc','#7a5434','#1c1410'],1.5,9],
+  fox:['models/animals/fox.gltf.json',.62,Math.PI,['#a8461c','#d0662a','#f2e8da','#2a1a12','#1a1210'],1.4,8],
+  crow:['models/animals/crow.gltf.json',.34,0,['#0c0d10','#17181e','#24252c','#2a2a2e','#3a3a3a'],1,1],
+  rabbit:['models/animals/rabbit.gltf.json',.42,0,null,1.3,8],
+};
+const ANM={};
+function paintCoat(o,pal){
+  const g=o.geometry,P=g.attributes.position,N=g.attributes.normal;g.computeBoundingBox();const bb=g.boundingBox,h=(bb.max.y-bb.min.y)||1;
+  const C=pal.map(c=>new THREE.Color(c)),col=new Float32Array(P.count*3),c=new THREE.Color();
+  for(let i=0;i<P.count;i++){const t=(P.getY(i)-bb.min.y)/h,ny=N?N.getY(i):0;
+    if(t<.05)c.copy(C[4]);else if(t<.38)c.copy(C[3]).lerp(C[1],sstep(.25,.38,t));
+    else if(ny<-.35)c.copy(C[2]);else c.copy(C[1]).lerp(C[0],sstep(.55,.95,t)*.85).lerp(C[2],clamp(-ny,0,1)*.5);
+    const n=.92+.16*Math.abs(Math.sin(P.getX(i)*.07+P.getZ(i)*.05));col[i*3]=c.r*n;col[i*3+1]=c.g*n;col[i*3+2]=c.b*n;}
+  g.setAttribute('color',new THREE.BufferAttribute(col,3));}
+if(THREE.GLTFLoader&&THREE.SkeletonUtils){const L=new THREE.GLTFLoader();
+  for(const [k,[url,h,ry,pal,wv,rv]] of Object.entries(ANM_FILES))L.load(url,g=>{try{
+    const root=g.scene,drop=[];root.traverse(o=>{if(o.isLight||o.isCamera||(o.isMesh&&!o.isSkinnedMesh))drop.push(o);});for(const o of drop)o.parent.remove(o);
+    const grad=toonGradient();
+    root.traverse(o=>{if(!o.isSkinnedMesh)return;const old=Array.isArray(o.material)?o.material[0]:o.material;
+      if(pal)paintCoat(o,pal);if(old&&old.map){old.map.flipY=true;old.map.needsUpdate=true;}
+      o.material=new THREE.MeshToonMaterial({map:pal?null:old&&old.map||null,vertexColors:!!pal,gradientMap:grad,skinning:true});o.castShadow=true;o.frustumCulled=false;});
+    root.updateMatrixWorld(true);const b=new THREE.Box3().setFromObject(root),s=h/((b.max.y-b.min.y)||1),c=b.getCenter(new V3());
+    const clips={};for(const a of g.animations)clips[a.name]=a;
+    ANM[k]={root,s,ry,offY:-b.min.y*s,offX:-c.x*s,offZ:-c.z*s,clips,wv,rv};
+  }catch(e){console.warn('Animal model '+k+' failed; keeping the drawn one.',e);}},undefined,()=>{});}
+// white-tailed buck antlers on the deer's head bone, in metres (undoing the model's scale)
+function antlers(bone,s){const g=new THREE.Group(),m=FLAT(0xd8ccb0);g.scale.setScalar(1/s);
+  for(const sd of [-1,1]){const beam=mk(CYL(.022,.034,.42,5),m,sd*.1,.2,.02);beam.rotation.z=-sd*.5;beam.rotation.x=.35;g.add(beam);
+    for(let i=0;i<3;i++){const t=mk(CYL(.012,.02,.16,4),m,sd*(.16+i*.04),.3+i*.07,.06+i*.05);t.rotation.x=-.2;g.add(t);}}
+  bone.add(g);}
+function makeAnimalGLB(type){
+  const T=ANM[type];if(!T)return null;
+  const g=new THREE.Group(),inst=THREE.SkeletonUtils.clone(T.root);
+  const piv=new THREE.Group();piv.rotation.y=T.ry;piv.add(inst);inst.scale.setScalar(T.s);
+  // centre the body on the group's origin in the turned frame
+  const o=new V3(T.offX,T.offY,T.offZ);inst.position.copy(o);g.add(piv);
+  if(type==='deer'){inst.scale.set(T.s*.82,T.s,T.s*.95);let head=null;inst.traverse(b=>{if(b.isBone&&b.name==='Head')head=b;});if(head&&Math.random()<.5)antlers(head,T.s);}
+  const mats=[];inst.traverse(m=>{if(m.isSkinnedMesh){m.material=m.material.clone();m.material.emissive=new THREE.Color(0);mats.push(m.material);}});
+  if(GFX==='high')inst.traverse(m=>{if(!m.isSkinnedMesh||m.userData.ol)return;const ol=new THREE.SkinnedMesh(m.geometry,zOutlineMat(true,(.012/T.s).toFixed(4)));ol.userData.ol=1;ol.bind(m.skeleton,m.bindMatrix);ol.bindMode=m.bindMode;ol.frustumCulled=false;m.parent.add(ol);});
+  const mixer=new THREE.AnimationMixer(inst),acts={};
+  for(const n of ['idle','walk','run','fly','death'])if(T.clips[n]){const a=mixer.clipAction(T.clips[n]);acts[n]=a;if(n==='death'){a.setLoop(THREE.LoopOnce,1);a.clampWhenFinished=true;}}
+  const start=acts.idle||acts.walk||acts.run||acts.fly;if(start){start.play();start.time=Math.random()*start.getClip().duration;}
+  return{g,legs:[],wings:[],mixer,acts,cur:start,mats,glb:true,T};
+}
+// pick the clip for what the animal is doing and keep its feet in step with how fast it moves
+function animalAnim(a,moving,speed,dt){
+  const A=a.acts,T=a.T;let want=null,ts=1;
+  if(a.dead&&A.death)want=A.death;
+  else if(a.type==='crow'){want=A.fly;ts=a.state==='fly'?1.4:0;}
+  else if(moving===2){want=A.run||A.walk;ts=A.run?speed/T.rv:speed/T.wv;}
+  else if(moving){want=A.walk||A.run;ts=A.walk?speed/T.wv:speed/T.rv;}
+  else{want=A.idle||A.walk||A.run;ts=A.idle?1:0;}
+  if(want&&want!==a.cur){want.reset();want.play();if(a.cur)a.cur.crossFadeTo(want,.18,false);a.cur=want;}
+  if(want&&want!==A.death)want.timeScale=clamp(ts,0,2.5);
+  a.mixer.update(dt);
+  const fl=a.flash>0?.7:0;for(const m of a.mats)m.emissive.setRGB(fl,fl*.15,fl*.1);
+}
 const animals=[];let packN=0,wolfWarned=false,butcherTip=false;
 // painted coats: hair strokes over a back-to-belly gradient, plus face sprites with eyes and nose on the head's front
 function coat(key,top,base,belly,o){o=o||{};return sprMat('coat'+key,128,128,(g,w,h,r)=>{const gr=g.createLinearGradient(0,0,0,h);gr.addColorStop(0,top);gr.addColorStop(.55,base);gr.addColorStop(1,belly);g.fillStyle=gr;g.fillRect(0,0,w,h);
@@ -20,12 +84,14 @@ function face(key,base,eye,nose){return sprMat('face'+key,64,64,(g,w,h,r)=>{g.fi
   g.fillStyle=nose;g.beginPath();g.ellipse(w/2,h*.78,w*.16,h*.1,0,0,6.28);g.fill();g.strokeStyle=INKC;g.lineWidth=4;g.strokeRect(0,0,w,h);});}
 const COATS={};
 function animalMats(type){if(COATS[type])return COATS[type];let c;
+  if(type==='fox')return animalMats('wolf');
   if(type==='deer'){const s=coat('deer','#6a4226','#9a6a3e','#e8dcc4'),t=coat('deerT','#5a3820','#7a5030','#8a5e38'),f=face('deer','#8a5e38','#2a1a10','#1a1410');c={body:[s,s,t,coat('deerB','#e8dcc4','#efe6d6','#f4ecdc'),s,s],head:[s,s,t,s,f,s],leg:coat('deerL','#5a3a22','#6a4428','#3a2618')};}
   else if(type==='rabbit'){const s=coat('rab','#6a5a48','#9a8a72','#e8e0d0',{spots:0}),f=face('rab','#8a7a66','#3a2a1a','#d89a9a');c={body:[s,s,coat('rabT','#5a4a3a','#7a6a56','#8a7a66'),s,s,s],head:[s,s,s,s,f,s]};}
   else if(type==='wolf'){const s=coat('wolf','#4a4846','#7a7874','#c8c4bc',{saddle:'rgba(30,28,26,.6)'}),t=coat('wolfT','#2e2c2a','#4a4846','#5a5854'),f=face('wolf','#6a6864','#e8b830','#141210');c={body:[s,s,t,coat('wolfB','#c8c4bc','#d8d4cc','#e0dcd4'),s,s],head:[s,s,t,s,f,s],leg:coat('wolfL','#3a3836','#5a5854','#2a2826')};}
   else{const s=coat('crow','#0e0f12','#17181d','#22232a',{feather:true});c={body:[s,s,s,s,s,s],head:[s,s,s,s,face('crow','#17181d','#c8a040','#3a3a3a'),s]};}
   return COATS[type]=c;}
 function makeAnimal(type){
+  const gm=makeAnimalGLB(type);if(gm)return gm;
   const g=new THREE.Group(),legs=[],wings=[],AM=animalMats(type);
   const leg=(x,y,z,h,w,m)=>{const p=new THREE.Group();p.position.set(x,y,z);p.add(mk(BOX(w,h,w),m,0,-h/2,0));g.add(p);legs.push(p);};
   if(type==='deer'){const c=AM.body[0],dk=AM.leg,wh=M(0xeee6d6);
@@ -36,7 +102,7 @@ function makeAnimal(type){
     for(const [x,z] of [[.17,.45],[-.17,.45],[.17,-.45],[-.17,-.45]])leg(x,.82,z,.82,.1,dk);
   }else if(type==='rabbit'){const c=AM.body[0],wh=M(0xeee6d6);
     g.add(mki(BOX(.26,.24,.42),AM.body,0,.2,0,.03));g.add(mki(BOX(.18,.18,.2),AM.head,0,.34,.22,.02));g.add(mk(BOX(.05,.22,.04),c,.05,.52,.2));g.add(mk(BOX(.05,.22,.04),c,-.05,.52,.2));g.add(mk(BOX(.1,.1,.06),wh,0,.25,-.23));
-  }else if(type==='wolf'){const c=AM.body[0],dk=AM.leg;
+  }else if(type==='wolf'||type==='fox'){const c=AM.body[0],dk=AM.leg;
     g.add(mki(BOX(.42,.44,1.05),AM.body,0,.8,0,.04));g.add(mki(BOX(.3,.28,.36),AM.head,0,1.02,.66,.03));g.add(mk(BOX(.16,.14,.26),dk,0,.95,.9));
     g.add(mk(BOX(.08,.15,.05),dk,.1,1.2,.58));g.add(mk(BOX(.08,.15,.05),dk,-.1,1.2,.58));const tl=mk(BOX(.1,.1,.55),c,0,.84,-.72);tl.rotation.x=.55;g.add(tl);
     g.add(mk(BOX(.05,.04,.02),BASIC(0xffd23f),.08,1.06,.85,false));g.add(mk(BOX(.05,.04,.02),BASIC(0xffd23f),-.08,1.06,.85,false));
@@ -45,6 +111,7 @@ function makeAnimal(type){
     g.add(mk(BOX(.14,.12,.26),c,0,.14,0));g.add(mk(BOX(.1,.1,.1),AM.head,0,.22,.15));g.add(mk(BOX(.03,.03,.08),M(0x3a3a3a),0,.21,.23));
     for(const s of [-1,1]){const p=new THREE.Group();p.position.set(s*.07,.17,0);p.add(mk(BOX(.3,.02,.16),c,s*.15,0,0));g.add(p);wings.push(p);}
   }
+  if(type==='fox')g.scale.setScalar(.6);
   return{g,legs,wings};
 }
 function spawnAnimal(type,x,z,pack){
@@ -60,11 +127,11 @@ function spawnAnimals(){
   for(let k=0;k<8;k++){const ang=rand(0,6.28),r=rand(62,112),x=player.x+Math.cos(ang)*r,z=player.z+Math.sin(ang)*r;
     if(blockedSpot(x,z,1.4))continue;
     const b=bioC(Math.floor(x/CH),Math.floor(z/CH));
-    const w=b==='forest'?{deer:4,rabbit:2,wolf:night?4.5:1.4,crow:1.2}:b==='town'?{crow:5,rabbit:1.5,wolf:night?2.4:.6,deer:.4}:{rabbit:3.5,deer:3,crow:2.6,wolf:night?2.4:.6};
+    const w=b==='forest'?{deer:4,rabbit:2,fox:1.2,wolf:night?4.5:1.4,crow:1.2}:b==='town'?{crow:5,rabbit:1.5,fox:.6,wolf:night?2.4:.6,deer:.4}:{rabbit:3.5,deer:3,fox:1.4,crow:2.6,wolf:night?2.4:.6};
     if(S.season===3){w.deer*=.5;w.rabbit*=.6;w.wolf*=1.7;w.crow*=.6;}else if(S.season===0){w.deer*=1.25;w.rabbit*=1.3;}else if(S.season===2)w.crow*=1.5;
     if(packs.size>=(night?3:2)||(S.wave===0&&!night&&RPG.lv<2))w.wolf=0;
     let s=0;for(const t in w)s+=w[t];let rr=Math.random()*s,t='deer';for(const q in w){rr-=w[q];if(rr<=0){t=q;break;}}
-    const cnt=t==='deer'?randi(2,4):t==='rabbit'?randi(1,3):t==='wolf'?randi(2,4):randi(5,8),pack={id:++packN,howled:false,flown:false};
+    const cnt=t==='deer'?randi(2,4):t==='fox'?randi(1,2):t==='rabbit'?randi(1,3):t==='wolf'?randi(2,4):randi(5,8),pack={id:++packN,howled:false,flown:false};
     for(let i=0;i<cnt;i++){const ax=x+rand(-3,3),az=z+rand(-3,3);if(depthAt(ax,az)>-.15||blockedSpot(ax,az,.6))continue;spawnAnimal(t,ax,az,pack);}
     return;}
 }
@@ -116,13 +183,13 @@ function updateAnimals(dt){
   const px=player.x,pz=player.z,night=S.phase==='night';
   for(let i=animals.length-1;i>=0;i--){const a=animals[i],d0=Math.hypot(a.x-px,a.z-pz);
     if(d0>170){removeAnimal(i);continue;}
-    if(a.dead){a.deadT+=dt;const k=Math.min(1,a.deadT/.45);a.g.rotation.z=k*1.45;a.g.position.y=-k*.15-(a.deadT>60?(a.deadT-60)*.1:0);
+    if(a.dead){a.deadT+=dt;const k=Math.min(1,a.deadT/.45);if(a.mixer)animalAnim(a,0,0,dt);if(!(a.mixer&&a.acts.death))a.g.rotation.z=k*1.45;a.g.position.y=-k*.15-(a.deadT>60?(a.deadT-60)*.1:0);
       if(a.deadT>75||(a.done&&a.deadT>44)){removeAnimal(i);}continue;}
     a.flash-=dt;a.atkCd-=dt;let vx=0,vz=0,moving=0;
     if(a.type==='crow'){
       if(a.state==='fly'){a.t-=dt;a.vy=Math.max(1,a.vy-dt*1.2);a.y+=a.vy*dt;a.x+=a.vx*dt;a.z+=a.vz*dt;for(const w of a.wings)w.rotation.z=Math.sin(performance.now()/45+a.ph)*.9*(w.position.x>0?1:-1);
         a.yaw=Math.atan2(a.vx,a.vz);if(a.t<=0){removeAnimal(i);continue;}}
-      else{a.ph+=dt*6;a.g.children[1].position.y=.22-Math.max(0,Math.sin(a.ph))*.06;
+      else{a.ph+=dt*6;if(!a.glb)a.g.children[1].position.y=.22-Math.max(0,Math.sin(a.ph))*.06;
         if(player.alive&&d0<a.d.flee*(player.crouch?.45:1)*(player.sprinting?1.4:1))crowFly(a);
         a.t-=dt;if(a.t<=0){a.t=rand(1,3);a.tx=a.x+rand(-1.5,1.5);a.tz=a.z+rand(-1.5,1.5);}
         const dx=a.tx-a.x,dz=a.tz-a.z,l=Math.hypot(dx,dz);if(l>.2){vx=dx/l*a.d.walk;vz=dz/l*a.d.walk;moving=1;}}
@@ -151,7 +218,8 @@ function updateAnimals(dt){
     for(let k=0;k<a.legs.length;k++)a.legs[k].rotation.x=sw*amp*(k===0||k===3?1:-1);
     let bob=0;if(a.type==='rabbit'&&moving)bob=Math.abs(Math.sin(a.ph*.6))*(moving===2?.35:.12);
     a.lunge=Math.max(0,(a.lunge||0)-dt);
-    a.g.position.set(a.x,a.y+bob,a.z);a.g.rotation.y=a.yaw;a.g.rotation.x=a.type!=='crow'&&a.state==='graze'&&a.type==='deer'?.12:(a.lunge>0?-.25:0);
+    if(a.mixer){bob=0;animalAnim(a,moving,Math.hypot(vx,vz),dt);}
+    a.g.position.set(a.x,a.y+bob,a.z);a.g.rotation.y=a.yaw;a.g.rotation.x=!a.glb&&a.state==='graze'&&a.type==='deer'?.12:(a.lunge>0?-.25:0);
   }
 }
 

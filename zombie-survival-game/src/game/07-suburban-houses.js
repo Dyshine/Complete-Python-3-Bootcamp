@@ -176,7 +176,7 @@ function bBarn(x,z,rot){
   const K=Kit(x,z,rot),hw=6,hd=8,h=4,R=RNG;
   const red=CTM('siding',pick([0xc0473a,0xa8382c,0x8a4a3a,0xb85a3a]),2),wt=FLAT(0xf0e8d8);
   kBox(K,0,ITM('wood',0x5b4a39,0x8a7a62,3),hw*2,.12,hd*2,0,.06,0);
-  kWall(K,'x',hd,-hw,hw,h,red,[[0,4.4,'g']],{gTop:3.6});
+  kWall(K,'x',hd,-hw,hw,h,red,[[0,4.4,'g']],{gTop:3.6,noRoll:true});
   kWall(K,'x',-hd,-hw,hw,h,red,[[0,1.4,'d']]);
   for(const sx of [-hw,hw])kWall(K,'z',sx,-hd+.15,hd-.15,h,red,[[-4,1,'w'],[0,1,R()<.5?'b':'w'],[4,1,'w']],{sill:2,top:3.1,trim:wt});
   for(const [cx,cz] of [[-hw,hd],[hw,hd],[-hw,-hd],[hw,-hd]])kBox(K,0,wt,.4,h,.4,cx,h/2,cz);
@@ -362,10 +362,13 @@ function townW(x,z){const cx=Math.floor(x/CH),cz=Math.floor(z/CH);if(bioC(cx,cz)
 function terrainH(x,z){
   const hw=1-sstep(6,18,Math.min(Math.abs(x),Math.abs(z))),bm=1-sstep(BR+8,BR+30,Math.max(Math.abs(x),Math.abs(z))),keep=(1-hw)*(1-bm);
   if(keep<=0)return 0;
-  const amp=2.2+6.5*sstep(.47,.33,vnoise(x/CH*.3,z/CH*.3));
+  const amp=3+9.5*sstep(.47,.33,vnoise(x/CH*.3,z/CH*.3));
   const n=vnoise(x*.011+5.3,z*.011-2.1)*.55+vnoise(x*.027-8.4,z*.027+3.7)*.3+vnoise(x*.07+1.9,z*.07-6.6)*.15;
-  let h=(n-.3)*amp*1.8;if(h<0)h*=.1;
-  h*=(1-townW(x,z))*(1-sstep(.6,.7,vnoise(x*.02+31.1,z*.02-7.7))); // towns and scattered clearings are level, so cabins and farms have room
+  // broad rolling swells under the hills, so even the farmland climbs and dips
+  const roll=Math.max(0,vnoise(x*.0045-17.3,z*.0045+8.8)-.36)*11;
+  let h=(n-.3)*amp*2.1+roll;if(h<0)h*=.1;
+  // scattered clearings settle onto the gentle swell (level enough for cabins and farms); towns sit flat on the plain
+  h=lerp(h,roll*.5,sstep(.5,.6,vnoise(x*.02+31.1,z*.02-7.7)))*(1-townW(x,z));
   const cm=sstep(36,72,Math.max(Math.abs(x),Math.abs(z))); // no water right next to the farmstead
   const lk=sstep(.21,.11,vnoise(x*.0065+51.2,z*.0065-33.7))*cm,rv=sstep(.03,.01,Math.abs(vnoise(x*.0042-71.3,z*.0042+19.9)-.5))*cm;
   return(h*(1-Math.max(lk,rv))-Math.max(lk*3.6,rv*2.6))*keep;

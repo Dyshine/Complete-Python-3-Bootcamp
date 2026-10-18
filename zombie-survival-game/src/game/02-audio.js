@@ -48,7 +48,7 @@ const Sound=(()=>{
   const T=()=>ctx.currentTime;
   // ---------- recorded samples: sounds/<name>_<n>.mp3, decoded once ----------
   const SMP={pistol:4,pistol_far:1,revolver:2,revolver_far:1,smg:4,smg_far:1,rifle:4,rifle_far:1,shotgun:3,shotgun_far:1,sniper:4,sniper_far:1,
-    reload_mag:1,reload_rifle:1,pump:1,shell:1};
+    reload_mag:1,reload_rifle:1,pump:1,shell:1,cheer:2,horn:1,boing:1,honk:1,ooo:1};
   const SB={},SLAST={};
   function loadSamples(){if(!window.fetch)return;
     for(const [k,n] of Object.entries(SMP))for(let i=1;i<=n;i++)
@@ -69,6 +69,24 @@ const Sound=(()=>{
     if(!sup&&INROOM<.5&&SB[n+'_far'])sample(o,n+'_far',v*G[2]*.16,rand(.11,.17),1);   // slap-back off the treeline outdoors
     if(n==='shotgun')sample(o,'pump',.55*v,.42,1)||(noise(o,.08,'bandpass',1400,3,.18*v,.5),noise(o,.1,'bandpass',900,3,.2*v,.68));
     if(n==='sniper')noise(o,.05,'bandpass',3400,4,.08*v,.6);
+    return true;}
+  // level up: the broadcast cuts to a stadium stinger, a different silly combination each time
+  function whistle(o,t0,blasts){for(const [s,d] of blasts){const os=ctx.createOscillator(),lfo=ctx.createOscillator(),lg=ctx.createGain(),g=ctx.createGain(),t=T()+t0+s;
+      os.type='sine';os.frequency.value=2850;lfo.frequency.value=31;lg.gain.value=220;lfo.connect(lg);lg.connect(os.frequency);
+      g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.16,t+.02);g.gain.setValueAtTime(.16,t+d-.04);g.gain.linearRampToValueAtTime(0,t+d);
+      os.connect(g);g.connect(o);os.start(t);lfo.start(t);os.stop(t+d+.05);lfo.stop(t+d+.05);}
+    noise(o,blasts[blasts.length-1][1]+blasts[blasts.length-1][0],'bandpass',2900,3,.03,t0);}
+  function buzzer(o,t0){const lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=1800;lp.connect(o);
+    for(const f of [118,121.5]){const os=ctx.createOscillator(),g=ctx.createGain(),t=T()+t0;os.type='square';os.frequency.value=f;g.gain.setValueAtTime(.09,t);g.gain.setValueAtTime(.09,t+.75);g.gain.linearRampToValueAtTime(0,t+.8);os.connect(g);g.connect(lp);os.start(t);os.stop(t+.85);}}
+  let lastFan=-1;
+  function fanfare(v){if(!SB.cheer)return false;const o=route({len:5,wet:.22});let k=Math.floor(Math.random()*5);if(k===lastFan)k=(k+1)%5;lastFan=k;
+    sample(o,'cheer',.7*v,k===2?.35:.15,1);
+    switch(k){
+      case 0:sample(o,'horn',.75*v,0,1);break;
+      case 1:sample(o,'honk',.8*v,0,1);sample(o,'honk',.8*v,.42,1.12);break;
+      case 2:whistle(o,0,[[0,.16],[.24,.5]]);sample(o,'boing',.7*v,.5,rand(.9,1.15));break;
+      case 3:sample(o,'ooo',.6*v,0,1);sample(o,'horn',.6*v,.9,1.06);break;
+      case 4:buzzer(o,0);sample(o,'boing',.7*v,.65,rand(1.1,1.3));break;}
     return true;}
   // reload by weapon class; t is the reload's length so the closing rack lands near its end
   function reloadSample(cls,t){const o=route({len:(t||1.6)+.5,wet:.05});
@@ -116,6 +134,7 @@ const Sound=(()=>{
     const pos=x!=null?{x,z}:null,O=(len,wet)=>route(Object.assign({len,wet},pos||{}));
     if(gunSample(n,v,pos,opt))return;
     if(n==='reload'&&opt&&opt.cls&&reloadSample(opt.cls,opt.t))return;
+    if(n==='level'&&fanfare(v))return;
     let o;
     switch(n){
       case 'pistol':o=O(1.4,.32);gun(o,{crack:[2600,.5*v],body:.11,bodyF:1500,bv:.55*v,thump:.12,thF:150,tv:.5*v,tail:.9,tailF:1400,tl:.16*v,mech:.06*v});break;

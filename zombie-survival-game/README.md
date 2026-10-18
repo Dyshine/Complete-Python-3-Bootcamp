@@ -66,6 +66,8 @@ list of per-tick updates. Add a new system's `update…(dt)` there; the tests us
 - Suburban houses: City Kit Suburban by Kenney (www.kenney.nl), CC0.
 - Farm homes: Family house collection by Miloslav "drummyfish" Číž, CC0. Hay shed: Old wood barn by carlosjorgereis, CC0.
 - Firearms: Ultimate Gun Pack by Quaternius, CC0.
+- Animals: wolf, bird, red fox and horse (as the deer) by Quaternius; rabbit by Čestmír Dammer. CC0.
+- Level-up crowd, horn, boing, honk and "ooo": see sounds/CREDITS.txt, all CC0.
 - Gunshots: The Free Firearm Sound Library (Ben Jaszczak et al.), CC0. Reloads: Gun Reload Sounds by SpringySpringo and
   Shotgun Reload Sound Effects by zer0_sol, CC0.
 - Trooper body: the three.js example *Soldier*, a Mixamo character.

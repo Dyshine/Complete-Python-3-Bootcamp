@@ -52,7 +52,15 @@ function updatePhase(dt){
     if(S.clock>=CYCLE)endNight();
   }
 }
+// what wanders in by day: mostly walkers, with crawlers from the start and the specials joining as the nights go by
+function roamerType(){const w=S.wave,s=D.spec,T=[['walker',60],['crawler',10],['runner',w>=1?10*s:3],['trooper',w>=2?6*s:0],['spitter',w>=2?5*s:0],['boomer',w>=3?4*s:0]];
+  let t=0;for(const [,p] of T)t+=p;let r=Math.random()*t;for(const [k,p] of T){r-=p;if(r<=0)return k;}return'walker';}
 function trickle(dt,cap){
-  S.daySpawnT-=dt;if(S.daySpawnT<=0){S.daySpawnT=rand(7,11);if(zombies.filter(z=>!z.dying).length<cap){const p=edgeSpawn();const z=spawnZombie(S.wave>=2&&Math.random()<.3*D.spec?'runner':'walker',p.x,p.z);z.aware=z.always=false;}}
+  // towns are busier
+  const town=bioC(Math.floor(player.x/CH),Math.floor(player.z/CH))==='town';if(town)cap=Math.round(cap*1.5);
+  S.daySpawnT-=dt;if(S.daySpawnT<=0){S.daySpawnT=rand(4,7);const alive=zombies.filter(z=>!z.dying).length;if(alive<cap){
+    // a straggler, or a little knot of them shuffling together
+    const p=edgeSpawn(),n=Math.min(cap-alive,Math.random()<.35?randi(2,4):1),t0=roamerType();
+    for(let i=0;i<n;i++){const x=p.x+rand(-2.5,2.5),zz=p.z+rand(-2.5,2.5);if(i&&blockedSpot(x,zz,.8))continue;const z=spawnZombie(i&&Math.random()<.6?t0:roamerType(),i?x:p.x,i?zz:p.z);z.aware=z.always=false;}}}
 }
 

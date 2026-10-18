@@ -13,3 +13,13 @@ reload_mag, reload_rifle, pump
 shell
   "Shotgun Reload Sound Effects" by zer0_sol
   https://opengameart.org/content/shotgun-reload-sound-effects
+
+Level-up stingers (cheer, horn, boing, honk, ooo):
+  cheer_1/2: "Applause in a large hall or church" by eXpl0it3r, mixed with "Crowd shouting/speaking ambience" by StarNinjas
+    https://opengameart.org/content/applause-in-a-large-hall-or-church
+    https://opengameart.org/content/crowd-shoutingspeaking-ambience
+  horn_1:  "Their coming (generic horn sound)" by StumpyStrust   https://opengameart.org/content/their-coming-generic-horn-sound
+  boing_1: "Boing" by Aeva                                      https://opengameart.org/content/boing
+  honk_1:  "Bicycle horn" by AntumDeluge                        https://opengameart.org/content/bicycle-horn
+  ooo_1:   "Oooooooooooooo" by Nocturnal_Vanguard               https://opengameart.org/content/oooooooooooooo
+  The referee whistle and the buzzer are synthesised in the game.

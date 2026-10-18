@@ -1,0 +1,9 @@
+All CC0 1.0 (public domain). Converted from FBX to glTF with three.js FBXLoader + GLTFExporter; clips renamed
+(idle, walk, run, fly, death). Coats are painted at load time in the game.
+
+wolf.gltf.json    Wolf from "Animal Pack Vol.2" by Quaternius          https://opengameart.org/content/animated-animales-low-poly
+crow.gltf.json    Bird from "Animals Pack" by Quaternius               https://opengameart.org/content/5-low-poly-animals
+fox.gltf.json     Red Fox from "Animals Pack" by Quaternius            https://opengameart.org/content/5-low-poly-animals
+deer.gltf.json    Horse from "Farm Animals" by Quaternius, reshaped in game as a white-tailed deer
+                                                                       https://opengameart.org/content/lowpoly-animated-farm-animal-pack
+rabbit.gltf.json  Rabbit by Čestmír Dammer (body mesh, texture at 512 px) https://opengameart.org/content/rabbit-0

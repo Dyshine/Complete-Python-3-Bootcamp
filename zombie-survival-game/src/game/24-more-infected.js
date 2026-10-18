@@ -19,6 +19,13 @@ const ZVAR={
   biker:{p:6,force:[.09,.09,.11],hat:'halfhelm'},
   lanky:{p:8,bones:{LeftArm:1.22,RightArm:1.22,LeftUpLeg:1.1,RightUpLeg:1.1},lift:.09},
   bloat:{p:7,force:[.46,.58,.3],bones:{Spine01:1.17,Head:.86,LeftArm:.88,RightArm:.88}},
+  farmer:{p:9,force:[.2,.3,.52],hat:'straw'},
+  hunter:{p:6,force:[.98,.42,.06],hat:'blaze'},
+  football:{p:5,force:[.62,.08,.08],hat:'gridiron',bones:{LeftShoulder:1.25,RightShoulder:1.25,Spine02:1.08}},
+  nurse:{p:6,force:[.86,.52,.62],hat:'mask'},
+  chef:{p:4,force:[.9,.9,.88],hat:'toque'},
+  trucker:{p:6,force:[.36,.3,.22],hat:'trucker'},
+  runt:{p:5,bones:{Spine01:.9,LeftUpLeg:.9,RightUpLeg:.9,Head:1.12},lift:-.08},
 };
 function pickVar(model){const L=Object.entries(ZVAR).filter(([k,v])=>!(v.not&&v.not.includes(model)));let s=0;for(const [,v] of L)s+=v.p;let r=Math.random()*s;for(const [k,v] of L){r-=v.p;if(r<=0)return k;}return'plain';}
 // a prop hung on a bone, built in metres whatever units the armature uses
@@ -29,6 +36,12 @@ const HATS={
   hood:g=>{const h=mki(new THREE.SphereGeometry(.17,12,9),M(0xe8cc2a),0,.12,0,.02);h.scale.set(1,1.2,1);g.add(h);g.add(mk(BOX(.13,.07,.03),M(0x2a2a2a),0,.11,.165,false));},
   mask:g=>{g.add(mki(BOX(.14,.09,.05),M(0x9fd4e6),0,.08,.15,.02));},
   firehelm:g=>{const m=M(0x8a1e14);g.add(mki(CYL(.14,.165,.12,12),m,0,.2,0,.02));g.add(mki(CYL(.23,.23,.025,14),m,0,.15,-.02,.02));g.add(mk(BOX(.06,.05,.01),M(0xe9c46a),0,.2,.166,false));},
+  straw:g=>{const m=M(0xd8b860);g.add(mki(CYL(.11,.13,.11,10),m,0,.21,0,.02));g.add(mki(CYL(.29,.29,.02,16),m,0,.16,0,.02));g.add(mk(CYL(.132,.132,.025,10),M(0x7a2e22),0,.175,0,false));},
+  blaze:g=>{const m=M(0xf05a10);g.add(mki(new THREE.SphereGeometry(.13,10,7,0,Math.PI*2,0,Math.PI*.5),m,0,.15,0,.02));g.add(mki(BOX(.2,.02,.11),m,0,.15,.14,.02));},
+  gridiron:g=>{const m=M(0x9a1414,{metalness:.3,roughness:.4});const h=mki(new THREE.SphereGeometry(.175,12,9),m,0,.12,0,.02);h.scale.set(1,1.08,1.12);g.add(h);
+    for(const y of [.03,.08])g.add(mk(BOX(.22,.018,.02),M(0xd8d8d0),0,y,.19,false));g.add(mk(BOX(.03,.2,.3),M(0xe8e0c8),0,.25,0,false));},
+  toque:g=>{const m=M(0xf2f0ea);g.add(mki(CYL(.12,.115,.16,10),m,0,.24,0,.02));const t=mki(new THREE.SphereGeometry(.14,10,8),m,0,.36,0,.02);t.scale.y=.6;g.add(t);},
+  trucker:g=>{g.add(mki(BOX(.2,.1,.21),M(0x2a4a7a),0,.19,0,.02));g.add(mki(BOX(.2,.02,.11),M(0x2a4a7a),0,.15,.15,.02));g.add(mk(BOX(.12,.06,.01),M(0xe8e0d0),0,.2,.106,false));},
   halfhelm:g=>{g.add(mki(new THREE.SphereGeometry(.165,12,8,0,Math.PI*2,0,Math.PI*.5),M(0x151515,{metalness:.4,roughness:.4}),0,.12,0,.02));},
 };
 function applyVariant(type,inst,gu,T){

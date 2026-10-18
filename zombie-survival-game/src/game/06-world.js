@@ -230,18 +230,20 @@ function addSwingDoor(px,pz,a0,len){
   const g=new THREE.Group();g.position.set(px,0,pz);g.rotation.y=-a0;
   g.add(mki(BOX(len,2.3,.12),doorM,len/2,1.15,0,.05));
   g.add(mk(BOX(.12,.12,.25),M(0xb89a4a,{metalness:.5}),len-.35,1.1,0,false));
-  track(g);const d={g,px,pz,a0,len,ang:rand(-.3,.3),angV:0,home:0};d.home=d.ang;sdoors.push(d);if(CUR)CUR.doors.push(d);return d;
+  track(g);const d={g,px,pz,a0,len,ang:RNG()<.25?rand(-.45,.45):0,angV:0,home:0};d.home=d.ang;sdoors.push(d);if(CUR)CUR.doors.push(d);return d;
 }
 function addHouse(x,z,rot){
   const g=new THREE.Group();g.position.set(x,0,z);g.rotation.y=rot;track(g);
   const wallM=TM('plaster',2,1,pick([0x8a7f6c,0x7d7466,0x8f7a62]),pick([0xffffff,0xf0e8dc,0xe4e8e0])),trim=TM('wood',2,1,0x4a3f33,0x8a7a68);
   const fl=mk(BOX(8,.2,8),TM('wood',3,3,0x5b4a39,0xa89880),0,.1,0);fl.castShadow=false;g.add(fl);
-  const pieces=[[0,-4,8,.3,2.8],[-4,0,.3,8,2.8],[4,-1.8,.3,4.4,2.8],[4,2.6,.3,2.8,1.1],[-2.6,4,2.8,.3,2.8],[2.9,4,2.2,.3,1.6]];
+  const pieces=[[0,-4,8,.3,2.8],[-4,0,.3,8,2.8],[4,-1.4,.3,5.2,2.8],[4,2.6,.3,2.8,1.1],[-2.6,4,2.8,.3,2.8],[2.9,4,2.2,.3,1.6]];
   for(const [lx,lz,w,d,h] of pieces){
     g.add(mki(BOX(w,h,d),wallM,lx,h/2,lz,.08));
     const len=Math.max(w,d),horiz=w>d,n=Math.ceil(len);
     for(let i=0;i<=n;i++){const t=-len/2+i*len/n;const p=l2w(x,z,rot,lx+(horiz?t:0),lz+(horiz?0:t));addOb({x:p.x,z:p.z,r:.55});}
   }
+  for(const [lx,lz,w,d,y0] of [[4,2.6,.3,2.8,1.1],[2.9,4,2.2,.3,1.6]]){g.add(mki(BOX(w,2.8-2.2,d),wallM,lx,2.5,lz,.08));
+    g.add(mk(BOX(w>d?w-.1:.08,2.2-y0,w>d?.08:d-.1),GLASS,lx,(y0+2.2)/2,lz));g.add(mk(BOX(w>d?w:.36,.1,w>d?.36:d),trim,lx,y0,lz));}
   g.add(mki(BOX(8.4,.25,.4),trim,0,2.9,-1.5,.05));
   const beam2=mki(BOX(.4,.25,6.5),trim,-1.2,2.75,.4,.05);beam2.rotation.z=.12;g.add(beam2);
   g.add(mki(BOX(1.6,.8,1),TM('wood',1,1,0x5a4430,0x9a8870),-2.2,.5,-2.6,.05));
@@ -344,8 +346,10 @@ function kWall(K,axis,fixed,a0,a1,h,mat,ops,o){
   // collision circles stop short of doorways so a person can actually fit through
   let cur=a0,inset=0;
   for(const [c,w,kind] of ops){const s0=c-w/2,s1=c+w/2,gap=kind==='d'||kind==='g';piece(cur,s0,0,h,mat);solid(cur+inset,s0-(gap?.56:0));inset=gap?.56:0;
-    if(kind==='d')piece(s0,s1,2.4,h,mat);
-    else if(kind==='g')piece(s0,s1,o.gTop||3.3,h,mat);
+    if(kind==='d'){piece(s0,s1,2.4,h,mat);if(!G&&!Y)(K.dops||(K.dops=[])).push([axis,fixed,s0,w]);}
+    else if(kind==='g'){const gt=o.gTop||3.3;piece(s0,s1,gt,h,mat);
+      // a roll-up door stuck a third of the way down
+      if(!o.noRoll){const down=gt*rand(.3,.4),rm=CTM('metalwall',pick([0xb8b4a8,0x8a8e88,0xa89a80]),1.2);piece(s0+.05,s1-.05,gt-down,gt,rm,.1,-out*.05);}}
     else{piece(s0,s1,0,sill,mat);piece(s0,s1,top,h,mat);
       const gm=kind==='s'?STAINED:win;piece(s0,s1,sill,top,gm,.08);
       if(kind==='b')solid(s0,s1);
@@ -371,8 +375,16 @@ function kGable(K,mat,endMat,w,d,y,rise,alongZ,oh){
 function kFlatRoof(K,mat,w,d,y,lip){kBox(K,1,mat,w,.25,d,0,y+.12,0);const L=lip||.6,pm=FLAT(0x5a5650);
   kBox(K,1,pm,w,L,.25,0,y+L/2,d/2-.12);kBox(K,1,pm,w,L,.25,0,y+L/2,-d/2+.12);kBox(K,1,pm,.25,L,d,w/2-.12,y+L/2,0);kBox(K,1,pm,.25,L,d,-w/2+.12,y+L/2,0);}
 // door that swings: hinge at local (x0, z) on a wall along local x
-function kDoor(K,x0,z,w){const p=l2w(K.x,K.z,K.rot,x0,z);addSwingDoor(p.x,p.z,-K.rot,w);}
+function kDoor(K,x0,z,w){const p=l2w(K.x,K.z,K.rot,x0,z);addSwingDoor(p.x,p.z,-K.rot,w);(K.kd||(K.kd=[])).push([x0+w/2,z]);}
+// every ground-floor doorway gets a door unless the builder already hung one there
+function kAutoDoors(K){if(!K.dops)return;
+  for(const [axis,fixed,s0,w] of K.dops){const cx=axis==='x'?s0+w/2:fixed,cz=axis==='x'?fixed:s0+w/2;
+    if(K.kd&&K.kd.some(([x,z])=>Math.abs(x-cx)<.6&&Math.abs(z-cz)<.6))continue;
+    const len=Math.min(w-.08,1.6);
+    if(axis==='x'){const p=l2w(K.x,K.z,K.rot,s0+.04,fixed);addSwingDoor(p.x,p.z,-K.rot,len);}
+    else{const p=l2w(K.x,K.z,K.rot,fixed,s0+.04),c=Math.cos(K.rot),s=Math.sin(K.rot);addSwingDoor(p.x,p.z,Math.atan2(c,s),len);}}}
 function kFinish(K,hw,hd,h,kind,loot){
+  kAutoDoors(K);
   const baseG=kBake(K,0);const roof=K.r.size?kBake(K,1):null,upper=K.u&&K.u.size?kBake(K,2):null;
   if(K.wins)kWins(K,baseG,upper);
   for(const [lx,lz,r,lvl,h,wi] of K.ob){const p=l2w(K.x,K.z,K.rot,lx,lz),ob={x:p.x,z:p.z,r:r||.55};if(lvl!=null)ob.lvl=lvl;if(h!=null&&lvl==null)ob.h=h;addOb(ob);if(wi!=null&&K.wins){ob.win=K.wins[wi];K.wins[wi].obs.push(ob);}}
