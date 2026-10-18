@@ -12,8 +12,8 @@ const RUR={ready:false,types:[],skins:[],shed:null,scale:3.6};
     geo.setIndex(new THREE.BufferAttribute(b64(idx,Uint16Array),1));geo=geo.toNonIndexed();geo.computeVertexNormals();geo.computeBoundingBox();return geo;};
   const mat=(map,col)=>new THREE.MeshToonMaterial({map,color:col||0xe2ddd2,gradientMap:TOON_GRAD});
   fetch('models/rural/houses.json').then(r=>r.ok?r.json():Promise.reject(r.status)).then(d=>{
-    RUR.types=d.types.map(t=>({name:t.name,geo:geoOf(t.pos,t.uv,t.idx)}));
-    RUR.skins=['a','b','c'].map(s=>mat(tex(`models/rural/skin_${s}.jpg`)));RUR.ready=true;}).catch(()=>{});
+    RUR.types=d.types.map(t=>{const geo=geoOf(t.pos,t.uv,t.idx);return{name:t.name,geo,glass:shellPanes(geo,(u,v)=>u>=.74&&v>=.5,1.6/RUR.scale)};});
+    RUR.skins=['a','b','c'].map(s=>rurWinMat(mat(tex(`models/rural/skin_${s}.jpg`)),s));RUR.ready=true;}).catch(()=>{});
   fetch('models/rural/shed.json').then(r=>r.ok?r.json():Promise.reject(r.status)).then(d=>{
     const W=tex('models/rural/shed_wood.jpg'),St=tex('models/rural/shed_straw.jpg');for(const t of [W,St])t.wrapS=t.wrapT=THREE.RepeatWrapping;
     RUR.shed=d.mats.map(m=>({geo:geoOf(m.pos,m.uv,m.idx,4096),mat:mat(m.tex==='straw'?St:W,m.tex==='straw'?0xd0c49a:0x9c9282)}));}).catch(()=>{});}
@@ -25,10 +25,10 @@ function addRural(x,z,rot,type,skin){
   if(!RUR.ready)return false;const ti=type!=null?type:Math.floor(RNG()*4),T=RUR.types[ti],si=skin!=null?skin:Math.floor(RNG()*3),s=RUR.scale;
   const g=new THREE.Group();g.position.set(x,0,z);g.rotation.y=rot;
   const m=new THREE.Mesh(T.geo,RUR.skins[si]);m.scale.setScalar(s);m.castShadow=true;m.receiveShadow=true;g.add(m);
-  if(GFX==='high'){const o=new THREE.Mesh(T.geo,SUB_OL);o.scale.copy(m.scale);g.add(o);}
+  if(GFX==='high'){const o=new THREE.Mesh(T.glass.hull,SUB_OL);o.scale.copy(m.scale);g.add(o);}
   track(g);
   const bb=T.geo.boundingBox,hw=(bb.max.x-bb.min.x)/2*s,hd=(bb.max.z-bb.min.z)/2*s;
-  rurSolid(x,z,rot,hw,hd);
+  rurSolid(x,z,rot,hw,hd);shellGlass(g,m,x,z,rot,T.glass,hw,hd);
   const c=Math.abs(Math.cos(rot)),sn=Math.abs(Math.sin(rot)),rec={x,z,rot,hw,hd,h:(bb.max.y-bb.min.y)*s,kind:'house',solid:true,style:'rural'+si,type:T.name,ex:c*hw+sn*hd,ez:sn*hw+c*hd};
   houses.push(rec);if(CUR)CUR.houses.push(rec);
   if(RNG()<.6){const p=l2w(x,z,rot,rand(-hw+2,hw-2),hd+rand(2,4));addProp(pick(['carton','crate','tire','can']),p.x,p.z);}

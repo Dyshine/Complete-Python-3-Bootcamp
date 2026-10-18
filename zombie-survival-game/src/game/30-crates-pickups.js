@@ -88,7 +88,7 @@ function kWins(K,baseG,upperG){const groups=new Map();
   for(const W of K.wins){const p=l2w(K.x,K.z,K.rot,W.lc[0],W.lc[1]);W.x=p.x;W.z=p.z;W.key=cutKey(p.x,p.z)+'|'+Math.round(W.Y*2);W.ch=CUR;W.pre=!!(CUR&&CUR.wb&&CUR.wb.has(W.key));}}
 function breakWin(W,silent){if(!W||W.broken||!W.geo)return;W.broken=true;
   const a=W.geo.attributes.position.array,s=W.start*3,e=(W.start+W.count)*3,cx=a[s],cy=a[s+1],cz=a[s+2];for(let i=s;i<e;i+=3){a[i]=cx;a[i+1]=cy;a[i+2]=cz;}W.geo.attributes.position.needsUpdate=true;
-  for(const ob of W.obs)if(ob.lvl===undefined)ob.h=Math.max(.3,W.sill); // the empty frame: jump or climb through
+  if(!W.shell)for(const ob of W.obs)if(ob.lvl===undefined)ob.h=Math.max(.3,W.sill); // the empty frame: jump or climb through (kit houses stay shut)
   if(silent)return;
   const y=(W.sill+W.top)/2;burst(W.x,y,W.z,12,'glass',4);Sound.play('crash',.5,W.x,W.z);Sound.play('clink',.8,W.x,W.z);makeNoise(W.x,W.z,14);
   if(W.ch){let mem=chunkMem.get(W.ch.key);if(!mem)chunkMem.set(W.ch.key,mem={day:-1,saved:[],cut:W.ch.cut||new Set()});(mem.wb||(mem.wb=new Set())).add(W.key);}}

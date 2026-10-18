@@ -250,7 +250,7 @@ function addHouse(x,z,rot){
     for(let i=0;i<=n;i++){const t=-len/2+i*len/n;const p=l2w(x,z,rot,lx+(horiz?t:0),lz+(horiz?0:t));addOb({x:p.x,z:p.z,r:.55});}
   }
   for(const [lx,lz,w,d,y0] of [[4,2.6,.3,2.8,1.1],[2.9,4,2.2,.3,1.6]]){g.add(mki(BOX(w,2.8-2.2,d),wallM,lx,2.5,lz,.08));
-    g.add(mk(BOX(w>d?w-.1:.08,2.2-y0,w>d?.08:d-.1),GLASS,lx,(y0+2.2)/2,lz));g.add(mk(BOX(w>d?w:.36,.1,w>d?.36:d),trim,lx,y0,lz));}
+    g.add(mk(BOX(w>d?w-.1:.08,2.2-y0,w>d?.08:d-.1),GLASS,lx,(y0+2.2)/2,lz,false));g.add(mk(BOX(w>d?w:.36,.1,w>d?.36:d),trim,lx,y0,lz));}
   g.add(mki(BOX(8.4,.25,.4),trim,0,2.9,-1.5,.05));
   const beam2=mki(BOX(.4,.25,6.5),trim,-1.2,2.75,.4,.05);beam2.rotation.z=.12;g.add(beam2);
   g.add(mki(BOX(1.6,.8,1),TM('wood',1,1,0x5a4430,0x9a8870),-2.2,.5,-2.6,.05));
@@ -294,8 +294,11 @@ function btex(name){if(BTEXC[name])return BTEXC[name];
     g.fillStyle='#5a3e16';g.fillRect(0,80,256,5);g.fillRect(0,170,256,5);}
   else if(name==='stained'){g.fillStyle=ink;g.fillRect(0,0,256,256);const cols=['#b8322a','#2f5fa8','#d9a520','#3f8f4a','#7a3f9a'];
     for(let y=0;y<256;y+=32)for(let x=0;x<256;x+=32){g.fillStyle=cols[(R()*cols.length)|0];g.fillRect(x+3,y+3,26,26);}}
-  else if(name==='glass'){g.fillStyle='#22313a';g.fillRect(0,0,256,256);g.fillStyle='rgba(190,220,230,.35)';
-    g.beginPath();g.moveTo(40,256);g.lineTo(110,256);g.lineTo(256,110);g.lineTo(256,40);g.fill();g.fillStyle='rgba(190,220,230,.2)';g.beginPath();g.moveTo(140,256);g.lineTo(160,256);g.lineTo(256,160);g.lineTo(256,140);g.fill();}
+  else if(name==='glass'){ // see-through: a faint tint, two highlight streaks, grime settled along the bottom
+    g.fillStyle='rgba(150,182,192,.2)';g.fillRect(0,0,256,256);g.fillStyle='rgba(225,242,248,.38)';
+    g.beginPath();g.moveTo(40,256);g.lineTo(110,256);g.lineTo(256,110);g.lineTo(256,40);g.fill();g.fillStyle='rgba(225,242,248,.22)';g.beginPath();g.moveTo(140,256);g.lineTo(160,256);g.lineTo(256,160);g.lineTo(256,140);g.fill();
+    const gr=g.createLinearGradient(0,256,0,170);gr.addColorStop(0,'rgba(70,62,44,.4)');gr.addColorStop(1,'rgba(70,62,44,0)');g.fillStyle=gr;g.fillRect(0,170,256,86);
+    for(let k=0;k<40;k++){g.fillStyle=`rgba(80,70,50,${r(.05,.18)})`;g.beginPath();g.arc(r(0,256),r(0,256),r(1,5),0,6.28);g.fill();}}
   const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=4;return BTEXC[name]=t;}
 const BMAT={};
 // canvas-textured toon material; T = metres covered by one texture tile
@@ -304,8 +307,8 @@ function CTM(name,tint,T){const k=name+'|'+tint+'|'+T;if(BMAT[k])return BMAT[k];
 function ITM(name,fallback,tint,T){const k='i'+name+'|'+fallback+'|'+tint+'|'+T;if(BMAT[k])return BMAT[k];const m=new THREE.MeshToonMaterial({color:fallback,gradientMap:TOON_GRAD});m.userData.T=T||3;
   onTex(name,t=>{m.map=t;m.color.setHex(tint==null?0xffffff:tint);m.needsUpdate=true;});return BMAT[k]=m;}
 function FLAT(hex,noInk){const k='f'+hex+(noInk?'n':'');if(BMAT[k])return BMAT[k];const m=new THREE.MeshToonMaterial({color:hex,gradientMap:TOON_GRAD});m.userData.noInk=!!noInk;return BMAT[k]=m;}
-const GLASS=(()=>{const m=new THREE.MeshToonMaterial({map:btex('glass'),gradientMap:TOON_GRAD,emissive:0x0a1418});m.userData.T=1.6;m.userData.noInk=true;return m;})();
-const STAINED=(()=>{const m=new THREE.MeshToonMaterial({map:btex('stained'),gradientMap:TOON_GRAD,emissive:0x2a1a10});m.userData.T=1.2;m.userData.noInk=true;return m;})();
+const GLASS=(()=>{const m=new THREE.MeshToonMaterial({map:btex('glass'),gradientMap:TOON_GRAD,emissive:0x050a0c,transparent:true,depthWrite:false,side:THREE.DoubleSide});m.userData.T=1.6;m.userData.noInk=true;return m;})();
+const STAINED=(()=>{const m=new THREE.MeshToonMaterial({map:btex('stained'),gradientMap:TOON_GRAD,emissive:0x2a1a10,transparent:true,opacity:.82,depthWrite:false,side:THREE.DoubleSide});m.userData.T=1.2;m.userData.noInk=true;return m;})();
 const SIGNS={};
 function signMat(text,bg,fg){const k=text+bg;if(SIGNS[k])return SIGNS[k].m;
   const c=document.createElement('canvas');c.width=512;c.height=128;const t=new THREE.CanvasTexture(c);t.anisotropy=4;
@@ -340,7 +343,7 @@ function mergeSimple(list){const out=new THREE.BufferGeometry();
 const INK_PUSH=(()=>{const m=new THREE.MeshBasicMaterial({color:0x0b0a09,side:THREE.BackSide});
   m.onBeforeCompile=sh=>{sh.vertexShader=sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n transformed+=normal*.045;');};m.customProgramCacheKey=()=>'inkpush';return m;})();
 function kBake(K,roof){const grp=new THREE.Group();
-  for(const [mat,list] of (roof===2?K.u:roof?K.r:K.b)){const geo=mergeSimple(list);if(CUR)CUR.geos.push(geo);const m=new THREE.Mesh(geo,mat);m.castShadow=true;m.receiveShadow=true;grp.add(m);
+  for(const [mat,list] of (roof===2?K.u:roof?K.r:K.b)){const geo=mergeSimple(list);if(CUR)CUR.geos.push(geo);const m=new THREE.Mesh(geo,mat);m.castShadow=!mat.transparent;m.receiveShadow=true;grp.add(m);
     if(!mat.userData.noInk){const o=new THREE.Mesh(geo,INK_PUSH);o.castShadow=o.receiveShadow=false;o.visible=GFX==='high';m.add(o);inkHulls.add(o);if(CUR)CUR.inks.push(o);}}
   K.g.add(grp);return grp;}
 // wall along local x (z fixed) or local z (x fixed). openings: [centre, width, kind] d=door gap, w=window, b=boarded window, s=stained window, g=wide opening

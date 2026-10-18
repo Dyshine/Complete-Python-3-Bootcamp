@@ -16,6 +16,7 @@ const SUB_STYLES={
 const SUB_GLSL=`
 float sH(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
 float sN(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(sH(i),sH(i+vec2(1,0)),f.x),mix(sH(i+vec2(0,1)),sH(i+vec2(1,1)),f.x),f.y);}
+float subGlass(vec2 uv){return step(.625,uv.x)*step(uv.x,.75)*step(.25,uv.y)*step(uv.y,.5);}
 vec3 subStyle(vec3 tex,vec2 uv,vec3 p,vec3 n){
   float lum=dot(tex,vec3(.299,.587,.114));
   float wall=step(.375,uv.x)*step(uv.x,.5)*step(.5,uv.y)*step(uv.y,.75);
@@ -45,13 +46,13 @@ vec3 subStyle(vec3 tex,vec2 uv,vec3 p,vec3 n){
   return c;}
 `;
 function subMat(key,base){if(SUB.mats[key])return SUB.mats[key];const S=SUB_STYLES[key];
-  const m=new THREE.MeshToonMaterial({map:base.map,gradientMap:TOON_GRAD,side:THREE.FrontSide});
+  const m=new THREE.MeshToonMaterial({map:base.map,gradientMap:TOON_GRAD,side:THREE.DoubleSide});
   const u={uWall:{value:new THREE.Color(S.wall)},uRoof:{value:new THREE.Color(S.roof)},uTrim:{value:new THREE.Color(S.trim)},uDark:{value:new THREE.Color(S.dark)},
     uWallFx:{value:S.wallFx},uRoofFx:{value:S.roofFx},uScale:{value:SUB.scale},uSeed:{value:Object.keys(SUB_STYLES).indexOf(key)*7.3}};
   m.onBeforeCompile=sh=>{Object.assign(sh.uniforms,u);
     sh.vertexShader='varying vec3 vSP;varying vec3 vSN;\n'+sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n vSP=position;vSN=normal;');
     sh.fragmentShader='varying vec3 vSP;varying vec3 vSN;uniform vec3 uWall,uRoof,uTrim,uDark;uniform float uWallFx,uRoofFx,uScale,uSeed;\n'+SUB_GLSL+
-      sh.fragmentShader.replace('#include <map_fragment>','#include <map_fragment>\n diffuseColor.rgb=subStyle(diffuseColor.rgb,vUv,vSP,normalize(vSN));');};
+      sh.fragmentShader.replace('#include <map_fragment>','#include <map_fragment>\n if(subGlass(vUv)>.5)discard;\n diffuseColor.rgb=subStyle(diffuseColor.rgb,vUv,vSP,normalize(vSN));\n if(!gl_FrontFacing)diffuseColor.rgb*=.42;');};
   m.customProgramCacheKey=()=>'sub|'+key;return SUB.mats[key]=m;}
 const SUB_OL=(()=>{const m=new THREE.MeshBasicMaterial({color:0x0b0a09,side:THREE.BackSide});m.onBeforeCompile=sh=>{sh.vertexShader=sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n transformed+=normal*.006;');};m.customProgramCacheKey=()=>'subol';return m;})();
 if(THREE.GLTFLoader){try{new THREE.GLTFLoader().load('models/houses/suburban.gltf.json',g=>{try{
@@ -59,6 +60,8 @@ if(THREE.GLTFLoader){try{new THREE.GLTFLoader().load('models/houses/suburban.glt
     SUB.types.push({name:o.name||o.parent.name,geo:o.geometry,min:bb.min.clone(),max:bb.max.clone()});}});
   // one scale for the whole kit: the widest house becomes 13 m across
   let mx=0;for(const t of SUB.types)mx=Math.max(mx,t.max.x-t.min.x,t.max.z-t.min.z);SUB.scale=13/mx;
+  // the panes, cut out of the palette's glass swatch (07e-house-glass.js)
+  for(const t of SUB.types)t.glass=shellPanes(t.geo,(u,v)=>u>=.62&&u<=.755&&v>=.245&&v<=.505,1.6/SUB.scale);
   for(const k in SUB_STYLES)subMat(k,base);SUB.ready=SUB.types.length>0;
 }catch(e){console.warn('Suburban houses failed; using built-in houses.',e);}},undefined,()=>{});}catch(e){}}
 // a kit house on a lot, facing local +z (the street); returns false when the kit isn't loaded yet
@@ -67,10 +70,11 @@ function addSuburb(x,z,rot,styleKey){
   if(!SUB.ready)return false;const T=SUB.types[Math.floor(RNG()*SUB.types.length)],keys=Object.keys(SUB_STYLES),key=styleKey||keys[Math.floor(RNG()*keys.length)],s=SUB.scale;
   const g=new THREE.Group();g.position.set(x,0,z);g.rotation.y=rot;
   const m=new THREE.Mesh(T.geo,SUB.mats[key]);m.scale.setScalar(s);m.position.set(-(T.min.x+T.max.x)/2*s,0,-(T.min.z+T.max.z)/2*s);m.castShadow=true;m.receiveShadow=true;g.add(m);
-  if(GFX==='high'){const o=new THREE.Mesh(T.geo,SUB_OL);o.scale.copy(m.scale);o.position.copy(m.position);g.add(o);}
+  if(GFX==='high'){const o=new THREE.Mesh(T.glass.hull,SUB_OL);o.scale.copy(m.scale);o.position.copy(m.position);g.add(o);}
   track(g);
   // solid footprint: a ring of obstacles round the walls and a fill inside so nothing spawns in the shell
   const hw=(T.max.x-T.min.x)/2*s,hd=(T.max.z-T.min.z)/2*s;
+  shellGlass(g,m,x,z,rot,T.glass,hw,hd);
   for(let lx=-hw+.8;lx<=hw-.8+.01;lx+=1.5)for(let lz=-hd+.8;lz<=hd-.8+.01;lz+=1.5){const p=l2w(x,z,rot,lx,lz);addOb({x:p.x,z:p.z,r:1.05});}
   const c=Math.abs(Math.cos(rot)),sn=Math.abs(Math.sin(rot)),rec={x,z,rot,hw,hd,h:(T.max.y-T.min.y)*s,kind:'house',solid:true,style:key,type:T.name,ex:c*hw+sn*hd,ez:sn*hw+c*hd};
   houses.push(rec);if(CUR)CUR.houses.push(rec);

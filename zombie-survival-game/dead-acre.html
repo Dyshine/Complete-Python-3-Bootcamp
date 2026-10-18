@@ -1305,7 +1305,7 @@ function addHouse(x,z,rot){
     for(let i=0;i<=n;i++){const t=-len/2+i*len/n;const p=l2w(x,z,rot,lx+(horiz?t:0),lz+(horiz?0:t));addOb({x:p.x,z:p.z,r:.55});}
   }
   for(const [lx,lz,w,d,y0] of [[4,2.6,.3,2.8,1.1],[2.9,4,2.2,.3,1.6]]){g.add(mki(BOX(w,2.8-2.2,d),wallM,lx,2.5,lz,.08));
-    g.add(mk(BOX(w>d?w-.1:.08,2.2-y0,w>d?.08:d-.1),GLASS,lx,(y0+2.2)/2,lz));g.add(mk(BOX(w>d?w:.36,.1,w>d?.36:d),trim,lx,y0,lz));}
+    g.add(mk(BOX(w>d?w-.1:.08,2.2-y0,w>d?.08:d-.1),GLASS,lx,(y0+2.2)/2,lz,false));g.add(mk(BOX(w>d?w:.36,.1,w>d?.36:d),trim,lx,y0,lz));}
   g.add(mki(BOX(8.4,.25,.4),trim,0,2.9,-1.5,.05));
   const beam2=mki(BOX(.4,.25,6.5),trim,-1.2,2.75,.4,.05);beam2.rotation.z=.12;g.add(beam2);
   g.add(mki(BOX(1.6,.8,1),TM('wood',1,1,0x5a4430,0x9a8870),-2.2,.5,-2.6,.05));
@@ -1349,8 +1349,11 @@ function btex(name){if(BTEXC[name])return BTEXC[name];
     g.fillStyle='#5a3e16';g.fillRect(0,80,256,5);g.fillRect(0,170,256,5);}
   else if(name==='stained'){g.fillStyle=ink;g.fillRect(0,0,256,256);const cols=['#b8322a','#2f5fa8','#d9a520','#3f8f4a','#7a3f9a'];
     for(let y=0;y<256;y+=32)for(let x=0;x<256;x+=32){g.fillStyle=cols[(R()*cols.length)|0];g.fillRect(x+3,y+3,26,26);}}
-  else if(name==='glass'){g.fillStyle='#22313a';g.fillRect(0,0,256,256);g.fillStyle='rgba(190,220,230,.35)';
-    g.beginPath();g.moveTo(40,256);g.lineTo(110,256);g.lineTo(256,110);g.lineTo(256,40);g.fill();g.fillStyle='rgba(190,220,230,.2)';g.beginPath();g.moveTo(140,256);g.lineTo(160,256);g.lineTo(256,160);g.lineTo(256,140);g.fill();}
+  else if(name==='glass'){ // see-through: a faint tint, two highlight streaks, grime settled along the bottom
+    g.fillStyle='rgba(150,182,192,.2)';g.fillRect(0,0,256,256);g.fillStyle='rgba(225,242,248,.38)';
+    g.beginPath();g.moveTo(40,256);g.lineTo(110,256);g.lineTo(256,110);g.lineTo(256,40);g.fill();g.fillStyle='rgba(225,242,248,.22)';g.beginPath();g.moveTo(140,256);g.lineTo(160,256);g.lineTo(256,160);g.lineTo(256,140);g.fill();
+    const gr=g.createLinearGradient(0,256,0,170);gr.addColorStop(0,'rgba(70,62,44,.4)');gr.addColorStop(1,'rgba(70,62,44,0)');g.fillStyle=gr;g.fillRect(0,170,256,86);
+    for(let k=0;k<40;k++){g.fillStyle=`rgba(80,70,50,${r(.05,.18)})`;g.beginPath();g.arc(r(0,256),r(0,256),r(1,5),0,6.28);g.fill();}}
   const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=4;return BTEXC[name]=t;}
 const BMAT={};
 // canvas-textured toon material; T = metres covered by one texture tile
@@ -1359,8 +1362,8 @@ function CTM(name,tint,T){const k=name+'|'+tint+'|'+T;if(BMAT[k])return BMAT[k];
 function ITM(name,fallback,tint,T){const k='i'+name+'|'+fallback+'|'+tint+'|'+T;if(BMAT[k])return BMAT[k];const m=new THREE.MeshToonMaterial({color:fallback,gradientMap:TOON_GRAD});m.userData.T=T||3;
   onTex(name,t=>{m.map=t;m.color.setHex(tint==null?0xffffff:tint);m.needsUpdate=true;});return BMAT[k]=m;}
 function FLAT(hex,noInk){const k='f'+hex+(noInk?'n':'');if(BMAT[k])return BMAT[k];const m=new THREE.MeshToonMaterial({color:hex,gradientMap:TOON_GRAD});m.userData.noInk=!!noInk;return BMAT[k]=m;}
-const GLASS=(()=>{const m=new THREE.MeshToonMaterial({map:btex('glass'),gradientMap:TOON_GRAD,emissive:0x0a1418});m.userData.T=1.6;m.userData.noInk=true;return m;})();
-const STAINED=(()=>{const m=new THREE.MeshToonMaterial({map:btex('stained'),gradientMap:TOON_GRAD,emissive:0x2a1a10});m.userData.T=1.2;m.userData.noInk=true;return m;})();
+const GLASS=(()=>{const m=new THREE.MeshToonMaterial({map:btex('glass'),gradientMap:TOON_GRAD,emissive:0x050a0c,transparent:true,depthWrite:false,side:THREE.DoubleSide});m.userData.T=1.6;m.userData.noInk=true;return m;})();
+const STAINED=(()=>{const m=new THREE.MeshToonMaterial({map:btex('stained'),gradientMap:TOON_GRAD,emissive:0x2a1a10,transparent:true,opacity:.82,depthWrite:false,side:THREE.DoubleSide});m.userData.T=1.2;m.userData.noInk=true;return m;})();
 const SIGNS={};
 function signMat(text,bg,fg){const k=text+bg;if(SIGNS[k])return SIGNS[k].m;
   const c=document.createElement('canvas');c.width=512;c.height=128;const t=new THREE.CanvasTexture(c);t.anisotropy=4;
@@ -1395,7 +1398,7 @@ function mergeSimple(list){const out=new THREE.BufferGeometry();
 const INK_PUSH=(()=>{const m=new THREE.MeshBasicMaterial({color:0x0b0a09,side:THREE.BackSide});
   m.onBeforeCompile=sh=>{sh.vertexShader=sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n transformed+=normal*.045;');};m.customProgramCacheKey=()=>'inkpush';return m;})();
 function kBake(K,roof){const grp=new THREE.Group();
-  for(const [mat,list] of (roof===2?K.u:roof?K.r:K.b)){const geo=mergeSimple(list);if(CUR)CUR.geos.push(geo);const m=new THREE.Mesh(geo,mat);m.castShadow=true;m.receiveShadow=true;grp.add(m);
+  for(const [mat,list] of (roof===2?K.u:roof?K.r:K.b)){const geo=mergeSimple(list);if(CUR)CUR.geos.push(geo);const m=new THREE.Mesh(geo,mat);m.castShadow=!mat.transparent;m.receiveShadow=true;grp.add(m);
     if(!mat.userData.noInk){const o=new THREE.Mesh(geo,INK_PUSH);o.castShadow=o.receiveShadow=false;o.visible=GFX==='high';m.add(o);inkHulls.add(o);if(CUR)CUR.inks.push(o);}}
   K.g.add(grp);return grp;}
 // wall along local x (z fixed) or local z (x fixed). openings: [centre, width, kind] d=door gap, w=window, b=boarded window, s=stained window, g=wide opening
@@ -1622,6 +1625,7 @@ const SUB_STYLES={
 const SUB_GLSL=`
 float sH(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
 float sN(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(sH(i),sH(i+vec2(1,0)),f.x),mix(sH(i+vec2(0,1)),sH(i+vec2(1,1)),f.x),f.y);}
+float subGlass(vec2 uv){return step(.625,uv.x)*step(uv.x,.75)*step(.25,uv.y)*step(uv.y,.5);}
 vec3 subStyle(vec3 tex,vec2 uv,vec3 p,vec3 n){
   float lum=dot(tex,vec3(.299,.587,.114));
   float wall=step(.375,uv.x)*step(uv.x,.5)*step(.5,uv.y)*step(uv.y,.75);
@@ -1651,13 +1655,13 @@ vec3 subStyle(vec3 tex,vec2 uv,vec3 p,vec3 n){
   return c;}
 `;
 function subMat(key,base){if(SUB.mats[key])return SUB.mats[key];const S=SUB_STYLES[key];
-  const m=new THREE.MeshToonMaterial({map:base.map,gradientMap:TOON_GRAD,side:THREE.FrontSide});
+  const m=new THREE.MeshToonMaterial({map:base.map,gradientMap:TOON_GRAD,side:THREE.DoubleSide});
   const u={uWall:{value:new THREE.Color(S.wall)},uRoof:{value:new THREE.Color(S.roof)},uTrim:{value:new THREE.Color(S.trim)},uDark:{value:new THREE.Color(S.dark)},
     uWallFx:{value:S.wallFx},uRoofFx:{value:S.roofFx},uScale:{value:SUB.scale},uSeed:{value:Object.keys(SUB_STYLES).indexOf(key)*7.3}};
   m.onBeforeCompile=sh=>{Object.assign(sh.uniforms,u);
     sh.vertexShader='varying vec3 vSP;varying vec3 vSN;\n'+sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n vSP=position;vSN=normal;');
     sh.fragmentShader='varying vec3 vSP;varying vec3 vSN;uniform vec3 uWall,uRoof,uTrim,uDark;uniform float uWallFx,uRoofFx,uScale,uSeed;\n'+SUB_GLSL+
-      sh.fragmentShader.replace('#include <map_fragment>','#include <map_fragment>\n diffuseColor.rgb=subStyle(diffuseColor.rgb,vUv,vSP,normalize(vSN));');};
+      sh.fragmentShader.replace('#include <map_fragment>','#include <map_fragment>\n if(subGlass(vUv)>.5)discard;\n diffuseColor.rgb=subStyle(diffuseColor.rgb,vUv,vSP,normalize(vSN));\n if(!gl_FrontFacing)diffuseColor.rgb*=.42;');};
   m.customProgramCacheKey=()=>'sub|'+key;return SUB.mats[key]=m;}
 const SUB_OL=(()=>{const m=new THREE.MeshBasicMaterial({color:0x0b0a09,side:THREE.BackSide});m.onBeforeCompile=sh=>{sh.vertexShader=sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n transformed+=normal*.006;');};m.customProgramCacheKey=()=>'subol';return m;})();
 if(THREE.GLTFLoader){try{new THREE.GLTFLoader().load('models/houses/suburban.gltf.json',g=>{try{
@@ -1665,6 +1669,8 @@ if(THREE.GLTFLoader){try{new THREE.GLTFLoader().load('models/houses/suburban.glt
     SUB.types.push({name:o.name||o.parent.name,geo:o.geometry,min:bb.min.clone(),max:bb.max.clone()});}});
   // one scale for the whole kit: the widest house becomes 13 m across
   let mx=0;for(const t of SUB.types)mx=Math.max(mx,t.max.x-t.min.x,t.max.z-t.min.z);SUB.scale=13/mx;
+  // the panes, cut out of the palette's glass swatch (07e-house-glass.js)
+  for(const t of SUB.types)t.glass=shellPanes(t.geo,(u,v)=>u>=.62&&u<=.755&&v>=.245&&v<=.505,1.6/SUB.scale);
   for(const k in SUB_STYLES)subMat(k,base);SUB.ready=SUB.types.length>0;
 }catch(e){console.warn('Suburban houses failed; using built-in houses.',e);}},undefined,()=>{});}catch(e){}}
 // a kit house on a lot, facing local +z (the street); returns false when the kit isn't loaded yet
@@ -1673,10 +1679,11 @@ function addSuburb(x,z,rot,styleKey){
   if(!SUB.ready)return false;const T=SUB.types[Math.floor(RNG()*SUB.types.length)],keys=Object.keys(SUB_STYLES),key=styleKey||keys[Math.floor(RNG()*keys.length)],s=SUB.scale;
   const g=new THREE.Group();g.position.set(x,0,z);g.rotation.y=rot;
   const m=new THREE.Mesh(T.geo,SUB.mats[key]);m.scale.setScalar(s);m.position.set(-(T.min.x+T.max.x)/2*s,0,-(T.min.z+T.max.z)/2*s);m.castShadow=true;m.receiveShadow=true;g.add(m);
-  if(GFX==='high'){const o=new THREE.Mesh(T.geo,SUB_OL);o.scale.copy(m.scale);o.position.copy(m.position);g.add(o);}
+  if(GFX==='high'){const o=new THREE.Mesh(T.glass.hull,SUB_OL);o.scale.copy(m.scale);o.position.copy(m.position);g.add(o);}
   track(g);
   // solid footprint: a ring of obstacles round the walls and a fill inside so nothing spawns in the shell
   const hw=(T.max.x-T.min.x)/2*s,hd=(T.max.z-T.min.z)/2*s;
+  shellGlass(g,m,x,z,rot,T.glass,hw,hd);
   for(let lx=-hw+.8;lx<=hw-.8+.01;lx+=1.5)for(let lz=-hd+.8;lz<=hd-.8+.01;lz+=1.5){const p=l2w(x,z,rot,lx,lz);addOb({x:p.x,z:p.z,r:1.05});}
   const c=Math.abs(Math.cos(rot)),sn=Math.abs(Math.sin(rot)),rec={x,z,rot,hw,hd,h:(T.max.y-T.min.y)*s,kind:'house',solid:true,style:key,type:T.name,ex:c*hw+sn*hd,ez:sn*hw+c*hd};
   houses.push(rec);if(CUR)CUR.houses.push(rec);
@@ -2328,8 +2335,8 @@ const RUR={ready:false,types:[],skins:[],shed:null,scale:3.6};
     geo.setIndex(new THREE.BufferAttribute(b64(idx,Uint16Array),1));geo=geo.toNonIndexed();geo.computeVertexNormals();geo.computeBoundingBox();return geo;};
   const mat=(map,col)=>new THREE.MeshToonMaterial({map,color:col||0xe2ddd2,gradientMap:TOON_GRAD});
   fetch('models/rural/houses.json').then(r=>r.ok?r.json():Promise.reject(r.status)).then(d=>{
-    RUR.types=d.types.map(t=>({name:t.name,geo:geoOf(t.pos,t.uv,t.idx)}));
-    RUR.skins=['a','b','c'].map(s=>mat(tex(`models/rural/skin_${s}.jpg`)));RUR.ready=true;}).catch(()=>{});
+    RUR.types=d.types.map(t=>{const geo=geoOf(t.pos,t.uv,t.idx);return{name:t.name,geo,glass:shellPanes(geo,(u,v)=>u>=.74&&v>=.5,1.6/RUR.scale)};});
+    RUR.skins=['a','b','c'].map(s=>rurWinMat(mat(tex(`models/rural/skin_${s}.jpg`)),s));RUR.ready=true;}).catch(()=>{});
   fetch('models/rural/shed.json').then(r=>r.ok?r.json():Promise.reject(r.status)).then(d=>{
     const W=tex('models/rural/shed_wood.jpg'),St=tex('models/rural/shed_straw.jpg');for(const t of [W,St])t.wrapS=t.wrapT=THREE.RepeatWrapping;
     RUR.shed=d.mats.map(m=>({geo:geoOf(m.pos,m.uv,m.idx,4096),mat:mat(m.tex==='straw'?St:W,m.tex==='straw'?0xd0c49a:0x9c9282)}));}).catch(()=>{});}
@@ -2341,10 +2348,10 @@ function addRural(x,z,rot,type,skin){
   if(!RUR.ready)return false;const ti=type!=null?type:Math.floor(RNG()*4),T=RUR.types[ti],si=skin!=null?skin:Math.floor(RNG()*3),s=RUR.scale;
   const g=new THREE.Group();g.position.set(x,0,z);g.rotation.y=rot;
   const m=new THREE.Mesh(T.geo,RUR.skins[si]);m.scale.setScalar(s);m.castShadow=true;m.receiveShadow=true;g.add(m);
-  if(GFX==='high'){const o=new THREE.Mesh(T.geo,SUB_OL);o.scale.copy(m.scale);g.add(o);}
+  if(GFX==='high'){const o=new THREE.Mesh(T.glass.hull,SUB_OL);o.scale.copy(m.scale);g.add(o);}
   track(g);
   const bb=T.geo.boundingBox,hw=(bb.max.x-bb.min.x)/2*s,hd=(bb.max.z-bb.min.z)/2*s;
-  rurSolid(x,z,rot,hw,hd);
+  rurSolid(x,z,rot,hw,hd);shellGlass(g,m,x,z,rot,T.glass,hw,hd);
   const c=Math.abs(Math.cos(rot)),sn=Math.abs(Math.sin(rot)),rec={x,z,rot,hw,hd,h:(bb.max.y-bb.min.y)*s,kind:'house',solid:true,style:'rural'+si,type:T.name,ex:c*hw+sn*hd,ez:sn*hw+c*hd};
   houses.push(rec);if(CUR)CUR.houses.push(rec);
   if(RNG()<.6){const p=l2w(x,z,rot,rand(-hw+2,hw-2),hd+rand(2,4));addProp(pick(['carton','crate','tire','can']),p.x,p.z);}
@@ -2569,6 +2576,64 @@ function kitStripLook(c){
   const u=c.mat.userData.u;u.uRust.value=1;u.uBroken.value=1;for(const w of c.wheels)w.visible=false;c.g.position.y=-.32;
   const hood=mk(BOX(c.wid*.86,.06,1.1),CTM('metalwall',0x7a4a34,1.5),0,c.hgt*.62,c.len/2-.6);hood.rotation.x=-1.05;c.g.add(hood);
   const D=CARKIT.types['debris-door'];if(D&&!c.door){c.door=new THREE.Mesh(D.body[0]||D.wheels[0],c.mat);c.door.scale.set(...CAR_SCALE);c.door.rotation.set(-Math.PI/2,0,rand(-.5,.5));c.door.position.set(c.wid/2+.8,.08-c.g.position.y,rand(-.6,.6));c.g.add(c.door);}
+}
+/* ================= GLASS IN THE KIT HOUSES =================
+   The Kenney and farm houses come with their windows painted on. At load each model's panes are cut out into a small mesh
+   of see-through glass, the painted glass is dropped from the walls (discarded in the shader, so frames and muntins stay),
+   and the shell is drawn from the inside as well, darker, so a window shows a dim empty room rather than the field behind
+   the house. Every pane is a breakable window like the ones in the drawn buildings: shoot it, swing at it or blow it in,
+   and the chunk remembers it broken. */
+const _gv=new V3(),_gn=new V3();
+// split a kit model into its window panes (triangles whose corners all pass isWin(u,v)) and an outline hull without them
+function shellPanes(geo,isWin,uvK){
+  const P=geo.attributes.position,U=geo.attributes.uv,N=geo.attributes.normal,I=geo.index,n=I?I.count:P.count,vi=k=>I?I.getX(k):k;
+  const win=[],keep=[];
+  for(let t=0;t<n;t+=3){let w=true;for(let k=0;k<3;k++){const v=vi(t+k);if(!isWin(U.getX(v),U.getY(v)))w=false;}(w?win:keep).push(t);}
+  // the outline hull leaves the glass out, or it would paint the far windows black when you look in through the near ones
+  const hull=new THREE.BufferGeometry();hull.setAttribute('position',P);if(N)hull.setAttribute('normal',N);
+  const hi=[];for(const t of keep)for(let k=0;k<3;k++)hi.push(vi(t+k));hull.setIndex(hi);
+  // panes are the glass triangles that share corners
+  const key=v=>Math.round(P.getX(v)*500)+','+Math.round(P.getY(v)*500)+','+Math.round(P.getZ(v)*500);
+  const par=new Map(),f=x=>{while(par.get(x)!==x){par.set(x,par.get(par.get(x)));x=par.get(x);}return x;};
+  for(const t of win){const ks=[0,1,2].map(k=>key(vi(t+k)));for(const k of ks)if(!par.has(k))par.set(k,k);for(let k=1;k<3;k++)par.set(f(ks[k]),f(ks[0]));}
+  const groups=new Map();for(const t of win){const r=f(key(vi(t)));if(!groups.has(r))groups.set(r,[]);groups.get(r).push(t);}
+  const pos=[],nor=[],uv=[],panes=[];
+  for(const ts of groups.values()){const min=new V3(1e9,1e9,1e9),max=new V3(-1e9,-1e9,-1e9),nn=new V3();
+    for(const t of ts)for(let k=0;k<3;k++){const v=vi(t+k);_gv.fromBufferAttribute(P,v);min.min(_gv);max.max(_gv);if(N)nn.add(_gn.fromBufferAttribute(N,v));}
+    if(nn.lengthSq()<1e-8)nn.set(0,0,1);nn.normalize();const side=Math.abs(nn.x)>Math.abs(nn.z),start=pos.length/3;
+    for(const t of ts)for(let k=0;k<3;k++){const v=vi(t+k);_gv.fromBufferAttribute(P,v);pos.push(_gv.x,_gv.y,_gv.z);nor.push(nn.x,nn.y,nn.z);
+      // planar UVs, so the streaks and the grime land the right way up on every pane
+      uv.push((side?_gv.z-min.z:_gv.x-min.x)/uvK,(_gv.y-min.y)/uvK);}
+    panes.push({start,count:pos.length/3-start,min,max,c:min.clone().add(max).multiplyScalar(.5),n:nn});}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+  g.setAttribute('normal',new THREE.Float32BufferAttribute(nor,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+  return{geo:g,panes,hull};
+}
+// one house's glass: its own copy of the panes (breaking one collapses it in place), a breakable window per pane and a floor
+function shellGlass(g,body,x,z,rot,G,hw,hd){
+  if(!G||!G.panes.length)return;
+  const geo=G.geo.clone(),m=new THREE.Mesh(geo,GLASS);m.scale.copy(body.scale);m.position.copy(body.position);m.renderOrder=2;g.add(m);if(CUR)CUR.geos.push(geo);
+  const s=body.scale.x,o=body.position;let low=1e9;
+  for(const p of G.panes){const sill=p.min.y*s+o.y,top=p.max.y*s+o.y;low=Math.min(low,sill);
+    const wp=l2w(x,z,rot,p.c.x*s+o.x-p.n.x*.2,p.c.z*s+o.z-p.n.z*.2);
+    const W={geo,start:p.start,count:p.count,x:wp.x,z:wp.z,sill,top,Y:0,obs:[],shell:true,mesh:m};
+    const ob={x:wp.x,z:wp.z,r:clamp(Math.hypot(p.max.x-p.min.x,p.max.z-p.min.z)*s*.32,.3,.6),win:W};
+    if(sill>2.3)ob.lvl=1; // upstairs: out of reach of shots and swings from the ground; a blast still takes it
+    addOb(ob);W.obs.push(ob);
+    W.key=cutKey(wp.x,wp.z)+'|'+Math.round(sill*2);W.ch=CUR;if(CUR&&CUR.wb&&CUR.wb.has(W.key))breakWin(W,true);}
+  // a bare floor for the empty rooms you can now see into
+  const fl=new THREE.Mesh(new THREE.PlaneGeometry(Math.max(1,hw*2-.5),Math.max(1,hd*2-.5)),FLAT(0x2c241d,true));
+  fl.rotation.x=-Math.PI/2;fl.position.y=clamp(low-.9,.04,.6);fl.receiveShadow=true;g.add(fl);if(CUR)CUR.geos.push(fl.geometry);
+}
+// the farm skins paint different windows in the same corner of the atlas: pane rectangles in pixels from (764, 0),
+// [x0, y0, x1, y1, dark] where dark keeps the light muntins and drops only the dark glass between them
+const RUR_PANES={a:[[22,12,245,238,1],[30,265,126,470,0],[155,265,240,470,0]],b:[[23,15,250,238,1],[20,258,128,478,0],[142,258,252,478,0]],c:[[28,10,248,228,0],[30,265,120,470,0],[152,265,243,470,0]]};
+function rurWinMat(m,skin){
+  const test=RUR_PANES[skin].map(([x0,y0,x1,y1,dark])=>`if(px>${x0}.&&px<${x1}.&&py>${y0}.&&py<${y1}.${dark?'&&dot(diffuseColor.rgb,vec3(.3,.59,.11))<.4':''})discard;`).join('');
+  m.side=THREE.DoubleSide;
+  m.onBeforeCompile=sh=>{sh.fragmentShader=sh.fragmentShader.replace('#include <map_fragment>',
+    '#include <map_fragment>\n {float px=vUv.x*1024.-764.,py=(1.-vUv.y)*1024.;if(px>0.&&py<500.){'+test+'}}\n if(!gl_FrontFacing)diffuseColor.rgb*=.42;');};
+  m.customProgramCacheKey=()=>'rurwin'+skin;return m;
 }
 /* ================= GRASS (instanced, wind-swayed in the vertex shader) ================= */
 const windU={uTime:{value:0},uWind:{value:.3},uWdir:{value:new THREE.Vector2(1,0)}};
@@ -5064,7 +5129,7 @@ function kWins(K,baseG,upperG){const groups=new Map();
   for(const W of K.wins){const p=l2w(K.x,K.z,K.rot,W.lc[0],W.lc[1]);W.x=p.x;W.z=p.z;W.key=cutKey(p.x,p.z)+'|'+Math.round(W.Y*2);W.ch=CUR;W.pre=!!(CUR&&CUR.wb&&CUR.wb.has(W.key));}}
 function breakWin(W,silent){if(!W||W.broken||!W.geo)return;W.broken=true;
   const a=W.geo.attributes.position.array,s=W.start*3,e=(W.start+W.count)*3,cx=a[s],cy=a[s+1],cz=a[s+2];for(let i=s;i<e;i+=3){a[i]=cx;a[i+1]=cy;a[i+2]=cz;}W.geo.attributes.position.needsUpdate=true;
-  for(const ob of W.obs)if(ob.lvl===undefined)ob.h=Math.max(.3,W.sill); // the empty frame: jump or climb through
+  if(!W.shell)for(const ob of W.obs)if(ob.lvl===undefined)ob.h=Math.max(.3,W.sill); // the empty frame: jump or climb through (kit houses stay shut)
   if(silent)return;
   const y=(W.sill+W.top)/2;burst(W.x,y,W.z,12,'glass',4);Sound.play('crash',.5,W.x,W.z);Sound.play('clink',.8,W.x,W.z);makeNoise(W.x,W.z,14);
   if(W.ch){let mem=chunkMem.get(W.ch.key);if(!mem)chunkMem.set(W.ch.key,mem={day:-1,saved:[],cut:W.ch.cut||new Set()});(mem.wb||(mem.wb=new Set())).add(W.key);}}
