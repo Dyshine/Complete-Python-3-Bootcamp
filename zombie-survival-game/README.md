@@ -1,9 +1,9 @@
 # Dead Acre
 
-A third-person zombie survival game show in three.js. Condemned inmates are dropped into a Midwest quarantine zone and
+A zombie survival game show in three.js, played in third person, first person or top-down (V switches). Condemned inmates are dropped into a Midwest quarantine zone and
 broadcast live; the show runs until they die.
 
-`dead-acre.html` is the playable game: one self-contained page plus the `models/` and `textures/` folders next to it.
+`dead-acre.html` is the playable game: one self-contained page plus the `models/`, `textures/` and `sounds/` folders next to it.
 It is **built** from `src/`. Edit the files in `src/`, never `dead-acre.html` directly.
 
 ## Commands
@@ -31,7 +31,10 @@ src/game/*.js         the game, joined in filename order into one script
 tests/hooks.js        test-only hooks, added inside the game's scope by test builds
 tests/suites.mjs      the browser test suites; tests/run.mjs runs them
 tools/build.mjs       the build; tools/dev.mjs the dev server; tools/lint.mjs the linter
-models/, textures/    assets loaded at runtime (see models/houses/LICENSE-kenney.txt)
+models/, textures/    assets loaded at runtime (licences in each models/ folder)
+sounds/               recorded gunshots and reloads (sounds/CREDITS.txt)
+tools/pack-guns.mjs   regenerates models/guns/guns.json from Quaternius' Ultimate Gun Pack (OBJ folder)
+tools/pack-rural.mjs  regenerates models/rural/ from the Family house collection (baked OBJs and textures)
 ```
 
 ### How the game files fit together
@@ -51,7 +54,7 @@ list of per-tick updates. Add a new system's `update…(dt)` there; the tests us
 | Files | What's in them |
 |---|---|
 | 00–05 | helpers, terrain shader hook, audio engine, gamepad, renderer, materials |
-| 06–12 | world generation (towns, farms, landmarks, stores), suburban houses, grass, decals, the cabin, props |
+| 06–12 | world generation (towns, farms, landmarks, stores), suburban and rural house kits, street furniture, grass, decals, the cabin, props |
 | 13–22 | player, definitions and state, weather, difficulty, floors and stairs, gathering and farming, stealth |
 | 23–27 | infected (types, variants, skins), hordes, perimeter fence |
 | 29–34 | weapons, crates and pickups, HUD, workshop menu, day/night phases, RPG |
@@ -61,5 +64,9 @@ list of per-tick updates. Add a new system's `update…(dt)` there; the tests us
 ## Credits
 
 - Suburban houses: City Kit Suburban by Kenney (www.kenney.nl), CC0.
+- Farm homes: Family house collection by Miloslav "drummyfish" Číž, CC0. Hay shed: Old wood barn by carlosjorgereis, CC0.
+- Firearms: Ultimate Gun Pack by Quaternius, CC0.
+- Gunshots: The Free Firearm Sound Library (Ben Jaszczak et al.), CC0. Reloads: Gun Reload Sounds by SpringySpringo and
+  Shotgun Reload Sound Effects by zer0_sol, CC0.
 - Trooper body: the three.js example *Soldier*, a Mixamo character.
 - three.js r128.

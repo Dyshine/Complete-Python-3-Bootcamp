@@ -284,12 +284,13 @@ function pickW(list){let t=0;for(const [,w] of list)t+=w;let r=RNG()*t;for(const
 function addFarmstead(cx,cz,r0,clear){
   const at=(lx,lz)=>l2w(cx,cz,r0,lx,lz);
   const tryB=(fn,lx,lz,e,rr)=>{const p=at(lx,lz);if(clear(p.x,p.z,e))return fn(p.x,p.z,r0+(rr||0)),true;return false;};
-  tryB(RNG()<.5?bFarmhouse2:bFarmhouse,-8,5,7);
+  {const r=RNG();tryB(r<.45?ruralOrFarm:r<.72?bFarmhouse2:bFarmhouse,-8,5,7.5);}
   tryB(bBarn,7,-2,9,Math.PI/2);
   tryB(bSilo,18.5,-9,3);if(RNG()<.6)tryB(bSilo,18.5,-4.2,3);
   if(RNG()<.6)tryB(bWindmill,-12,-8,2);else tryB(bWaterTower,-12,-8,3.5);
   if(RNG()<.7)tryB(bShed,-1,10,2.5,Math.PI);
   tryB(addWell,3.8,8,1.4);
+  if(RNG()<.6)tryB(addHayShed,-3,-15,4.5);
 }
 
 const PINE=[0x2f4a32,0x3a5236,0x2a3f2e,0x46573a];
@@ -438,6 +439,15 @@ function townPlan(rep){
       if(hash2(u,v*s,28)<.6)it('stree',u+8,v+s*5.4,0,1);}}
   it('church',-17,46,rotU(-1),8.2);it('well',9.6,24,rotV,1.5);it('coop',18,46,rotU(1),8);
   for(const v of [54,62,82,90])for(const s of [-1,1])if(hash2(v,s,29)<.7)it('stree',s*7.2,v,0,1);
+  // street furniture: lamps down Main and along the cross streets, stop signs and hydrants at the corners, road paint
+  const lampState=(a,b)=>{const h=hash2(a,b,30);return h<.25?1:h<.33?2:0;};
+  for(const s of [-1,1])for(let v=-12;v<=88;v+=14)if(Math.abs(v-30)>6&&Math.abs(v-72)>6)it('lamp',s*6.9,v,rotU(s),.5,{state:lampState(s,v)});
+  for(const v0 of [30,72]){
+    for(const [i,u] of [-100,-68,-36,36,68,100].entries()){const s=i%2?1:-1;it('lamp',u,v0+s*4.9,s<0?rotV:rotV+Math.PI,.5,{state:lampState(u,v0)});}
+    it('stop',7.6,v0-4.7,rotU(-1),.5);it('stop',-7.6,v0+4.7,rotU(1),.5);
+    it('hydrant',6.6,v0+6.5,0,.5);it('hydrant',-6.6,v0-6.5,0,.5);}
+  it('hydrant',-6.6,8,0,.5);
+  P.paint=townPaint(P,W,ax);
   TPLAN.set(rep.key,P);return P;
 }
 const inRect=(r,x,z,m)=>x>r.x0-(m||0)&&x<r.x1+(m||0)&&z>r.z0-(m||0)&&z<r.z1+(m||0);
@@ -460,6 +470,8 @@ function genTown(ch){
     kBox(K,0,ballast,q.b-q.a,.12,q.d-q.c,cx,.06,cz);
     for(const o of [-.72,.72]){if(alongX)kBox(K,0,steel,len,.14,.1,cx,.25,cz+o);else kBox(K,0,steel,.1,.14,len,cx+o,.25,cz);}
     for(let t=.45;t<len;t+=.9){if(alongX)kBox(K,0,tie,.24,.1,2.4,q.a+t-x0,.15,cz);else kBox(K,0,tie,2.4,.1,.24,cx,.15,q.c+t-z0);}}
+  // road paint: centre lines, crosswalks, stop bars
+  {const yl=FLAT(0xc8a838,true);for(const p of P.paint)if(p.x>=x0&&p.x<x1&&p.z>=z0&&p.z<z1){kBox(K,0,p.col==='y'?yl:stripe,p.w,.012,p.d,p.x-x0,.057,p.z-z0);any=true;}}
   // diagonal parking lines along Main
   for(const p of P.items)if(p.type==='park'&&p.x>=x0&&p.x<x1&&p.z>=z0&&p.z<z1){kBox(K,0,stripe,.12,.02,4.2,p.x-x0+Math.sin(p.rot)*0,.06,p.z-z0,p.rot+Math.PI/4);any=true;}
   if(any)kFinish(K,0,0,0,'street',false);else scene.remove(K.g);
@@ -472,13 +484,16 @@ function genTown(ch){
       case 'tower':bTownTower(p.x,p.z,p.rot,p.name);break;
       case 'block':bMainBlock(p.x,p.z,p.rot,p);break;
       case 'foursquare':{const r=RNG();if(!(r<.3&&addSuburb(p.x,p.z,p.rot)))bTownhouse(p.x,p.z,p.rot);break;}
-      case 'bungalow':{const r=RNG();if(!(r<.65&&addSuburb(p.x,p.z,p.rot)))addHouse(p.x,p.z,p.rot);break;}
+      case 'bungalow':{const r=RNG();if(!(r<.4&&addSuburb(p.x,p.z,p.rot))&&!(r<.7&&addRural(p.x,p.z,p.rot,randi(2,5))))addHouse(p.x,p.z,p.rot);break;}
       case 'porch':bFarmhouse2(p.x,p.z,p.rot);break;
       case 'church':bChurch(p.x,p.z,p.rot);break;
       case 'well':addWell(p.x,p.z,p.rot);break;
       case 'coop':bGas(p.x,p.z,p.rot,'CO-OP');break;
       case 'park':if(RNG()<.85)addCar(p.x,p.z,p.rot+rand(-.12,.12),RNG()<.45?'pickup':null);break;
-      case 'stree':addTree(p.x,p.z,rand(.95,1.35),RNG()<.2);break;}}
+      case 'stree':addTree(p.x,p.z,rand(.95,1.35),RNG()<.2);break;
+      case 'lamp':bLamp(p.x,p.z,p.rot,p.state);break;
+      case 'stop':bStopSign(p.x,p.z,p.rot);break;
+      case 'hydrant':bHydrant(p.x,p.z);break;}}
   // the leftovers of a quarantine: barrels, litter and wrecks, kept off the streets
   const spot=(r,m)=>{for(let i=0;i<30;i++){const x=x0+rand(m,CH-m),z=z0+rand(m,CH-m);if(road(x,z)||onTownStreet(P,x,z,.5))continue;if(!blockedSpot(x,z,r))return{x,z};}return null;};
   for(let i=randi(1,3);i>0;i--){const p=spot(.8,3);if(p)addBarrel(p.x,p.z);}
@@ -600,8 +615,8 @@ function genChunk(cx,cz){
             if(lotFlat(bx,bz,hx?e+5:e+3,hx?e+3:e+5)&&!blockedSpot(bx,bz,e*.5)){(sup?bSupercenter:bGrocery)(bx,bz,rot);big=true;break;}}}}
       const fr=big?1:RNG(),r0=randi(0,3)*Math.PI/2;
       if(fr<.35){const p=spot(10,18);if(p)addFarmstead(p.x,p.z,r0,clear);}
-      else if(fr<.7){const f=pickW([[bFarmhouse,18],[bFarmhouse2,18],[addHouse,10],[subOrHouse,14],[bBarn,20],[bSilo,10],[bWindmill,10],[bWaterTower,6],[bShed,4],[addWell,7]]);
-        const e=f===bBarn?8:f===bFarmhouse||f===bFarmhouse2||f===subOrHouse?6.7:f===addHouse?5:f===addWell?1.4:3.5,p=spot(e+1,e+2);if(p&&clear(p.x,p.z,e))f(p.x,p.z,r0);}
+      else if(fr<.7){const f=pickW([[bFarmhouse,14],[bFarmhouse2,14],[ruralOrFarm,22],[addHouse,8],[subOrHouse,12],[bBarn,20],[addHayShed,7],[bSilo,10],[bWindmill,10],[bWaterTower,6],[bShed,4],[addWell,7]]);
+        const e=f===bBarn?8:f===ruralOrFarm?7.5:f===addHayShed?4.5:f===bFarmhouse||f===bFarmhouse2||f===subOrHouse?6.7:f===addHouse?5:f===addWell?1.4:3.5,p=spot(e+1,e+2);if(p&&clear(p.x,p.z,e))f(p.x,p.z,r0);}
       for(let i=big?0:randi(4,8);i>0;i--){const p=spot(1.2,2);if(p)addTree(p.x,p.z,rand(.8,1.45),RNG()<.4);}
       for(let i=big?0:randi(2,4);i>0;i--){const p=spot(1.6,2);if(p)addRock(p.x,p.z,rand(.6,1.5));}
       for(let i=randi(0,2);i>0;i--){const p=spot(.6,2);if(p)addHerb(p.x,p.z);}
@@ -621,6 +636,7 @@ function genChunk(cx,cz){
           if(!RK)RK=Kit(0,0,0);const px=axis==='x'?t:side*4.6,pz=axis==='x'?side*4.6:t;
           kBox(RK,0,railM,.16,.9,.16,px,.45,pz);if(axis==='x')kBox(RK,0,railM,4,.22,.1,px,.78,pz);else kBox(RK,0,railM,.1,.22,4,px,.78,pz);kSolid(RK,px,pz,.35);}}
       if(RK)kFinish(RK,0,0,0,'rail',false);
+      highwayFurniture(axis,x0,z0);
     }
   }finally{RNG=Math.random;for(const o of ch.ghosts)delOb(o);ch.ghosts.length=0;CUR=null;}
   chunkLoot(ch);

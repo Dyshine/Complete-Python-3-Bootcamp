@@ -10,7 +10,7 @@ function die(){
     $('overScreen').hidden=false;document.body.classList.remove('playing');if(pad.active)setPadFocus($('againBtn'));},1400);
 }
 function resetGame(){
-  camYaw=Math.PI;camPitch=.3;camera.near=TP?.15:.5;camera.updateProjectionMatrix();
+  camYaw=Math.PI;camPitch=FP?.08:.3;camera.near=FP?.04:TP?.15:.5;camera.updateProjectionMatrix();
   for(const z of zombies)removeZombie(z);zombies.length=0;
   for(const c of crates)dropCrate(c);crates.length=0;
   for(const p of pickups)scene.remove(p.m);pickups.length=0;

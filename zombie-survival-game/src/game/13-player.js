@@ -105,7 +105,7 @@ function updateHero(dt,moving,sprint,fwd,sp){
   }
   heroUndo();HERO.mixer.update(dt);heroProcedural(dt,moving);
   // keep the gun in the right hand, pointed where the player aims
-  if(HERO.hand){HERO.hand.getWorldPosition(_hp);pl.worldToLocal(_hp);const cw=CARRY.w;gun.position.set(lerp(_hp.x*.6,_hp.x+CARRY.off.x,cw),lerp(_hp.y,_hp.y+CARRY.off.y,cw),lerp(Math.max(.25,_hp.z+.25),_hp.z+CARRY.off.z,cw));
+  if(HERO.hand&&!FP){HERO.hand.getWorldPosition(_hp);pl.worldToLocal(_hp);const cw=CARRY.w;gun.position.set(lerp(_hp.x*.6,_hp.x+CARRY.off.x,cw),lerp(_hp.y,_hp.y+CARRY.off.y,cw),lerp(Math.max(.25,_hp.z+.25),_hp.z+CARRY.off.z,cw));
     if(WA.aim>.01){gun.position.x=lerp(gun.position.x,_hp.x,WA.aim);gun.position.z=lerp(gun.position.z,_hp.z+.04,WA.aim);}placeGun(dt);gun.visible=!HERO.dead&&!player.swim&&!player.climb&&!(player.mantle>0);}
 }
 if(THREE.GLTFLoader){try{new THREE.GLTFLoader().load('models/hero.gltf.json',g=>{try{setupHero(g);}catch(e){console.warn('Hero model setup failed; using box survivor.',e);}},undefined,()=>{});}catch(e){}}

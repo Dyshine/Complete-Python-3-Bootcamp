@@ -71,6 +71,7 @@ function updateGroundWindow(){
   ground.position.set(sx,0,sz);rebuildGround(sx,sz);water.position.x=sx;water.position.z=sz;roadV.position.z=sz;roadH.position.x=sx;dashV.position.z=sz;dashH.position.x=sx;
   for(const d of dashV.children)d.visible=Math.abs(d.position.z+sz)>BR+3;
   for(const d of dashH.children)d.visible=Math.abs(d.position.x+sx)>BR+3;
+  updateEdgeLines(sx,sz);
 }
 
 /* ---------- obstacle spatial grid (collision, bullets and placement only look at nearby cells) ---------- */
@@ -392,6 +393,7 @@ function updateRoofs(){const px=player.x,pz=player.z;let inAny=false;
       if(!hide&&TP){const cx=camera.position.x-b.x,cz=camera.position.z-b.z,clx=cx*c-cz*s,clz=cx*s+cz*c;hide=Math.abs(clx)<b.hw+1.2&&Math.abs(clz)<b.hd+1.2;}
       else if(!hide)hide=Math.abs(dx)<b.ex+.7&&dz<b.ez&&dz>-(b.ez+b.h*.64+.5);}
     if(hide&&dx*dx+dz*dz<1600){const c2=Math.cos(b.rot),s2=Math.sin(b.rot);if(Math.abs(dx*c2-dz*s2)<b.hw+.2&&Math.abs(dx*s2+dz*c2)<b.hd+.2)inAny=true;}
+    if(FP)hide=false;   // first person keeps roofs and ceilings: you're under them, not looking down through them
     let hideUp=hide;
     if(b.upper&&hide){const inside=Math.abs(dx*Math.cos(b.rot)-dz*Math.sin(b.rot))<b.hw+.5&&Math.abs(dx*Math.sin(b.rot)+dz*Math.cos(b.rot))<b.hd+.5;
       hideUp=inside?!player.lvl:TP?camera.position.y-gH(b.x,b.z)<b.fh+.6:true;}

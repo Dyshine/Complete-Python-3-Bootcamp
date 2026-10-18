@@ -119,7 +119,7 @@ function homeEntry(x,z){let best=null,bc=1e9;for(const s of hsegs){if(s.kind!=='
   const c=Math.hypot(s.cx-x,s.cz-z)+Math.hypot(s.cx-player.x,s.cz-player.z)+(s.kind==='door'?(HOME.door.alive&&!HOME.door.open?HOME.door.hp/25:0):(s.st.boards?s.st.bhp/12:s.st.glass?2:0));
   if(c<bc){bc=c;best=s;}}return best;}
 function updateHome(dt){const d=HOME.door;d.amt+=((d.open&&d.alive?1:0)-d.amt)*Math.min(1,dt*7);if(HOME.hinge)HOME.hinge.rotation.y=d.amt*1.65;
-  const on=TP&&inHome(player.x,player.z),c=camera.position;
+  const on=TP&&!FP&&inHome(player.x,player.z),c=camera.position;
   for(const e of HOME.cut){const cut=on&&(e.axis==='x'?(c.z-e.fixed)*e.out:(c.x-e.fixed)*e.out)>.1;if(cut===!!e.cutNow)continue;e.cutNow=cut;
     if(e.win){e.win.cut=cut;winVisual(e.win);}else if(e.door){HOME.doorCut=cut;doorVisual();}
     else if(e.y0>=.85)e.m.visible=!cut;

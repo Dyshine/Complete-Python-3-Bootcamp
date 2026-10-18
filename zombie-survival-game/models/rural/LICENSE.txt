@@ -1,0 +1,9 @@
+houses.json, skin_a.jpg, skin_b.jpg, skin_c.jpg:
+  "Family house collection" by Miloslav "drummyfish" Číž, CC0 1.0 (public domain).
+  https://opengameart.org/content/family-house-collection
+  The baked models and baked textures, packed by tools/pack-rural.mjs.
+
+shed.json, shed_wood.jpg, shed_straw.jpg:
+  "Old wood barn" by carlosjorgereis, CC0 1.0 (public domain).
+  https://opengameart.org/content/old-wood-barn
+  Converted from barn.dae with three.js ColladaLoader.

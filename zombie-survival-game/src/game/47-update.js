@@ -151,24 +151,69 @@ function updateEnv(dt){
   if(gradePass){gradePass.uniforms.flash.value=fl*.35;gradePass.uniforms.night.value=v;gradePass.uniforms.time.value=W.time;gradePass.uniforms.sat.value=.95-.14*W.cloud-.18*W.ash;}
   flash.intensity=lerp(0,2.6,v);lantern.intensity=lerp(0,1.1,v)+W.fog*.4;lantern.position.set(player.x,2.6+gH(player.x,player.z),player.z);
   for(const f of floods)f.intensity=base.floods?lerp(.15,1.7,v):0;
+  streetLights(v);
 }
 const camGoal=new V3();let camGY=0;
-/* ---------- third-person chase camera (default) · V switches to the classic top-down view ---------- */
-let TP=!isTouch&&store.get('deadacre.view','tp')==='tp';
+/* ---------- cameras: third-person chase (default), first-person, classic top-down; V cycles them ----------
+   First person is the chase camera's controls with the eye at the survivor's head: TP stays true, FP adds the head
+   camera, hides the body and hands the gun to a viewmodel rig on the camera. */
+const VIEW0=store.get('deadacre.view','tp');
+let TP=!isTouch&&VIEW0!=='top',FP=TP&&VIEW0==='fp';
 let camYaw=Math.PI,camPitch=.3;const TPD=4.8,TP_SENS=.0024;
+const pitchLo=()=>FP?-1.25:-.12,pitchHi=()=>FP?1.3:.95;
 const _cp=new V3(),_cd=new V3(),_ct=new V3();
-const aimDist=()=>lerp(28,5,clamp((camPitch+.12)/1.07,0,1));
-function setView(tp){
-  TP=tp&&!isTouch;store.set('deadacre.view',TP?'tp':'top');camera.near=TP?.15:.5;camera.updateProjectionMatrix();
-  if(TP){camYaw=player.yaw;lockMouse();}else{if(document.pointerLockElement)document.exitPointerLock();const c=$('crosshair');c.style.left=mouse.x+'px';c.style.top=mouse.y+'px';}
-  toast(TP?'Third-person view: move the mouse to look. V for top-down.':'Top-down view. V for third-person.');
+// first person: the aim point is where the look ray meets the ground, out to 40 m
+const aimDist=()=>FP?(camPitch>.04?clamp(1.55/Math.tan(camPitch),2,40):40):lerp(28,5,clamp((camPitch+.12)/1.07,0,1));
+const VM=new THREE.Group();VM.rotation.y=Math.PI;camera.add(VM);scene.add(camera);
+const FPB={t:0,sx:0,sy:0,lx:0,ly:0};
+if(FP){VM.add(gun);pl.visible=false;}
+function setView(v){
+  const was=FP;v=isTouch?'top':v;TP=v!=='top';FP=v==='fp';store.set('deadacre.view',v);
+  camera.near=FP?.04:TP?.15:.5;camera.updateProjectionMatrix();
+  (FP?VM:pl).add(gun);pl.visible=!FP;if(!FP)VMH.visible=false;
+  if(FP&&!was)camPitch=.08;else if(!FP&&was)camPitch=clamp(camPitch+.25,-.12,.95);
+  if(TP){if(!was)camYaw=player.yaw;lockMouse();}else{if(document.pointerLockElement)document.exitPointerLock();const c=$('crosshair');c.style.left=mouse.x+'px';c.style.top=mouse.y+'px';}
+  toast(FP?'First-person view. V for top-down.':TP?'Third-person view: move the mouse to look. V for first person.':'Top-down view. V for third-person.');
+}
+const nextView=()=>FP?'top':TP?'fp':'tp';
+// the gun on the camera: at the hip, centred on the sights when aiming, bobbing with the stride and lagging the mouse.
+// Long guns sit with the butt at the shoulder (just behind the camera plane), handguns out in front.
+const VMH=(()=>{const g=new THREE.Group(),sleeve=FLAT(0x4b5640,true),glove=FLAT(0x2a2622,true);
+  const arm=()=>{const a=new THREE.Group(),f=mk(CYL(.04,.05,.42,8),sleeve,0,0,0);f.rotation.x=Math.PI/2;f.position.z=-.21;const h=mk(BOX(.075,.09,.11),glove,0,0,0);a.add(f,h);return a;};
+  g.R=arm();g.L=arm();g.add(g.R,g.L);VM.add(g);g.visible=false;return g;})();
+const _vmA=new V3();
+const _vmZ=new V3(0,0,-1);
+// hand at (x,y,z), forearm running back to the elbow at (bx,by,bz), both in the gun's frame
+function vmArm(a,x,y,z,bx,by,bz){a.position.set(x,y,z);_vmA.set(bx-x,by-y,bz-z).normalize();a.quaternion.setFromUnitVectors(_vmZ,_vmA);}
+function fpGun(dt){
+  VM.visible=true;
+  const ad=player.ads||0,mv=player.moving?1:0,run=player.sprinting&&mv?1:0;
+  FPB.t+=dt*(run?12:8.5)*mv*(player.crouch?.6:1);
+  const amp=(.006+.012*run)*mv*(1-ad*.85),bx=Math.sin(FPB.t)*amp,by=-Math.abs(Math.cos(FPB.t))*amp*1.3;
+  FPB.sx*=Math.exp(-dt*9);FPB.sy*=Math.exp(-dt*9);FPB.lx+=(FPB.sx-FPB.lx)*Math.min(1,dt*14);FPB.ly+=(FPB.sy-FPB.ly)*Math.min(1,dt*14);
+  const I=curW(),w=I&&wstat(I),melee=w&&w.melee&&!w.saw,kd=I&&!I.sp&&GUNKIT.ready&&GUNKIT.data[I.cls+I.tier];
+  const hand=I&&(I.cls==='side'||I.cls==='rev'),sight=kd?kd.sight:.06,butt=kd?kd.butt:hand?.05:.3;
+  // hip: handgun forward and right; long gun grip far enough forward that the stock ends at the shoulder
+  const hx=melee?-.2:hand?-.1:-.1,hy=melee?-.26:hand?-.115:-.12,hz=melee?.3:hand?.3:Math.max(.2,butt-.04);
+  const az=hand?.32:Math.max(.24,butt-.02);
+  gun.position.set(lerp(hx,0,ad)+bx+FPB.lx,lerp(hy,-sight-.01,ad)+by+FPB.ly-run*.06,lerp(hz,az,ad));
+  placeGun(dt);
+  if(run&&!(player.swing>0)){gun.rotateX(.55*run);gun.rotateY(-.5*run);}
+  gun.visible=!HERO.dead&&!player.swim&&!player.climb&&!(player.mantle>0);
+  // gloved hands: the right on the grip, the left on the fore-end (or cupping the right under a handgun)
+  VMH.visible=gun.visible&&!!I&&!(WA.throwT>0);
+  if(VMH.visible){VMH.position.copy(gun.position);VMH.quaternion.copy(gun.quaternion);
+    const tip=kd?kd.tip:.5,rl=player.reloadT>0&&player.reloadMax?Math.sin(Math.PI*(1-player.reloadT/player.reloadMax)):0;
+    vmArm(VMH.R,0,-.055,-.01,-.16,-.32,-.36);
+    if(hand||melee)vmArm(VMH.L,.03,-.08,.01,.2,-.3,-.3);
+    else vmArm(VMH.L,0,-.045-rl*.06,Math.min(tip*.5,.34)-rl*.25,.2,-.3,-.2);}
 }
 function lockMouse(){if(!TP||document.pointerLockElement||!stage.requestPointerLock)return;try{const r=stage.requestPointerLock();if(r&&r.catch)r.catch(()=>{});}catch(e){}}
 function unlockMouse(){if(document.pointerLockElement&&document.exitPointerLock)document.exitPointerLock();}
 // losing the pointer lock (Esc) pauses, like Esc does in top-down
 document.addEventListener('pointerlockchange',()=>{if(!document.pointerLockElement&&TP&&S.running&&!S.over&&!S.menu&&!S.paused&&!S.panel)togglePause();});
 const adsSens=()=>1-(player.ads||0)*(scoped()?.72:.5);
-function tpLook(dx,dy){const k=TP_SENS*adsSens();camYaw-=dx*k;camPitch=clamp(camPitch+dy*k,-.12,.95);}
+function tpLook(dx,dy){const k=TP_SENS*adsSens();camYaw-=dx*k;camPitch=clamp(camPitch+dy*k,pitchLo(),pitchHi());if(FP){FPB.sx=clamp(FPB.sx+dx*.00012,-.03,.03);FPB.sy=clamp(FPB.sy+dy*.00012,-.03,.03);}}
 function scoped(){const I=curW();return!!I&&(I.cls==='hunt'||(I.mods&&I.mods.optic==='scope'));}
 function camBlocked(x,y,z){
   if(y<gH(x,z)+.35)return true;let hit=false;
@@ -184,10 +229,21 @@ function canopyFade(){const c=camera.position;_canNow.clear();
   for(const t of _canNow){t.g.visible=false;CANOPY_HID.add(t);}}
 function updateCameraTP(dt){
   if(!document.pointerLockElement&&!pad.active){const ex=mouse.x/innerWidth;if(ex<.05)camYaw+=dt*2.2;else if(ex>.95)camYaw-=dt*2.2;}
-  if(pad.active){const k=adsSens();camYaw-=pad.rx*2.8*dt*k;camPitch=clamp(camPitch+pad.ry*1.8*dt*k,-.12,.95);}
+  if(pad.active){const k=adsSens();camYaw-=pad.rx*2.8*dt*k;camPitch=clamp(camPitch+pad.ry*1.8*dt*k,pitchLo(),pitchHi());}
   const fx=Math.sin(camYaw),fz=Math.cos(camYaw),rx=-Math.cos(camYaw),rz=Math.sin(camYaw);
   const gy=gH(player.x,player.z)+(player.swim?depthAt(player.x,player.z)-1.35:ICE?Math.max(0,depthAt(player.x,player.z)):0);
-  camGY+=(gy-camGY)*Math.min(1,dt*8);
+  camGY+=(gy-camGY)*Math.min(1,dt*(FP?16:8));
+  if(FP){
+    const cp=Math.cos(camPitch),sp=Math.sin(camPitch);_cd.set(fx*cp,-sp,fz*cp);
+    player.ehy=(player.ehy==null?1.62:player.ehy)+(((player.crouch?1.12:1.62)-(player.swim?.25:0))-(player.ehy==null?1.62:player.ehy))*Math.min(1,dt*10);
+    const bob=player.moving&&!player.jy?Math.abs(Math.sin(FPB.t))*.035*(player.sprinting?1.4:1)*(1-(player.ads||0)*.7):0;
+    camera.position.set(player.x+fx*.14,camGY+player.ehy+(player.lvlY||0)+(player.jy||0)+bob,player.z+fz*.14);
+    if(S.shake>0){camera.position.x+=rand(-1,1)*S.shake*.05;camera.position.y+=rand(-1,1)*S.shake*.05;S.shake=Math.max(0,S.shake-dt*2.2);}
+    camera.lookAt(camera.position.x+_cd.x,camera.position.y+_cd.y,camera.position.z+_cd.z);
+    if(S.shake>0||WA.kick>.02)camera.rotateZ(rand(-1,1)*(S.shake*.02+WA.kick*.004));
+    const c=$('crosshair');c.style.left=innerWidth/2+'px';c.style.top=innerHeight/2+'px';
+    if(player.ads>.3){const sf=$('scopeFx').style;sf.setProperty('--sx',(innerWidth/2).toFixed(0)+'px');sf.setProperty('--sy',(innerHeight/2).toFixed(0)+'px');}
+    fpGun(dt);return;}
   const ad=player.ads||0,sh=.75+.3*ad;
   _ct.set(player.x+rx*sh,camGY+(player.crouch?1.35:1.75)+.1*ad+(player.lvlY||0)+(player.jy||0),player.z+rz*sh);
   const pit=lerp(camPitch,Math.max(camPitch,.95),INDOOR),cp=Math.cos(pit),sp=Math.sin(pit);_cd.set(fx*cp,-sp,fz*cp);

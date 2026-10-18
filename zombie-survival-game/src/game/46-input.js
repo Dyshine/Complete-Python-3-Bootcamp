@@ -15,7 +15,7 @@ window.addEventListener('keydown',e=>{
   if(!S.paused&&!S.menu&&!S.panel){if(e.code==='KeyZ'){useQuick();return;}if(e.code==='KeyX'){cycleQuick();return;}}
   if(e.code==='KeyB'){if(S.menu)closeMenu();else if(!S.paused){if(inBase(player.x,player.z))openMenu();else{craftCat='Build camp';openCraft();}}return;}
   if(S.paused||S.menu)return;
-  if(e.code==='KeyV'){setView(!TP);return;}
+  if(e.code==='KeyV'){setView(nextView());return;}
   if(e.code==='KeyC'){player.crouchT=!player.crouchT;return;}
   const n=['Digit1','Digit2','Digit3','Digit4','Digit5','Digit6','Digit7','Digit8','Digit9','Digit0'].indexOf(e.code);if(n>=0)setWeapon(SLOTS[n]);
   if(e.code==='KeyQ')cycleWeapon(1);
@@ -33,7 +33,8 @@ let lastMouse={x:0,y:0};
 window.addEventListener('mousemove',e=>{mouse.x=e.clientX;mouse.y=e.clientY;
   if(pad.active&&Math.hypot(e.clientX-lastMouse.x,e.clientY-lastMouse.y)>8){setPadActive(false);if(S.running&&!S.menu&&!S.paused&&!S.over)document.body.classList.add('playing');}
   lastMouse={x:e.clientX,y:e.clientY};
-  if(TP){if(S.running&&!S.paused&&!S.menu&&!S.over)tpLook(e.movementX||0,e.movementY||0);}
+  // browsers report one huge jump when the pointer locks or re-enters the window; a real flick is never that big in one event
+  if(TP){const mx=e.movementX||0,my=e.movementY||0;if(S.running&&!S.paused&&!S.menu&&!S.over&&Math.abs(mx)<300&&Math.abs(my)<300)tpLook(mx,my);}
   else if(!pad.active){const c=$('crosshair');c.style.left=e.clientX+'px';c.style.top=e.clientY+'px';}});
 stage.addEventListener('mousedown',e=>{if(BM.on&&S.running&&!S.paused&&!S.panel){if(e.button===0)confirmBuild();else if(e.button===2)endBuild();Sound.init();return;}if(e.button===0){mouseDown=true;setPadActive(false);}if(e.button===2)mouseR=true;Sound.init();if(S.running&&!S.paused&&!S.menu&&!S.over)lockMouse();});
 window.addEventListener('mouseup',e=>{if(e.button===0)mouseDown=false;if(e.button===2)mouseR=false;});

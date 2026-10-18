@@ -4,7 +4,9 @@ const Sound=(()=>{
      Everything is synthesised in WebAudio: layered weapon reports (transient crack + body + low thump + reverb tail), surface
      footsteps, formant-filtered zombie voices, positional panning with distance filtering, a shared convolution reverb that
      gets roomier indoors, a weather/time-of-day ambience bed and an adaptive score that rises with danger. A bus compressor
-     and limiter glue it together. Volumes: master, music, effects (pause menu). */
+     and limiter glue it together. Volumes: master, music, effects (pause menu).
+     Firearms and reloads play recorded takes from sounds/ (CC0, see sounds/CREDITS.txt) through the same routing; the
+     synthesised reports stand in until the recordings have decoded, or if they can't load. */
   let ctx=null,master=null,sfx=null,amb=null,mus=null,rvb=null,rvbIn=null,comp=null,muted=false,voices=0;
   const NB={},last={},vol=store.get('deadacre.vol',{master:.9,music:.55,sfx:.9});
   const GAP={smg:.03,saw:.09,siren:.8,arc:.04,hit:.03,turret:.05,groan:.05,hurt:.18,pick:.04,empty:.12,rifle:.025,thud:.05,clink:.025,door:.15,step:.05,ui:.03};
@@ -27,7 +29,7 @@ const Sound=(()=>{
       rvb=ctx.createConvolver();rvb.buffer=impulse(2.4,3.2);rvbIn=ctx.createGain();rvbIn.gain.value=.9;const rvOut=ctx.createGain();rvOut.gain.value=.55;
       const rvLP=ctx.createBiquadFilter();rvLP.type='lowpass';rvLP.frequency.value=5200;rvbIn.connect(rvb);rvb.connect(rvLP);rvLP.connect(rvOut);rvOut.connect(master);
       for(const k of ['white','pink','brown'])NB[k]=buf(k);
-      applyVol();startMusic();
+      applyVol();startMusic();loadSamples();
     }catch(e){ctx=null;}
   }
   function applyVol(){if(!ctx)return;const t=ctx.currentTime;master.gain.setTargetAtTime(muted?0:vol.master*.55,t,.05);sfx.gain.setTargetAtTime(vol.sfx,t,.05);amb.gain.setTargetAtTime(vol.sfx*.9,t,.05);mus.gain.setTargetAtTime(vol.music*.5,t,.2);}
@@ -44,6 +46,37 @@ const Sound=(()=>{
     return g;
   }
   const T=()=>ctx.currentTime;
+  // ---------- recorded samples: sounds/<name>_<n>.mp3, decoded once ----------
+  const SMP={pistol:4,pistol_far:1,revolver:2,revolver_far:1,smg:4,smg_far:1,rifle:4,rifle_far:1,shotgun:3,shotgun_far:1,sniper:4,sniper_far:1,
+    reload_mag:1,reload_rifle:1,pump:1,shell:1};
+  const SB={},SLAST={};
+  function loadSamples(){if(!window.fetch)return;
+    for(const [k,n] of Object.entries(SMP))for(let i=1;i<=n;i++)
+      fetch(`sounds/${k}_${i}.mp3`).then(r=>r.ok?r.arrayBuffer():Promise.reject(r.status))
+        .then(a=>new Promise((res,rej)=>ctx.decodeAudioData(a,res,rej))).then(b=>{(SB[k]||(SB[k]=[])).push(b);}).catch(()=>{});}
+  // one take of k into out; never the same take twice running; slight pitch spread so rapid fire doesn't machine-gun
+  function sample(out,k,v,delay,rate){const L=SB[k];if(!L||!L.length)return false;
+    let i=Math.random()*L.length|0;if(L.length>1&&i===SLAST[k])i=(i+1)%L.length;SLAST[k]=i;
+    const s=ctx.createBufferSource();s.buffer=L[i];s.playbackRate.value=rate||rand(.95,1.05);
+    const g=ctx.createGain();g.gain.value=v;s.connect(g);g.connect(out);s.start(T()+(delay||0));return true;}
+  // per firearm: voice length, reverb send, level, low punch frequency
+  const GS={pistol:[1.3,.2,.62,130],revolver:[1.6,.24,.7,110],smg:[.8,.14,.5,140],rifle:[1.5,.2,.62,120],shotgun:[2,.26,.75,85],sniper:[2.6,.3,.8,80]};
+  function gunSample(n,v,pos,opt){const G=GS[n];if(!G||!SB[n])return false;const sup=opt&&opt.sup;
+    const o=route(Object.assign({len:G[0],wet:sup?G[1]*.5:G[1]},pos||{}));let out=o;
+    if(sup){const f=ctx.createBiquadFilter();f.type='lowpass';f.frequency.value=1500;f.Q.value=.5;f.connect(o);out=f;}
+    sample(out,n,v*G[2]*(sup?.4:1));
+    tone(o,G[3],G[3]*.3,.11,.3*v*(sup?.3:1),'sine');                       // chest punch small speakers lose from field recordings
+    if(!sup&&INROOM<.5&&SB[n+'_far'])sample(o,n+'_far',v*G[2]*.16,rand(.11,.17),1);   // slap-back off the treeline outdoors
+    if(n==='shotgun')sample(o,'pump',.55*v,.42,1)||(noise(o,.08,'bandpass',1400,3,.18*v,.5),noise(o,.1,'bandpass',900,3,.2*v,.68));
+    if(n==='sniper')noise(o,.05,'bandpass',3400,4,.08*v,.6);
+    return true;}
+  // reload by weapon class; t is the reload's length so the closing rack lands near its end
+  function reloadSample(cls,t){const o=route({len:(t||1.6)+.5,wet:.05});
+    switch(cls){
+      case 'side':case 'smg':return sample(o,'reload_mag',.5);
+      case 'ar':case 'hunt':return sample(o,'reload_rifle',.5);
+      case 'shot':case 'rev':{const ok=sample(o,'shell',.45);if(ok&&cls==='shot')sample(o,'pump',.5,Math.max(.5,(t||1.6)-.5),1);return ok;}
+    }return false;}
   function noise(out,dur,type,freq,q,vol,delay,kind,f1){
     const t=T()+(delay||0),s=ctx.createBufferSource();s.buffer=NB[kind||'white'];
     const f=ctx.createBiquadFilter();f.type=type||'lowpass';f.frequency.setValueAtTime(freq,t);if(f1)f.frequency.exponentialRampToValueAtTime(Math.max(20,f1),t+dur);f.Q.value=q||.7;
@@ -77,10 +110,12 @@ const Sound=(()=>{
     noise(out,tail,'lowpass',tailF,.6,o.tl,.02,'pink',tailF*.4);
     if(o.mech)noise(out,.05,'bandpass',3400,4,o.mech,o.mechD||.09);
   }
-  function play(n,v,x,z){
+  function play(n,v,x,z,opt){
     if(!ctx||muted||voices>60)return;v=v==null?1:v;if(v<.02)return;const now=ctx.currentTime;
     if(last[n]!=null&&now-last[n]<(GAP[n]==null?.02:GAP[n]))return;last[n]=now;
     const pos=x!=null?{x,z}:null,O=(len,wet)=>route(Object.assign({len,wet},pos||{}));
+    if(gunSample(n,v,pos,opt))return;
+    if(n==='reload'&&opt&&opt.cls&&reloadSample(opt.cls,opt.t))return;
     let o;
     switch(n){
       case 'pistol':o=O(1.4,.32);gun(o,{crack:[2600,.5*v],body:.11,bodyF:1500,bv:.55*v,thump:.12,thF:150,tv:.5*v,tail:.9,tailF:1400,tl:.16*v,mech:.06*v});break;
@@ -190,7 +225,7 @@ const Sound=(()=>{
   }
   function quiet(dt){if(!ctx)return;for(const L of Object.values(loops)){L.cur+=(0-L.cur)*Math.min(1,dt*3);L.g.gain.value=L.cur;}}
   function setVol(k,v){vol[k]=v;store.set('deadacre.vol',vol);applyVol();}
-  return{init,play,ambient,step,update,setVol,quiet,get vol(){return vol;},toggle(){muted=!muted;applyVol();return muted;},get muted(){return muted;}};
+  return{init,play,ambient,step,update,setVol,quiet,get samples(){return Object.keys(SB).length;},get vol(){return vol;},toggle(){muted=!muted;applyVol();return muted;},get muted(){return muted;}};
 })();
 
 

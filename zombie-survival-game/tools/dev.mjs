@@ -20,7 +20,7 @@ function render(test) {
 }
 const errorPage = e => `<!doctype html><meta charset=utf-8><body style="background:#140c0c;color:#f2d0c8;font:15px/1.5 monospace;padding:24px"><h2 style="color:#ff6a55">Build error</h2><pre>${e.replace(/</g, '&lt;')}</pre>${RELOAD}</body>`;
 
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.glb': 'model/gltf-binary', '.css': 'text/css' };
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.glb': 'model/gltf-binary', '.mp3': 'audio/mpeg', '.css': 'text/css' };
 http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x');
   if (u.pathname === '/__reload') { res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' }); res.write('\n'); clients.add(res); req.on('close', () => clients.delete(res)); return; }

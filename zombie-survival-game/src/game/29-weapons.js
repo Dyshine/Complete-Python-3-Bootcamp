@@ -72,7 +72,7 @@ function wstat(I){
     for(const k of ['quiet','unaware','siren','spreadFire','battery','chain','saw','stacks','bounce','sticky'])w[k]=sp[k];w.burn=sp.burn||0;
     w.dmg*=1+.2*((I.mk||1)-1);}
   for(const id of Object.values(I.mods)){
-    switch(id){case 'sup':w.noise*=.35;w.dmg*=.95;break;case 'comp':w.spread*=.7;w.kick*=.7;w.shake*=.7;break;case 'choke':w.spread*=.6;w.range*=1.35;break;
+    switch(id){case 'sup':w.noise*=.35;w.dmg*=.95;w.sup=true;break;case 'comp':w.spread*=.7;w.kick*=.7;w.shake*=.7;break;case 'choke':w.spread*=.6;w.range*=1.35;break;
       case 'ext':w.mag=Math.round(w.mag*1.5);break;case 'drum':w.mag=Math.round(w.mag*2.5);w.reload*=1.4;break;case 'dot':w.spread*=.75;w.range*=1.15;break;
       case 'scope':w.range*=1.5;w.crit=.15;break;case 'stock':w.kick*=.6;w.spread*=.85;break;case 'trig':w.rate/=1.15;break;
       case 'inc':if(!w.burn)w.burn=8;break;case 'hp':w.dmg*=1.2;w.pierce=Math.max(1,w.pierce-1);break;}}
@@ -245,7 +245,7 @@ function buildGun(I){
       const geo=new THREE.ExtrudeGeometry(shp,{depth:th,bevelEnabled:false});kAdd(K,0,m,geo,th/2,0,0,-Math.PI/2);geo.dispose();}}
   kBake(K,0);return K.g;
 }
-function gunModel(I){const k=I.sp||I.cls+I.tier;if(!GUNMODEL[k])GUNMODEL[k]=buildGun(I);return GUNMODEL[k].clone();}
+function gunModel(I){const k=I.sp||I.cls+I.tier;if(!GUNMODEL[k])GUNMODEL[k]=(!I.sp&&kitGun(k))||buildGun(I);return GUNMODEL[k].clone();}
 function equipVisual(){gun.clear();const I=curW();if(I)gun.add(gunModel(I));if(typeof muzzleFlash!=='undefined')gun.add(muzzleFlash.grp);}
 function spawnWDrop(I,x,z){
   const g=new THREE.Group();g.position.set(x,.12,z);const m=gunModel(I);m.rotation.z=Math.PI/2;m.rotation.y=rand(0,6.28);m.scale.setScalar(1.5);g.add(m);
@@ -270,7 +270,7 @@ function startReload(){
   if(w.melee&&!w.saw)return;
   if(w.saw){if(comp.CHM<=0){Sound.play('empty');toast('No Chem to refuel the Harvester','bad');return;}}
   else if(!w.infinite&&ammo[w.ammo]<=0){Sound.play('empty');return;}
-  player.reloadT=player.reloadMax=w.saw?1.5:w.reload*(1-.12*PERK('hands'));Sound.play('reload');
+  player.reloadT=player.reloadMax=w.saw?1.5:w.reload*(1-.12*PERK('hands'));Sound.play('reload',1,null,null,{cls:w.cls,t:player.reloadMax});
   if(!w.saw&&w.cls!=='shot'&&w.cls!=='bow'&&w.cls!=='rev'&&w.cls!=='gl')setTimeout(()=>{if(player.reloadT<=0)return;const p=particles[pIdx=(pIdx+1)%particles.length];gun.getWorldPosition(_va);
     p.m.material=PART_M.debris||p.m.material;p.m.geometry=BOX(.06,.16,.1);p.m.scale.setScalar(1);p.m.visible=true;p.m.position.set(_va.x,_va.y-.1-gH(_va.x,_va.z),_va.z);p.vx=rand(-.4,.4);p.vz=rand(-.4,.4);p.vy=.5;p.life=3;p.bounce=true;p.casing=false;Sound.play('clink',.6);},player.reloadMax*280);
 }
@@ -305,7 +305,7 @@ function tryFire(){
   SHOT=null;
   muzzleLight.position.set(mp.x,1.5+gH(mp.x,mp.z),mp.z);muzzleLight.intensity=w.noise<10?.6:3;
   if(w.kick)knockPlayer(-Math.sin(player.yaw),-Math.cos(player.yaw),w.kick);
-  S.shake=Math.max(S.shake,w.shake);Sound.play(w.chain?'arc':w.sfx,w.noise<10?.5:1);if(w.noise>1)makeNoise(player.x,player.z,w.noise*noiseMask());onShotFx(w);
+  S.shake=Math.max(S.shake,w.shake);Sound.play(w.chain?'arc':w.sfx,w.noise<10?.5:1,null,null,w.sup?{sup:true}:null);if(w.noise>1)makeNoise(player.x,player.z,w.noise*noiseMask());onShotFx(w);
   player.recoil=.08;
   if(I.mag===0&&!w.battery&&(w.infinite||ammo[w.ammo]>0))startReload();
 }

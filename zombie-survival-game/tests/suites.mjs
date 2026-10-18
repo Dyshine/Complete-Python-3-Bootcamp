@@ -4,11 +4,12 @@ export const suites = [
   {
     name: 'boot',
     async run(page, { expect }) {
-      const r = await page.evaluate(() => { __sim(100, .05); const S = __w().S; return { day: document.getElementById('phaseLabel').textContent, inHome: __w().inHome(__P.x, __P.z), chunks: __w().chunks.size, live: document.getElementById('liveView').textContent }; });
+      const r = await page.evaluate(() => { __sim(100, .05); const S = __w().S; return { samples: __w().Sound.samples, day: document.getElementById('phaseLabel').textContent, inHome: __w().inHome(__P.x, __P.z), chunks: __w().chunks.size, live: document.getElementById('liveView').textContent }; });
       expect(/DAY 1/.test(r.day), 'HUD should read DAY 1, got ' + r.day);
       expect(r.inHome, 'player should start inside the cabin');
       expect(r.chunks > 4, 'world chunks should stream in');
-      return `${r.chunks} chunks, ${r.live} watching`;
+      expect(r.samples === 16, 'all 16 recorded weapon sounds decode, got ' + r.samples);
+      return `${r.chunks} chunks, ${r.samples} sound sets, ${r.live} watching`;
     },
   },
   {
@@ -52,6 +53,25 @@ export const suites = [
       expect(r.wall < 4, 'house walls stop bullets');
       expect(r.lv === 3 && r.wins === 10 && r.wing, 'both wings build, with 10 windows');
       return `boards, door, glass, walls, wings`;
+    },
+  },
+  {
+    name: 'first-person',
+    async run(page, { expect, shot }) {
+      const r = await page.evaluate(() => {
+        const w = __w(); __P.x = 30; __P.z = 30; w.setView('fp'); w.camYaw = 0; w.camPitch = .05; __sim(30, .05); w.updateCamera(.05);
+        const o = { eye: +(__cam.position.y - w.gH(__P.x, __P.z)).toFixed(2), vm: w.gun.parent === w.VM, body: w.pl.visible };
+        const z = __spawn('walker', __P.x, __P.z + 9); z.hp = 1; z.aware = 0; w.updateCamera(.05);
+        for (let i = 0; i < 60 && !z.dying; i++) { w.tryFire(); __sim(1, .05); } o.killed = !!z.dying || z.hp <= 0;
+        return o;
+      });
+      await shot('first-person');
+      const back = await page.evaluate(() => { const w = __w(); w.setView('top'); w.setView('tp'); __sim(5, .05); return { vm: w.gun.parent === w.VM, body: w.pl.visible, view: localStorage.getItem('deadacre.view') }; });
+      expect(r.eye > 1.4 && r.eye < 1.9, 'eye height ' + r.eye);
+      expect(r.vm && !r.body, 'gun on the viewmodel rig and the body hidden');
+      expect(r.killed, 'shooting straight ahead hits an infected');
+      expect(!back.vm && back.body, 'third person gets the body and the gun back');
+      return `eye ${r.eye} m, hit, back to third person`;
     },
   },
   {

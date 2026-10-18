@@ -1,0 +1,15 @@
+All sounds in this folder are CC0 (public domain). Cut, trimmed, mixed to mono and re-encoded for the game.
+
+pistol, revolver, smg, rifle, shotgun, sniper (and *_far)
+  "The Free Firearm Sound Library" by Ben Jaszczak et al., submitted by bart
+  https://opengameart.org/content/the-free-firearm-sound-library
+  Walther PPQ and 1911 (pistol), Smith & Wesson 642 (revolver), PPSh and Carl Gustav M45 (smg),
+  AR-15 and AK-47 (rifle), Benelli Nova and Winchester Model 12 (shotgun), Tikka T3 and Mosin Nagant (sniper)
+
+reload_mag, reload_rifle, pump
+  "Gun Reload Sounds" by SpringySpringo
+  https://opengameart.org/content/gun-reload-sounds
+
+shell
+  "Shotgun Reload Sound Effects" by zer0_sol
+  https://opengameart.org/content/shotgun-reload-sound-effects
