@@ -1,0 +1,67 @@
+/* ===== broadcast look for the title, intro, pause and game-over screens ===== */
+:root{--tv-red:#e8262e;--tv-yel:#ffcc1a;--tv-ink:#07080c;--tv-panel:rgba(10,11,16,.93)}
+.overlay.tv{background:radial-gradient(ellipse at 50% 35%,rgba(70,10,14,.55),rgba(5,5,8,.96) 70%);isolation:isolate;padding-top:64px;padding-bottom:64px;align-items:start}
+.overlay.tv>.sheet{margin:auto 0;box-sizing:border-box;max-width:100%}
+.overlay.tv{overflow-x:hidden}
+.overlay.tv::before,.overlay.tv::after{content:"";position:fixed;top:-30vh;width:60vw;height:160vh;z-index:-1;pointer-events:none;mix-blend-mode:screen;
+  background:linear-gradient(90deg,transparent,rgba(255,236,190,.10) 45%,rgba(255,236,190,.16) 50%,rgba(255,236,190,.10) 55%,transparent);filter:blur(6px)}
+.overlay.tv::before{left:-10vw;transform-origin:50% 0;animation:beamL 9s ease-in-out infinite alternate}
+.overlay.tv::after{right:-10vw;transform-origin:50% 0;animation:beamR 11s ease-in-out infinite alternate}
+@keyframes beamL{from{transform:rotate(-24deg)}to{transform:rotate(10deg)}}
+@keyframes beamR{from{transform:rotate(22deg)}to{transform:rotate(-12deg)}}
+.tvfx{position:fixed;inset:0;pointer-events:none;z-index:3;background:repeating-linear-gradient(0deg,rgba(0,0,0,.18) 0 1px,transparent 1px 3px),radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.55))}
+.tvbug{position:fixed;top:14px;left:16px;z-index:4;display:flex;align-items:center;gap:8px;pointer-events:none}
+.tvbug b{font-family:"Anton",var(--f-display);font-size:22px;letter-spacing:.06em;color:#fff;background:var(--tv-red);padding:2px 9px;transform:skewX(-12deg);box-shadow:3px 3px 0 #000}
+.tvbug span{font-weight:700;letter-spacing:.2em;font-size:13px;color:#fff;display:flex;align-items:center;gap:6px;background:rgba(0,0,0,.6);padding:3px 8px}
+.tvbug span i{width:8px;height:8px;border-radius:50%;background:var(--tv-red);box-shadow:0 0 8px var(--tv-red);animation:liveblink 1.2s steps(2,start) infinite}
+.tvtc{position:fixed;top:16px;right:18px;z-index:4;font-weight:700;letter-spacing:.14em;font-size:14px;color:#fff;background:rgba(0,0,0,.6);padding:3px 9px;font-variant-numeric:tabular-nums;pointer-events:none}
+.tvtc::before{content:"● REC  ";color:var(--tv-red)}
+.tv .sheet{position:relative;z-index:2;background:linear-gradient(180deg,rgba(22,23,32,.95),var(--tv-panel));border:0;border-radius:0;
+  clip-path:polygon(0 0,calc(100% - 26px) 0,100% 26px,100% 100%,26px 100%,0 calc(100% - 26px));box-shadow:none;padding-top:clamp(26px,4vw,42px)}
+.tv .sheet::before{content:"";position:absolute;left:0;right:0;top:0;height:7px;background:repeating-linear-gradient(-55deg,var(--tv-yel) 0 14px,#111 14px 28px)}
+.tv .sheet::after{content:"";position:absolute;left:0;top:7px;bottom:0;width:4px;background:linear-gradient(var(--tv-red),transparent)}
+.tv .stamp{display:inline-block;background:var(--tv-red);color:#fff;font-family:var(--f-ui);font-weight:700;font-size:13px;letter-spacing:.22em;padding:4px 14px;transform:skewX(-12deg);box-shadow:3px 3px 0 #000}
+.tv .title{font-family:"Anton",var(--f-display);font-weight:400;text-transform:uppercase;letter-spacing:.01em;color:#fff;transform:skewX(-7deg);transform-origin:left bottom;margin:14px 0 10px;
+  text-shadow:3px 3px 0 var(--tv-red),6px 6px 0 #000,0 0 46px rgba(232,38,46,.5)}
+.tv .title span{color:var(--tv-yel);text-shadow:3px 3px 0 #b3121a,6px 6px 0 #000,0 0 46px rgba(255,204,26,.45)}
+.tv h1.title{font-size:clamp(64px,13vw,150px);animation:flick 6s infinite}
+@keyframes flick{0%,96%,100%{opacity:1}97%{opacity:.75}98%{opacity:1}99%{opacity:.85}}
+.tv .lede{font-size:19px}.tv .lede b{color:var(--tv-yel)}
+.tv .btn{position:relative;overflow:hidden;transform:skewX(-12deg);background:linear-gradient(180deg,#ffe066,var(--tv-yel) 55%,#e9a800);color:#120d02;border:0;border-radius:0;
+  font-family:"Anton",var(--f-ui);font-weight:400;letter-spacing:.12em;box-shadow:4px 4px 0 #000,0 0 26px rgba(255,204,26,.35);transition:transform .12s,box-shadow .12s}
+.tv .btn::after{content:"";position:absolute;top:0;bottom:0;left:-60%;width:40%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.65),transparent);transform:skewX(-20deg);animation:shine 3.4s ease-in-out infinite}
+@keyframes shine{0%,70%{left:-60%}100%{left:130%}}
+.tv .btn:hover,.tv .btn:focus-visible{transform:skewX(-12deg) translate(-2px,-2px);box-shadow:6px 6px 0 #000,0 0 34px rgba(255,204,26,.55);filter:none}
+.tv .btn.ghost{background:transparent;color:#fff;border:2px solid rgba(255,255,255,.8);box-shadow:4px 4px 0 #000}.tv .btn.ghost::after{display:none}
+.tv .btn.ghost:hover{background:rgba(255,255,255,.08)}
+.tv .best{color:#c9c4b4}
+.tv .cols h3{color:var(--tv-yel);border-bottom:2px solid rgba(232,38,46,.6)}
+.tv .diffpick button{border-radius:0;border:1px solid rgba(255,255,255,.18);transform:skewX(-6deg)}
+.tv .diffpick button.on{border-color:var(--tv-yel);background:rgba(255,204,26,.14);box-shadow:3px 3px 0 #000}.tv .diffpick button.on b{color:var(--tv-yel)}
+.tv .stats div{border:0;background:rgba(255,255,255,.04);border-left:4px solid var(--tv-red);border-radius:0}
+.tv .stats b{font-family:"Anton",var(--f-display);font-weight:400;color:var(--tv-yel);text-shadow:2px 2px 0 #000}
+/* the news ticker */
+.ticker{position:fixed;left:0;right:0;bottom:0;z-index:4;height:38px;display:flex;align-items:stretch;background:#0b0c12;border-top:3px solid var(--tv-red);overflow:hidden;pointer-events:none}
+.ticker .tkl{flex:none;display:flex;align-items:center;padding:0 16px;background:var(--tv-red);color:#fff;font-family:"Anton",var(--f-ui);letter-spacing:.14em;font-size:16px;clip-path:polygon(0 0,100% 0,calc(100% - 14px) 100%,0 100%);padding-right:26px}
+.ticker .tkt{flex:1;overflow:hidden;display:flex;align-items:center;mask-image:linear-gradient(90deg,transparent,#000 4%,#000 96%,transparent)}
+.ticker .tkt span{white-space:nowrap;font-weight:600;font-size:17px;letter-spacing:.04em;color:#f2eee2;padding-left:100%;animation:tick 48s linear infinite}
+.ticker .tkt em{font-style:normal;color:var(--tv-yel);margin:0 18px}
+@keyframes tick{to{transform:translateX(-100%)}}
+/* intro: the contestant card */
+.intro .ccard{display:grid;grid-template-columns:150px 1fr;gap:16px;align-items:stretch;margin:8px 0 12px}
+.intro .mug{position:relative;background:repeating-linear-gradient(0deg,rgba(255,255,255,.18) 0 1px,transparent 1px 16px),#2a2c33;border:2px solid #000;overflow:hidden;min-height:170px}
+.intro .mug svg{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);width:118px;fill:#0c0d11}
+.intro .mug .plate{position:absolute;left:8px;right:8px;bottom:8px;background:#0c0d11;color:#fff;font-weight:700;font-size:12px;letter-spacing:.12em;text-align:center;padding:3px 0;border:1px solid #555}
+.intro .icase{margin:0;border:0;border-left:4px solid var(--tv-red);background:rgba(255,255,255,.04)}
+.intro .ihost{border:0;padding:0;background:none}
+.intro .lower{display:inline-block;background:var(--tv-red);color:#fff;font-family:"Anton",var(--f-ui);letter-spacing:.12em;font-size:14px;padding:3px 12px;transform:skewX(-12deg);margin-bottom:6px;box-shadow:3px 3px 0 #000}
+.intro .ititle{font-family:"Anton",var(--f-display);font-weight:400;transform:skewX(-7deg);text-shadow:3px 3px 0 var(--tv-red),6px 6px 0 #000}.intro .ititle span{color:var(--tv-yel);text-shadow:3px 3px 0 #b3121a,6px 6px 0 #000}
+@media (max-width:560px){.intro .ccard{grid-template-columns:1fr}.intro .mug{min-height:150px}}
+/* game over: the signal breaks up */
+#overScreen.tv{background:radial-gradient(ellipse at 50% 40%,rgba(30,30,34,.7),rgba(4,4,6,.97) 70%)}
+#overScreen .tvstatic{position:fixed;inset:-50%;z-index:-1;opacity:.13;pointer-events:none;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");animation:staticmv .35s steps(4) infinite}
+@keyframes staticmv{0%{transform:translate(0,0)}25%{transform:translate(-6%,4%)}50%{transform:translate(5%,-3%)}75%{transform:translate(-3%,-6%)}}
+#overScreen .title{animation:glitch 2.4s infinite}
+@keyframes glitch{0%,88%,100%{text-shadow:3px 3px 0 var(--tv-red),6px 6px 0 #000;transform:skewX(-7deg)}90%{text-shadow:-5px 0 0 #18e0ff,5px 0 0 var(--tv-red);transform:skewX(-7deg) translateX(4px)}93%{text-shadow:5px 0 0 #18e0ff,-5px 0 0 var(--tv-red);transform:skewX(-7deg) translateX(-3px)}}
+@media (prefers-reduced-motion:reduce){.overlay.tv::before,.overlay.tv::after,.tv h1.title,.tv .btn::after,.ticker .tkt span,#overScreen .tvstatic,#overScreen .title,.tvbug span i{animation:none}.ticker .tkt span{padding-left:16px}}

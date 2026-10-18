@@ -1,1 +1,5 @@
 assets/
+node_modules/
+game-test.html
+test-results/
+.lint/

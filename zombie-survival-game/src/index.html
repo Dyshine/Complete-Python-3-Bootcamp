@@ -1,0 +1,276 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dead Acre</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:wght@400;500;600;700&family=Stardos+Stencil:wght@400;700&display=swap">
+<style>
+/*@STYLES*/
+</style>
+
+<div id="stage"></div>
+<div id="lowhp"></div>
+<div id="vignette"></div>
+<div id="scopeFx"></div>
+<div id="fadeOut"></div>
+<div id="crosshair" hidden></div>
+<div id="dmgLayer"></div>
+
+<div class="hud" id="hud" hidden>
+  <div class="tl panel">
+    <div id="phaseLabel">DAY 1</div>
+    <div id="phaseSub">Nightfall in 1:15</div>
+    <div class="wallrow"><span class="label">House</span><div class="bar"><i id="wallBar"></i></div><b id="wallPct">100%</b></div>
+    <div id="gateLine">Gates: <b>all shut</b></div>
+    <div id="seasonLine">Spring · day 1 of 3</div>
+    <div id="weatherLine">Weather: <b>Clear</b></div>
+    <div id="zoneLine">Farmland · at the farmstead</div>
+    <div id="hordeLine">Horde: <span>none in range</span></div>
+    <div id="jobLine"></div>
+    <div id="phaseHint">Space: start the night early</div>
+  </div>
+  <div class="tc">
+    <div class="res panel"><i class="ic-scrap"></i><span id="scrapNum">0</span><small>SCRAP</small></div>
+    <div class="res panel"><i class="ic-parts"></i><span id="partsNum">0</span><small>PARTS</small></div>
+    <div class="res panel"><i class="ic-wood"></i><span id="woodNum">0</span><small>WOOD</small></div>
+    <div class="res panel"><i class="ic-stone"></i><span id="stoneNum">0</span><small>STONE</small></div>
+    <div class="res panel"><i class="ic-food"></i><span id="foodNum">0</span><small>FOOD</small></div>
+    <div class="res panel"><i class="ic-hide"></i><span id="hideNum">0</span><small>HIDE</small></div>
+  </div>
+  <div class="stealth panel" id="stealth" hidden><span id="stealthTxt">HIDDEN</span><span class="meter"><i id="stealthBar"></i></span></div>
+  <div class="tr panel">
+    <canvas id="minimap" width="340" height="340"></canvas>
+    <div class="mapkey"><span><b style="background:#f2a516"></b>You</span><span><b style="background:#e8e2d0"></b>Crate</span><span><b style="background:#d6432f"></b>Infected</span><span><b style="background:#e9c46a"></b>Base</span></div>
+    <div id="padBadge" hidden>Controller active</div>
+  </div>
+  <div class="bl panel">
+    <div class="hprow">
+      <div id="hpNum">100</div>
+      <div class="bars"><div class="bar hp"><i id="hpBar"></i></div><div class="bar st"><i id="stBar"></i></div><div class="bar warm"><i id="warmBar"></i></div></div>
+    </div>
+    <div class="xprow"><span id="lvTag">LV 1</span><div class="bar xp"><i id="xpBar"></i></div><span id="ptsTag"></span></div>
+    <div class="items">
+      <span><kbd id="medKey">H</kbd>Medkits <b id="medNum">1</b></span>
+      <span><kbd id="grenKey">G</kbd>Grenades <b id="grenNum">0</b></span>
+    </div>
+    <div class="items quick">
+      <span id="quickSlot"></span>
+    </div>
+  </div>
+  <div class="br panel">
+    <div id="wName">M9 Pistol</div>
+    <div id="wAmmo">12 <small>/ ∞</small></div>
+    <div id="reloadBar"><i id="reloadFill"></i></div>
+    <div id="durRow"><span id="durTxt"></span><div class="bar"><i id="durBar"></i></div></div>
+    <div class="slots" id="slots"></div>
+  </div>
+  <div id="prompt" class="panel" hidden></div>
+  <div id="live"><i></i><b>LIVE</b><span id="liveWho"></span>·<span><span id="liveView">0</span> watching</span>·<span id="liveGoal"></span></div>
+  <div id="toasts"></div>
+  <div id="xpPop"></div>
+  <div id="lootWin" class="panel" hidden><header><b id="lootTitle"></b><button id="lootClose" aria-label="Close">✕</button></header><ul id="lootList"></ul><footer><button id="lootStash" hidden>Stash materials</button><button id="lootTake"></button></footer></div>
+  <div id="banner"><h2></h2><p></p></div>
+</div>
+
+<div id="touch" hidden>
+  <div class="stick" id="stickL"><div class="knob"></div></div>
+  <div class="stick" id="stickR"><div class="knob"></div></div>
+  <div class="tbtns">
+    <button data-k="interact">Use</button>
+    <button data-k="base">Base</button>
+    <button data-k="reload">Reload</button>
+    <button data-k="swap">Swap</button>
+    <button data-k="med">Medkit</button>
+    <button data-k="gren">Grenade</button>
+    <button data-k="map">Map</button>
+    <button data-k="skills">Perks</button>
+    <button data-k="jump">Jump</button>
+    <button data-k="item">Item</button>
+    <button data-k="craft">Craft</button>
+    <button data-k="night">Night</button>
+    <button data-k="pause">Pause</button>
+  </div>
+</div>
+
+<div class="overlay tv" id="startScreen">
+  <div class="tvfx"></div><div class="tvbug"><b>LBN</b><span><i></i>LIVE</span></div><div class="tvtc">00:00:00</div>
+  <div class="ticker"><div class="tkl">BREAKING</div><div class="tkt"><span id="tickerText"></span></div></div>
+  <div class="sheet">
+    <div class="stamp">Liberty Broadcast Network · Live from Quarantine Zone 7</div>
+    <h1 class="title">DEAD <span>ACRE</span></h1>
+    <p class="lede">You are on death row, and you just volunteered for television. The network drops condemned inmates into infected quarantine zones and broadcasts every minute. <b>There is no finish line: the show runs until you die, and every night you last is another episode.</b> Scavenge the ghost towns, hunt, take jobs, board up your cabin and play to the cameras: an excited audience brings sponsor drops, and a bored one brings trouble.</p>
+    <div class="cols">
+      <div>
+        <h3>Keyboard &amp; mouse</h3>
+        <div class="keys">
+          <kbd>W A S D</kbd><span>Move · <b>Shift</b> to sprint · <b>C</b> to crouch</span>
+          <kbd>Mouse</kbd><span>Look · left button fires · <b>right button aims down sights</b></span>
+          <kbd>V</kbd><span>Third-person / top-down camera</span>
+          <kbd>1–5 / Q</kbd><span>Switch weapon · <b>R</b> reload</span>
+          <kbd>E</kbd><span>Loot, doors, board up windows · takedown from behind</span>
+          <kbd>B</kbd><span>Workshop (inside the house)</span>
+          <kbd>H / G / F</kbd><span>Use medkit · throw grenade · eat</span>
+          <kbd>E (hold)</kbd><span>Chop trees, mine rocks, tend the garden</span>
+          <kbd>M / K / I</kbd><span>World map · survivor sheet · crafting</span>
+          <kbd>Z / X</kbd><span>Use quick item · switch quick item</span>
+          <kbd>Space</kbd><span>Jump · jump into cars, crates and rocks to climb up</span>
+          <kbd>T</kbd><span>Skip to nightfall</span>
+          <kbd>P / N</kbd><span>Pause · mute</span>
+        </div>
+      </div>
+      <div>
+        <h3>Xbox controller</h3>
+        <div class="keys">
+          <kbd>L stick</kbd><span>Move · click to sprint</span>
+          <kbd>R stick</kbd><span>Look and aim · click to crouch</span>
+          <kbd>RT / LT</kbd><span>Fire · aim down sights</span>
+          <kbd class="pb pa">A</kbd><span>Loot, doors, board up windows</span>
+          <kbd class="pb px">X</kbd><span>Reload</span>
+          <kbd class="pb py">Y</kbd><span>Workshop at home · crafting anywhere else</span>
+          <kbd class="pb pbb">B</kbd><span>Use medkit · back in menus</span>
+          <kbd>LB / RB</kbd><span>Switch weapon · menu tabs</span>
+          <kbd>D-pad</kbd><span>▲ use item · ◀ switch item · ▼ grenade · ▶ survivor sheet</span>
+          <kbd>View / Menu</kbd><span>World map · pause</span>
+        </div>
+      </div>
+      <div>
+        <h3>Known infected</h3>
+        <div class="bestiary">
+          <div><i style="background:#7c9a6a"></i><p style="margin:0"><b>Walker.</b> <span>Slow, relentless, chews through wooden walls.</span></p></div>
+          <div><i style="background:#c0503a"></i><p style="margin:0"><b>Runner</b> (night 2). <span>Fast and fragile. Don't let them flank you.</span></p></div>
+          <div><i style="background:#9bd651"></i><p style="margin:0"><b>Spitter</b> (night 3). <span>Lobs acid over your walls from range.</span></p></div>
+          <div><i style="background:#6a7a5a"></i><p style="margin:0"><b>Trooper</b> (night 3). <span>Turned soldiers in body armor. Twice the hit points, slow and steady.</span></p></div>
+          <div><i style="background:#e09a4a"></i><p style="margin:0"><b>Boomer</b> (night 4). <span>Explodes on contact. Shreds wall sections.</span></p></div>
+          <div><i style="background:#8d8a7a"></i><p style="margin:0"><b>Brute</b> (night 5). <span>Charges and knocks you flying.</span></p></div>
+          <div><i style="background:#d6432f"></i><p style="margin:0"><b>The Abomination</b> (every 5th night). <span>Ground slams and calls runners.</span></p></div>
+        </div>
+      </div>
+    </div>
+    <div class="diffpick" id="diffPick" role="radiogroup" aria-label="Difficulty">
+      <button data-diff="easy" role="radio"><b>Easy</b><small>Fewer infected, small hordes, softer hits.</small></button>
+      <button data-diff="normal" role="radio"><b>Normal</b><small>The intended balance.</small></button>
+      <button data-diff="hard" role="radio"><b>Hard</b><small>Half again as many infected, bigger hordes.</small></button>
+      <button data-diff="nightmare" role="radio"><b>Nightmare</b><small>Twice the infected. Hordes every night.</small></button>
+    </div>
+    <div class="cta">
+      <button class="btn" id="startBtn">Enter the zone</button>
+      <span class="best" id="bestLine"></span>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="menu" hidden>
+  <div class="sheet">
+    <div class="menuhead">
+      <div><div class="stamp">Base workshop</div><h2>Farmstead</h2><p id="menuSub">Time is paused while you plan.</p></div>
+      <div class="wallet">
+        <div class="res panel"><i class="ic-scrap"></i><span id="mScrap">0</span><small>SCRAP</small></div>
+        <div class="res panel"><i class="ic-parts"></i><span id="mParts">0</span><small>PARTS</small></div>
+      </div>
+    </div>
+    <div class="tabs" id="tabs">
+      <button data-act="tab:def" class="on">Defenses</button>
+      <button data-act="tab:arm">Armory</button>
+      <button data-act="tab:salv">Salvage</button>
+      <button data-act="tab:sup">Supplies</button>
+      <button data-act="tab:jobs">Job board</button>
+      <span class="padtip" id="padTip" hidden>LB / RB switch tabs · A buy · B back</span>
+    </div>
+    <div class="grid" id="menuGrid"></div>
+    <div class="menufoot"><span>Scrap drops from infected and crates. Parts come from rare crates, brutes and airdrops.</span><button class="btn ghost" data-act="close">Back to the field</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="mapScreen" hidden>
+  <div class="sheet">
+    <div class="menuhead"><div><div class="stamp">Field map</div><h2 id="mapHere">Farmland</h2><p id="mapStats"></p></div>
+      <div class="zoom"><button class="btn ghost" data-z="-1">Zoom in</button><button class="btn ghost" data-z="1">Zoom out</button></div></div>
+    <div class="mapwrap">
+      <canvas id="worldMap" width="680" height="680"></canvas>
+      <div class="mapside">
+        <div><h3>Jobs</h3><ul id="mapJobs"></ul></div>
+        <div><h3>Key</h3><div class="lgd"><span><i style="background:#e9c46a"></i>Farmstead</span><span><i style="background:#5fa8d3"></i>Radio mast (reveals the map)</span><span><i style="background:#e9c46a;opacity:.7"></i>Fire lookout (reveals the map)</span><span><i style="background:#d6432f"></i>Crash site</span><span><i style="background:#9bd651"></i>Camp</span><span><i style="background:#c9b8f0"></i>Chapel</span><span><i style="background:#f2a516;border-radius:50%"></i>Job target</span></div></div>
+        <p style="margin:0;color:var(--mute)">The map fills in as you explore. Unexplored ground stays dark. Landmarks pay XP and hide a supply cache.</p>
+        <button class="btn ghost" id="mapNight">Skip to nightfall</button>
+        <button class="btn" id="mapClose">Back</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="craftScreen" hidden>
+  <div class="sheet">
+    <div class="menuhead"><div><div class="stamp">Crafting</div><h2>Field workbench</h2><p id="crBP"></p></div><button class="btn" id="crClose">Back</button></div>
+    <div class="tabs" id="crTabs"></div>
+    <div id="crWhere"></div>
+    <div class="crwrap">
+      <div class="grid" id="crGrid"></div>
+      <div class="crside">
+        <div><h3>Materials</h3><div class="list" id="crMats"></div></div>
+        <div><h3>Crafted items</h3><div class="list" id="crItems"></div></div>
+        <div><h3>Gear and tools</h3><div class="list" id="crGear"></div></div>
+        <p style="margin:0">Cloth comes from crates and car seats, herbs from flowering bushes, meat from hunting. Campfires let you cook anywhere; the workbench and forge are in the house.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="skillScreen" hidden>
+  <div class="sheet">
+    <div class="menuhead"><div><div class="stamp">Survivor sheet</div><h2 id="skHead">Level 1</h2></div><button class="btn" id="skClose">Back</button></div>
+    <div class="skhead"><span id="skXpTxt">0 XP</span><div class="bar"><i id="skXp"></i></div><div id="skPts"></div></div>
+    <div id="skGrid"></div>
+    <div class="cols" style="margin-top:18px"><div><h3>Job board</h3><ul id="skJobs"></ul></div><div><h3>Trinkets</h3><div class="perks" id="skTrink"></div></div></div>
+    <div class="skstats" id="skStats"></div>
+  </div>
+</div>
+
+<div class="overlay tv" id="pauseScreen" hidden>
+  <div class="tvfx"></div><div class="tvbug"><b>LBN</b><span><i></i>LIVE</span></div><div class="tvtc">00:00:00</div>
+  <div class="sheet" style="width:min(520px,100%)">
+    <div class="stamp">Commercial break</div>
+    <h2 class="title" style="font-size:clamp(44px,9vw,72px)">We'll be <span>right back</span></h2>
+    <div class="cta"><button class="btn" id="resumeBtn">Back to the show</button><button class="btn ghost" id="muteBtn">Mute sound</button><button class="btn ghost" id="vibBtn">Vibration: On</button><button class="btn ghost" id="volMaster">Volume</button><button class="btn ghost" id="volMusic">Music</button><button class="btn ghost" id="volSfx">Effects</button><button class="btn ghost" id="gfxBtn">Graphics: High</button><button class="btn ghost" id="quitBtn">Restart run</button></div>
+    <p class="best" style="margin:14px 0 0">High adds bloom, film grade, grass and sharper shadows. Low runs better on older laptops and phones.</p>
+  </div>
+</div>
+
+<div class="overlay tv" id="introScreen" hidden>
+  <div class="tvfx"></div><div class="tvbug"><b>LBN</b><span><i></i>LIVE</span></div><div class="tvtc">00:00:00</div>
+  <div class="sheet intro" style="width:min(700px,100%)">
+    <div id="introBody"></div>
+    <div class="cta"><button class="btn" id="introGo">Drop into the zone</button></div>
+  </div>
+</div>
+
+<div class="overlay tv" id="overScreen" hidden>
+  <div class="tvstatic"></div><div class="tvfx"></div><div class="tvbug"><b>LBN</b><span>SIGNAL LOST</span></div><div class="tvtc">00:00:00</div>
+  <div class="sheet" style="width:min(620px,100%)">
+    <div class="stamp">Transmission ended</div>
+    <h2 class="title" style="font-size:clamp(48px,10vw,88px)">YOU <span>FELL</span></h2>
+    <p class="lede" id="overLine">The farmstead goes dark.</p>
+    <div class="stats">
+      <div><b id="stNights">0</b><span>Nights survived</span></div>
+      <div><b id="stKills">0</b><span>Infected killed</span></div>
+      <div><b id="stCrates">0</b><span>Crates looted</span></div>
+      <div><b id="stPeak">0</b><span>Peak viewers</span></div>
+    </div>
+    <div class="cta"><button class="btn" id="againBtn">Try again</button><button class="btn ghost" id="diffBtn">Change difficulty</button><span class="best" id="bestLine2"></span></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/SkeletonUtils.js"></script>
+<script>
+(function(){
+'use strict';
+/*@GAME*/
+})();
+</script>

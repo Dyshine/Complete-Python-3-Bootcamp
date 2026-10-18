@@ -1,3 +1,5 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Dead Acre</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -6597,13 +6599,18 @@ applyGfx();
 resetGame();S.running=false;
 setWeather('storm');W.boltT=2;
 let last=performance.now(),hudT=0,mapT=0,idleA=0;
+// one tick of the running game: streaming, the player, the infected and every other system, then the camera. The page loop
+// calls it once per frame; the test harness calls it directly to fast-forward.
+function stepWorld(dt){
+    updateTerrain();updateChunks(false);updateGroundWindow();updateGrass();updateRoofs();updateSpin(dt);
+    updatePhase(dt);updatePlayer(dt);updateZombies(dt);updateHordes(dt);updateProps(dt);updateDoors(dt);updateTurrets(dt);updateSpecials(dt);updateGarden(dt);updateHome(dt);updateShow(dt);updateFelling(dt);updateWDrops(dt);updateAnimals(dt);updateLandmarks(dt);updateExplore(dt);updateAlarms(dt);updateSeasons(dt);updateWarmth(dt);updateFootprints(dt);updateBurning(dt);updateFires(dt);updateNoisers(dt);updatePlaced(dt);updateCamp(dt);updateWeaponFx(dt);enforceCaps(dt);updateLootWin();audioTick(dt);updateWorld(dt);updateWeather(dt,player.x,player.z-2);updateEnv(dt);updateCamera(dt);
+}
 function frame(now){
   requestAnimationFrame(frame);
   const dt=Math.min(.05,(now-last)/1000);last=now;
   pollPad(dt);
   if(S.running&&!S.paused&&!S.menu&&!S.over&&!S.panel){
-    updateTerrain();updateChunks(false);updateGroundWindow();updateGrass();updateRoofs();updateSpin(dt);
-    updatePhase(dt);updatePlayer(dt);updateZombies(dt);updateHordes(dt);updateProps(dt);updateDoors(dt);updateTurrets(dt);updateSpecials(dt);updateGarden(dt);updateHome(dt);updateShow(dt);updateFelling(dt);updateWDrops(dt);updateAnimals(dt);updateLandmarks(dt);updateExplore(dt);updateAlarms(dt);updateSeasons(dt);updateWarmth(dt);updateFootprints(dt);updateBurning(dt);updateFires(dt);updateNoisers(dt);updatePlaced(dt);updateCamp(dt);updateWeaponFx(dt);enforceCaps(dt);updateLootWin();audioTick(dt);updateWorld(dt);updateWeather(dt,player.x,player.z-2);updateEnv(dt);updateCamera(dt);
+    stepWorld(dt);
     hudT-=dt;if(hudT<=0){hudT=.08;updateHUD();}
     mapT-=dt;if(mapT<=0){mapT=.12;drawMinimap();}
     $('vignette').style.opacity=player.hurtT>0?Math.min(1,player.hurtT*2.5):0;

@@ -1,0 +1,21 @@
+{
+  "name": "dead-acre",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Dead Acre: a third-person zombie survival game show in three.js",
+  "type": "module",
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "dev": "node tools/dev.mjs",
+    "lint": "node tools/lint.mjs",
+    "check": "node tools/build.mjs --check && node tools/lint.mjs",
+    "test": "node tests/run.mjs",
+    "test:long": "node tests/run.mjs --long"
+  },
+  "devDependencies": {
+    "eslint": "^10.1.0",
+    "globals": "^17.13.0",
+    "playwright": "1.56.1",
+    "three": "0.128.0"
+  }
+}
