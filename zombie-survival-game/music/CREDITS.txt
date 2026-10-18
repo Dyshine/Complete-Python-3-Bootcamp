@@ -1,0 +1,14 @@
+All tracks CC0 1.0 (public domain), from OpenGameArt.org. Re-encoded to 64 kbps MP3 and loudness-matched; the game-over
+piece is cut to 94 s with a fade.
+
+menu.mp3      "Tragic ambient main menu" by brandon75689        https://opengameart.org/content/tragic-ambient-main-menu
+day_1.mp3     "Post Apocalyptic Wastelands [Loop Ready]" by Juhani Junkala (SubspaceAudio)
+                                                                 https://opengameart.org/content/horror-atmosphere
+day_2.mp3     "No Country for Old Alex" by Pro Sensory (Alex McCulloch)
+                                                                 https://opengameart.org/content/no-country-for-old-alex
+night_1.mp3   "The Plague" by Indieteur                         https://opengameart.org/content/the-plague
+night_2.mp3   "Dark place (loop)" by SkyleTheFrench             https://opengameart.org/content/dark-place-loop
+danger_1.mp3  "Zombies are coming" by yd                        https://opengameart.org/content/zombies-march
+combat_1.mp3  "Last fight (Dead Z. Pandemic) loop" by TAD       https://opengameart.org/content/last-fight-dead-z-pandemic
+combat_2.mp3  "Epic combat" by Chester01                        https://opengameart.org/content/epic-combat
+over.mp3      "End of Zombie Pandemic (piano)" by TAD           https://opengameart.org/content/the-end-dead-z-pandemic

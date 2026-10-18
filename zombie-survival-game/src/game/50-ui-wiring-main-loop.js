@@ -36,10 +36,10 @@ function frame(now){
     mapT-=dt;if(mapT<=0){mapT=.12;drawMinimap();}
     $('vignette').style.opacity=player.hurtT>0?Math.min(1,player.hurtT*2.5):0;
     crossT-=dt;$('crosshair').classList.toggle('hit',crossT>0);updateDmgNums(dt);updateStealthHUD();
-  }else if(S.over){Sound.quiet(dt);if(HERO.ready)HERO.mixer.update(dt);updateZombies(dt);updateHordes(dt);updateProps(dt);updateDoors(dt);updateWorld(dt);updateWeather(dt,player.x,player.z-2);updateEnv(dt);}
-  else if(!S.running){VM.visible=false;Sound.quiet(dt);idleA+=dt*.05;camera.position.set(Math.sin(idleA)*34,22,Math.cos(idleA)*34);camera.lookAt(0,0,0);updateWorld(dt);updateDoors(dt);updateWeather(dt,0,0);updateEnv(dt);
+  }else if(S.over){Sound.quiet(dt,'over');if(HERO.ready)HERO.mixer.update(dt);updateZombies(dt);updateHordes(dt);updateProps(dt);updateDoors(dt);updateWorld(dt);updateWeather(dt,player.x,player.z-2);updateEnv(dt);}
+  else if(!S.running){VM.visible=false;Sound.quiet(dt,'menu');idleA+=dt*.05;camera.position.set(Math.sin(idleA)*34,22,Math.cos(idleA)*34);camera.lookAt(0,0,0);updateWorld(dt);updateDoors(dt);updateWeather(dt,0,0);updateEnv(dt);
     sun.position.set(22,40,12);sun.target.position.set(0,0,0);}
-  else{Sound.quiet(dt);if(gradePass)gradePass.uniforms.time.value=now/1000;}
+  else{Sound.quiet(dt,'pause');if(gradePass)gradePass.uniforms.time.value=now/1000;}
   if(composer&&GFX==='high')composer.render();else renderer.render(scene,camera);
 }
 requestAnimationFrame(frame);

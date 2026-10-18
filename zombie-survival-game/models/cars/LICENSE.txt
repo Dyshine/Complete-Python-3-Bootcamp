@@ -1,0 +1,3 @@
+cars.gltf.json: vehicles and debris from "Car Kit" by Kenney (www.kenney.nl), CC0 1.0 (public domain).
+https://kenney.nl/assets/car-kit
+Merged from the kit's GLB files into one glTF (tangents dropped, vertices welded). Restyled in game (07d-car-kit.js).

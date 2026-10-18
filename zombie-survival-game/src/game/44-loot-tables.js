@@ -98,7 +98,7 @@ function takeEntry(e){
 let LOOT=null;
 function openLoot(src,title){LOOT={src,title};renderLoot();$('lootWin').hidden=false;Sound.play(src.loot.some(e=>RARS.indexOf(e.rar)>=3)?'epic':'crate');}
 function closeLoot(){LOOT=null;$('lootWin').hidden=true;}
-function renderLoot(){if(!LOOT)return;const L=LOOT.src.loot;
+function renderLoot(){if(!LOOT)return;const L=LOOT.src.loot;if(LOOT.src.inner)crateContents(LOOT.src);
   $('lootTitle').textContent=LOOT.title;
   $('lootList').innerHTML=L.length?L.map((e,i)=>`<li data-li="${i}" style="--rc:${RAR_COL[e.rar]}"><i></i><span>${lootLabel(e)}</span><small>${e.rar}</small></li>`).join(''):'<li class="empty">Empty</li>';
   $('lootTake').innerHTML=`${glyph('use')}Take all`;$('lootStash').hidden=LOOT.src.type!=='chest';}

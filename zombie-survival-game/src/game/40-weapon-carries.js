@@ -106,21 +106,39 @@ function placeGun(dt){
   if(w&&w.saw&&player.fireCd>-.2){gun.position.x+=rand(-.012,.012);gun.position.y+=rand(-.012,.012);}
   gun.rotation.set(rx,ry,rz);
   if(!FP&&CARRY.w>.01&&!(player.swing>0)&&!(WA.throwT>0)){_cq.setFromEuler(gun.rotation);gun.quaternion.copy(CARRY.q).slerp(_cq,1-CARRY.w);}
-  gun.position.z-=WA.kick*(FP?.07:.16);gun.position.y-=sw*(FP?.3:.45)+rl*.08;
+  gun.position.z-=WA.kick*(FP?.11:.16);if(FP)gun.rotation.x-=WA.kick*.22;gun.position.y-=sw*(FP?.3:.45)+rl*.08;
   // muzzle flash at the barrel tip
   if(muzzleFlash.t>0){muzzleFlash.t-=dt;const g=muzzleFlash.grp;g.visible=true;g.position.set(0,.02,gunTip()+.18);g.scale.setScalar(rand(.75,1.25)*muzzleFlash.s);g.rotation.z=rand(0,6.28);if(muzzleFlash.t<=0)g.visible=false;}
+}
+/* recoil: per weapon class, the muzzle climbs (v) and wanders sideways (h); rec is how much of the climb the shooter pulls
+   back down afterwards. Automatic fire builds heat, so a held trigger climbs and drifts more with each round; aiming,
+   crouching, a stock and a compensator all tame it. In top-down the kick throws the aim sideways for a moment. */
+const RECOIL={side:{v:.028,h:.008,rec:.85},rev:{v:.075,h:.014,rec:.75},smg:{v:.014,h:.011,rec:.6,auto:1},ar:{v:.018,h:.009,rec:.6,auto:1},
+  shot:{v:.085,h:.018,rec:.78},hunt:{v:.11,h:.012,rec:.72},gl:{v:.07,h:.012,rec:.8},bow:{v:.006,h:.002,rec:.9}};
+function applyRecoil(w){const R=w.saw||w.melee?null:RECOIL[w.cls];if(!R)return;
+  const mods=Object.values((w.I&&w.I.mods)||{});let k=(1-.45*(player.ads||0))*(player.crouch?.78:1)*(mods.includes('stock')?.65:1)*(mods.includes('comp')?.72:1)*(1-.06*PERK('steady'));
+  if(R.auto){WA.heat=Math.min(10,WA.heat+1);k*=1+WA.heat*.075;}
+  // the sideways wander keeps its direction for a few rounds, then swings back
+  WA.drift=clamp(WA.drift*.7+rand(-1,1)*.6+(Math.abs(WA.drift)>1.2?-Math.sign(WA.drift)*.6:0),-1.6,1.6);
+  const up=R.v*k*rand(.85,1.15),side=R.h*k*(WA.drift+rand(-.35,.35));
+  if(TP){camPitch=clamp(camPitch-up,pitchLo(),pitchHi());camYaw+=side;WA.camRec+=up*R.rec;WA.yawRec-=side*R.rec*.5;}
+  else{WA.yawOff+=side*3+(Math.random()<.5?-1:1)*up*.25;}
 }
 // called once per shot
 function onShotFx(w){S.lastShot=S.time;
   const k=clamp(.18+w.kick*.22+w.shake*1.3,.15,1)*(1-.45*(player.ads||0))*(player.crouch?.8:1);
   WA.kick=Math.min(1.2,WA.kick+k);WA.bloom=Math.min(1,WA.bloom+.12+w.shake*.8);WA.fov=Math.min(5,WA.fov+.6+w.shake*5+w.kick*.6);
-  if(TP){const ck=(.008+w.kick*.012+w.shake*.05)*(1-.5*(player.ads||0));camPitch=clamp(camPitch-ck,pitchLo(),pitchHi());WA.camRec+=ck*.7;camYaw+=rand(-1,1)*ck*.25;}
+  applyRecoil(w);
   if(w.noise>=10&&w.cls!=='bow'){muzzleFlash.t=.05;muzzleFlash.s=clamp(.6+w.dmg/60,.6,1.8);}
   haptic(w.rum[0],w.rum[1],w.rum[2],clamp(.25+w.rum[0]*.8,.2,1));
 }
 function updateWeaponFx(dt){
   WA.kick*=Math.exp(-dt*11);WA.bloom*=Math.exp(-dt*4);WA.fov*=Math.exp(-dt*12);WA.swap=Math.max(0,WA.swap-dt);WA.throwT=Math.max(0,WA.throwT-dt);WA.reachT=Math.max(0,WA.reachT-dt);
-  if(WA.camRec>1e-4){const r=WA.camRec*Math.min(1,dt*9);camPitch=clamp(camPitch+r,pitchLo(),pitchHi());WA.camRec-=r;}
+  // recovery waits a beat after the last shot, then pulls the muzzle back down
+  const settle=S.time-(S.lastShot||-9)>.09?Math.min(1,dt*8):Math.min(1,dt*2);
+  if(WA.camRec>1e-4){const r=WA.camRec*settle;camPitch=clamp(camPitch+r,pitchLo(),pitchHi());WA.camRec-=r;}
+  if(Math.abs(WA.yawRec)>1e-5){const r=WA.yawRec*settle;camYaw+=r;WA.yawRec-=r;}
+  WA.heat=Math.max(0,WA.heat-dt*(S.time-(S.lastShot||-9)>.25?6:1.5));WA.yawOff*=Math.exp(-dt*7);
   if(player.swing<=0)WA.chop=0;
   const ch=$('crosshair');const sc=((player.ads||0)>.5?.62:1)*(1+WA.bloom*.9);ch.style.transform=`scale(${sc.toFixed(3)})`;
 }

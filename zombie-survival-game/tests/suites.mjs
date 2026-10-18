@@ -4,12 +4,14 @@ export const suites = [
   {
     name: 'boot',
     async run(page, { expect }) {
-      const r = await page.evaluate(() => { __sim(100, .05); const S = __w().S; return { samples: __w().Sound.samples, day: document.getElementById('phaseLabel').textContent, inHome: __w().inHome(__P.x, __P.z), chunks: __w().chunks.size, live: document.getElementById('liveView').textContent }; });
+      await page.waitForTimeout(1500);
+      const r = await page.evaluate(() => { __sim(100, .05); const S = __w().S; return { music: __w().Sound.soundtrack, samples: __w().Sound.samples, day: document.getElementById('phaseLabel').textContent, inHome: __w().inHome(__P.x, __P.z), chunks: __w().chunks.size, live: document.getElementById('liveView').textContent }; });
       expect(/DAY 1/.test(r.day), 'HUD should read DAY 1, got ' + r.day);
       expect(r.inHome, 'player should start inside the cabin');
       expect(r.chunks > 4, 'world chunks should stream in');
       expect(r.samples === 21, 'all 21 recorded sound sets decode, got ' + r.samples);
-      return `${r.chunks} chunks, ${r.samples} sound sets, ${r.live} watching`;
+      expect(r.music === 'day' || r.music === 'night', 'the soundtrack streams a mood track, got ' + r.music);
+      return `${r.chunks} chunks, ${r.samples} sound sets, music: ${r.music}, ${r.live} watching`;
     },
   },
   {
@@ -79,7 +81,7 @@ export const suites = [
     async run(page, { expect }) {
       const r = await page.evaluate(() => {
         const w = __w(); let d = null;
-        for (let t = 60; t < 700 && !d; t += 48) { __P.x = t; __P.z = t; __sim(1, .05); d = w.sdoors.find(q => Math.hypot(q.px - __P.x, q.pz - __P.z) < 40); }
+        for (let t = 60; t < 1400 && !d; t += 40) { __P.x = Math.cos(t * .013) * t; __P.z = Math.sin(t * .013) * t; __sim(1, .05); d = w.sdoors.find(q => Math.hypot(q.px - __P.x, q.pz - __P.z) < 40); }
         if (!d) return { door: null };
         const a = d.a0 + d.ang, nx = -Math.sin(a), nz = Math.cos(a), mx = d.px + Math.cos(a) * d.len / 2, mz = d.pz + Math.sin(a) * d.len / 2;
         __P.x = mx + nx * 1.2; __P.z = mz + nz * 1.2; __sim(2, .05);

@@ -171,6 +171,12 @@ const CAR_LOOT=[
 function addCar(x,z,rot,model){
   model=model||(RNG()<.34?'pickup':RNG()<.3?'wagon':'sedan');
   const g=new THREE.Group();g.position.set(x,0,z);g.rotation.y=rot;g.rotation.z=rand(-.04,.04);track(g);
+  const KC=kitCarBody(g,model);
+  if(KC){const obs=[],n=Math.max(2,Math.round(KC.len/1.8)),r=KC.wid/2*1.12;
+    for(let i=0;i<n;i++){const lz=-KC.len/2+r*.8+(KC.len-r*1.6)*i/(n-1),p=l2w(x,z,rot,0,lz);obs.push(addOb({x:p.x,z:p.z,r,h:Math.min(KC.hgt,2.6)}));}
+    const key='car'+cutKey(x,z),mem=CUR&&chunkMem.get(CUR.key),left=mem&&mem.cars&&mem.cars.has(key)?mem.cars.get(key):randi(2,4)+PERK('mechanic')+(KC.len>5?1:0);
+    const c={x,z,rot,g,model:KC.name,kit:true,mat:KC.mat,body:KC.body,wheels:KC.wheels,wid:KC.wid,hgt:KC.hgt,left,key,ch:CUR,alarm:RNG()<.18&&!CAR_SERVICE.has(KC.name),len:KC.len};
+    carSpots.push(c);if(CUR)CUR.cars.push(c);if(!left)stripLook(c);return c;}
   const col=pick(CAR_COLS),mt=carMats(col,model),len=model==='pickup'?4.9:model==='wagon'?4.6:4.3;
   const body=mki(BOX(2,.78,len),mt.body,0,.74,0,.07);g.add(body);
   let cab;
@@ -188,7 +194,7 @@ function addCar(x,z,rot,model){
   return c;
 }
 function stripLook(c){
-  if(c.stripped)return;c.stripped=true;
+  if(c.stripped)return;c.stripped=true;if(c.kit){kitStripLook(c);return;}
   c.body.material=[c.mt.rust,c.mt.rust,c.mt.rust,c.body.material[3],c.mt.rust,c.mt.rust];
   for(const w of c.wheels)w.visible=false;c.g.position.y=-.3;
   const hood=mk(BOX(1.9,.06,1.2),c.mt.rust,0,1.55,c.len/2-.1);hood.rotation.x=-1.1;c.g.add(hood);
@@ -217,8 +223,9 @@ const ALARMS=[];
 function carAlarm(c){ALARMS.push({c,t:7,beep:0});makeNoise(c.x,c.z,75);toast('Car alarm! Every infected nearby heard that.','bad');}
 function updateAlarms(dt){for(let i=ALARMS.length-1;i>=0;i--){const a=ALARMS[i];a.t-=dt;a.beep-=dt;
   if(a.beep<=0){a.beep=.45;Sound.play('empty',clamp(1-Math.hypot(a.c.x-player.x,a.c.z-player.z)/60,.15,1));Sound.play('ui');
-    const on=(a.t*2.2|0)%2===0;if(a.c.body.material[4]&&a.c.body.material[4].emissive)a.c.body.material[4].emissive.setHex(on?0x8a7020:0);if((a.t*2|0)%3===0)makeNoise(a.c.x,a.c.z,40);}
-  if(a.t<=0){if(a.c.body.material[4]&&a.c.body.material[4].emissive)a.c.body.material[4].emissive.setHex(0);ALARMS.splice(i,1);}}}
+    const on=(a.t*2.2|0)%2===0,em=carEmissive(a.c);if(em)em.setHex(on?0x8a7020:0);if((a.t*2|0)%3===0)makeNoise(a.c.x,a.c.z,40);}
+  if(a.t<=0){const em=carEmissive(a.c);if(em)em.setHex(0);ALARMS.splice(i,1);}}}
+const carEmissive=c=>c.kit?c.mat.emissive:c.body.material[4]&&c.body.material[4].emissive;
 
 /* ---------- streamed world chunks ---------- */
 const CH=48,CH_LOAD=2,CH_KEEP=3,chunks=new Map(),chunkMem=new Map(),chunkQueue=[];

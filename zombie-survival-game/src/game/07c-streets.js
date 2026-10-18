@@ -102,3 +102,35 @@ function townPaint(P,W,ax){
     for(const s of [-1,1]){for(let k=0;k<6;k++)add(s*7.2,v0-2.9+k*1.15,2.2,.5,'w');add(s*8.9,v0+s*1.75,.3,3.2,'w');}}
   return paint;
 }
+
+/* ---------- traffic that stopped: what an evacuation leaves on a two-lane highway ----------
+   Right-hand traffic: heading +t the lane is on the right. Per chunk, maybe one scene: a line of stalled cars nose to
+   tail in one lane, a pile-up of a few cars knocked askew across both lanes, a car run off into the ditch, or a police
+   roadblock (cruisers across the lanes, cones). */
+function highwayTraffic(axis,x0,z0){
+  const t0=axis==='x'?x0:z0,along=axis==='x'?Math.PI/2:0;
+  // world position for distance t along the road and offset o across it
+  const P=(t,o)=>axis==='x'?{x:t,z:o}:{x:o,z:t};
+  const put=(t,o,rot,role)=>{if(Math.abs(t)<BR+14)return null;const p=P(t,o);if(blockedSpot(p.x,p.z,2.2))return null;return addCar(p.x,p.z,rot,role);};
+  const r=RNG();
+  if(r<.32){// stalled line, facing the same way in one lane (an evacuation that ran out of road)
+    const dir=RNG()<.5?1:-1,lane=-dir*1.75*(axis==='x'?-1:1),rot=along+(dir>0?0:Math.PI);let t=t0+rand(5,12);
+    for(let n=randi(2,4);n>0&&t<t0+CH-4;n--){put(t,lane+rand(-.25,.25),rot+rand(-.06,.06),pick(['sedan','sedan','wagon','pickup','van','truck']));t+=rand(6.5,8.5)*dir*dir;}
+    if(RNG()<.4){const p=P(t0+rand(6,CH-6),-lane*.2);addProp('cone',p.x,p.z);}
+  }else if(r<.5){// pile-up: two or three cars knocked across the lanes
+    const t=t0+rand(10,CH-10);for(let i=0;i<randi(2,3);i++){const c=put(t+rand(-3.5,3.5),rand(-2.2,2.2),along+rand(-.9,.9)+(RNG()<.5?Math.PI:0),pick(['sedan','wagon','pickup','van']));if(c&&RNG()<.5)stripLook(c);}
+    for(let i=0;i<randi(1,3);i++){const p=P(t+rand(-5,5),rand(-3,3));addProp(pick(['tire','cone','can']),p.x,p.z);}
+  }else if(r<.68){// off into the ditch, nose down the bank
+    const side=RNG()<.5?1:-1,t=t0+rand(6,CH-6),c=put(t,side*rand(5.4,6.4),along+side*rand(.35,.7)*(axis==='x'?-1:1)+(RNG()<.5?Math.PI:0),pick(['sedan','wagon','pickup']));
+    if(c){c.g.rotation.z=side*rand(.12,.22);c.g.rotation.x=rand(-.12,.12);}
+  }else if(r<.76&&Math.abs(t0)>140){// roadblock: cruisers parked across the road, cones between them
+    const t=t0+CH/2;put(t,-1.9,along+Math.PI/2+rand(-.15,.15),'police');put(t+rand(-1,1),1.9,along-Math.PI/2+rand(-.15,.15),RNG()<.7?'police':'ambulance');
+    for(let o=-3;o<=3;o+=1.5){const p=P(t+4,o);addProp('cone',p.x,p.z);}
+  }
+}
+// curbside parking on a town plan's cross streets, parallel to the kerb, facing the way the lane runs
+function townCurbCars(P,x0,z0,x1,z1){
+  for(const v0 of [30,72])for(let u=-100;u<=100;u+=9){if(Math.abs(u)<12)continue;
+    for(const s of [-1,1]){if(hash2(u*7+v0,s*13,41)>.24)continue;const p=P.W(u+rand(-1,1),v0+s*2.35);if(p.x<x0||p.x>=x1||p.z<z0||p.z>=z1)continue;
+      if(!townFits(p.x,p.z,2)||blockedSpot(p.x,p.z,2.2))continue;
+      addCar(p.x,p.z,P.rotV+(s>0?Math.PI/2:-Math.PI/2)+rand(-.04,.04),pick(['sedan','sedan','wagon','pickup','van','taxi']));}}}

@@ -3,7 +3,7 @@
 A zombie survival game show in three.js, played in third person, first person or top-down (V switches). Condemned inmates are dropped into a Midwest quarantine zone and
 broadcast live; the show runs until they die.
 
-`dead-acre.html` is the playable game: one self-contained page plus the `models/`, `textures/` and `sounds/` folders next to it.
+`dead-acre.html` is the playable game: one self-contained page plus the `models/`, `textures/`, `sounds/` and `music/` folders next to it.
 It is **built** from `src/`. Edit the files in `src/`, never `dead-acre.html` directly.
 
 ## Commands
@@ -32,7 +32,8 @@ tests/hooks.js        test-only hooks, added inside the game's scope by test bui
 tests/suites.mjs      the browser test suites; tests/run.mjs runs them
 tools/build.mjs       the build; tools/dev.mjs the dev server; tools/lint.mjs the linter
 models/, textures/    assets loaded at runtime (licences in each models/ folder)
-sounds/               recorded gunshots and reloads (sounds/CREDITS.txt)
+sounds/               recorded gunshots, reloads and level-up stingers (sounds/CREDITS.txt)
+music/                the soundtrack, streamed per mood (music/CREDITS.txt)
 tools/pack-guns.mjs   regenerates models/guns/guns.json from Quaternius' Ultimate Gun Pack (OBJ folder)
 tools/pack-rural.mjs  regenerates models/rural/ from the Family house collection (baked OBJs and textures)
 ```
@@ -68,6 +69,8 @@ list of per-tick updates. Add a new system's `update…(dt)` there; the tests us
 - Firearms: Ultimate Gun Pack by Quaternius, CC0.
 - Animals: wolf, bird, red fox and horse (as the deer) by Quaternius; rabbit by Čestmír Dammer. CC0.
 - Level-up crowd, horn, boing, honk and "ooo": see sounds/CREDITS.txt, all CC0.
+- Vehicles: Car Kit by Kenney, CC0.
+- Music: nine CC0 tracks from OpenGameArt, credited in music/CREDITS.txt.
 - Gunshots: The Free Firearm Sound Library (Ben Jaszczak et al.), CC0. Reloads: Gun Reload Sounds by SpringySpringo and
   Shotgun Reload Sound Effects by zer0_sol, CC0.
 - Trooper body: the three.js example *Soldier*, a Mixamo character.

@@ -226,8 +226,31 @@ const Sound=(()=>{
   // a slow minor-key pad and sparse plucks while exploring, a pulsing low ostinato when you're hunted, drums in a fight
   const KEY=[0,3,5,7,10],CHORDS=[[0,3,7],[-4,0,3],[-2,2,5],[-5,-2,2]];let M=null;
   function startMusic(){M={chord:0,cT:0,pT:2,beat:0,bT:0,danger:0,fight:0,pad:[]};}
+  /* ---------- the soundtrack: CC0 tracks (music/, see music/CREDITS.txt) streamed per mood and crossfaded ----------
+     menu → day (wasteland ambient, a dusty western) → night (dread) → danger (they're coming) → combat; game over gets
+     the piano. Each mood rotates through its takes; the synth score below plays only if the tracks can't. */
+  const TRACKS={menu:['menu'],day:['day_1','day_2'],night:['night_1','night_2'],danger:['danger_1'],combat:['combat_1','combat_2'],over:['over']};
+  const LEVEL={menu:.7,day:.55,night:.62,danger:.72,combat:.8,over:.75,pause:.35};
+  const TK={};let trackOK=false,trackFail=false,mode=null,modeT=0;
+  function track(m){if(TK[m])return TK[m];const el=new Audio(),list=TRACKS[m];let i=Math.floor(Math.random()*list.length);
+    el.loop=list.length===1;el.preload='auto';el.src=`music/${list[i]}.mp3`;
+    el.addEventListener('canplay',()=>{trackOK=true;},{once:true});el.addEventListener('error',()=>{if(!trackOK)trackFail=true;});
+    // with several takes, the next one follows when this one ends
+    el.addEventListener('ended',()=>{i=(i+1)%list.length;el.src=`music/${list[i]}.mp3`;el.play().catch(()=>{});});
+    let g=null;try{const s=ctx.createMediaElementSource(el);g=ctx.createGain();g.gain.value=0;s.connect(g);g.connect(mus);}catch(e){trackFail=true;}
+    return TK[m]={el,g,v:0};}
+  function soundtrack(dt,want){if(!ctx||trackFail)return false;
+    if(want!==mode){mode=want;modeT=0;}modeT+=dt;
+    const base=want==='pause'?Object.keys(TK).find(k=>TK[k].v>.05)||'day':want;
+    for(const m of new Set([...Object.keys(TK),base])){const T=track(m);if(!T.g)continue;const tgt=m===base?LEVEL[want]:0;
+      // into combat fast, out of it slowly; mood changes otherwise drift over a few seconds
+      const k=tgt>T.v?(m==='combat'||m==='danger'?1.6:.45):(m==='combat'?.18:.35);T.v+=(tgt-T.v)*Math.min(1,dt*k);T.g.gain.value=T.v;
+      if(tgt>0&&T.el.paused)T.el.play().catch(()=>{});
+      if(tgt===0&&T.v<.004&&!T.el.paused){T.el.pause();if(TRACKS[m].length>1){T.el.currentTime=0;}}}
+    return trackOK;}
   function music(dt,st){if(!M)return;const t=ctx.currentTime,night=st.night;
     M.danger+=(st.danger-M.danger)*Math.min(1,dt*.8);M.fight+=(st.fight-M.fight)*Math.min(1,dt*(st.fight>M.fight?3:.4));
+    if(soundtrack(dt,M.fight>.45?'combat':M.danger>.5?'danger':night>.5?'night':'day'))return;
     const root=night>.5?41:45; // F2 at night, A2 by day (MIDI)
     const hz=m=>440*Math.pow(2,(m-69)/12);
     M.cT-=dt;if(M.cT<=0){M.cT=8;M.chord=(M.chord+1)%CHORDS.length;const ch=CHORDS[M.chord],v=.022*(1-M.fight*.5);
@@ -242,9 +265,9 @@ const Sound=(()=>{
       if(M.fight>.3){const o=ctx.createGain();o.connect(mus);if(M.beat%4===0)tone(o,110,40,.25,.35*M.fight,'sine');if(M.beat%4===2){noise(o,.12,'bandpass',1800,.8,.12*M.fight,0,'white');}
         if(M.beat%2===1)noise(o,.03,'highpass',7000,.7,.05*M.fight);if(M.beat===7)tone(o,160,80,.18,.18*M.fight,'sine');}}
   }
-  function quiet(dt){if(!ctx)return;for(const L of Object.values(loops)){L.cur+=(0-L.cur)*Math.min(1,dt*3);L.g.gain.value=L.cur;}}
+  function quiet(dt,m){if(!ctx)return;for(const L of Object.values(loops)){L.cur+=(0-L.cur)*Math.min(1,dt*3);L.g.gain.value=L.cur;}if(m)soundtrack(dt,m);}
   function setVol(k,v){vol[k]=v;store.set('deadacre.vol',vol);applyVol();}
-  return{init,play,ambient,step,update,setVol,quiet,get samples(){return Object.keys(SB).length;},get vol(){return vol;},toggle(){muted=!muted;applyVol();return muted;},get muted(){return muted;}};
+  return{init,play,ambient,step,update,setVol,quiet,get samples(){return Object.keys(SB).length;},get soundtrack(){return trackOK?mode:null;},get vol(){return vol;},toggle(){muted=!muted;applyVol();return muted;},get muted(){return muted;}};
 })();
 
 
