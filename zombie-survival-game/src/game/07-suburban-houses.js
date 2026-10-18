@@ -73,7 +73,7 @@ function addSuburb(x,z,rot,styleKey){
   if(GFX==='high'){const o=new THREE.Mesh(T.glass.hull,SUB_OL);o.scale.copy(m.scale);o.position.copy(m.position);g.add(o);}
   track(g);
   // solid footprint: a ring of obstacles round the walls and a fill inside so nothing spawns in the shell
-  const hw=(T.max.x-T.min.x)/2*s,hd=(T.max.z-T.min.z)/2*s;
+  const hw=(T.max.x-T.min.x)/2*s,hd=(T.max.z-T.min.z)/2*s;addPad(x,z,rot,hw,hd);
   shellGlass(g,m,x,z,rot,T.glass,hw,hd);
   for(let lx=-hw+.8;lx<=hw-.8+.01;lx+=1.5)for(let lz=-hd+.8;lz<=hd-.8+.01;lz+=1.5){const p=l2w(x,z,rot,lx,lz);addOb({x:p.x,z:p.z,r:1.05});}
   const c=Math.abs(Math.cos(rot)),sn=Math.abs(Math.sin(rot)),rec={x,z,rot,hw,hd,h:(T.max.y-T.min.y)*s,kind:'house',solid:true,style:key,type:T.name,ex:c*hw+sn*hd,ez:sn*hw+c*hd};
@@ -324,11 +324,13 @@ function addTree(x,z,s,dead){
   const t={g,ph,k:dead?.6:1/s,kind:dead?'dead':'pine',x,z,s,hp:dead?3:4.5,ob,ch:CUR};ob.tree=t;trees.push(t);if(CUR)CUR.trees.push(t);
 }
 const rocks=[];
+// how far a thing of half-size hx by hz must sink so its downhill edge meets a slope (it is drawn at the height under its middle)
+function slopeSink(x,z,hx,hz,max){const h0=terrainH(x,z);let lo=h0;for(const [a,b] of [[1,0],[-1,0],[0,1],[0,-1],[.7,.7],[-.7,.7],[.7,-.7],[-.7,-.7]])lo=Math.min(lo,terrainH(x+a*hx,z+b*hz));return clamp(h0-lo,0,max);}
 const cutKey=(x,z)=>Math.round(x*2)+','+Math.round(z*2);
 function addRock(x,z,s){
   const tint=pick([0xb8b4a8,0xa8a498,0xc4bfb2]),k1=rand(.9,1.4),k2=rand(.5,.9),r1=rand(0,3),r2=rand(0,3);
   if(CUR&&CUR.cut&&CUR.cut.has(cutKey(x,z))){CUR.ghosts.push(addOb({x,z,r:1.05*s}));return;}
-  const r=mki(ROCK_G,TM('concrete',1,1,0x6d6a60,tint),x,.35*s,z,.07);r.scale.set(s*k1,s*k2,s);r.rotation.set(r1,r2,0);
+  const r=mki(ROCK_G,TM('concrete',1,1,0x6d6a60,tint),x,.35*s-slopeSink(x,z,.9*s*k1,.9*s,.9),z,.07);r.scale.set(s*k1,s*k2,s);r.rotation.set(r1,r2,0);
   track(r);const ob=addOb({x,z,r:1.05*s,h:.62*s});const rk={m:r,x,z,s,hp:3+s*1.5,ob,ch:CUR,sc:r.scale.clone()};ob.rock=rk;rocks.push(rk);if(CUR)CUR.rocks.push(rk);
 }
 const barrelM=M(0x8a2e22),bandM=new THREE.MeshStandardMaterial({color:0xf2a516,roughness:.7,emissive:0x3a2200});
@@ -370,7 +372,7 @@ function townW(x,z){const cx=Math.floor(x/CH),cz=Math.floor(z/CH);if(bioC(cx,cz)
   for(let i=-1;i<=1;i++)for(let j=-1;j<=1;j++){if((!i&&!j)||bioC(cx+i,cz+j)!=='town')continue;
     const x0=(cx+i)*CH,z0=(cz+j)*CH,dx=Math.max(x0-x,0,x-(x0+CH)),dz=Math.max(z0-z,0,z-(z0+CH));w=Math.max(w,1-sstep(0,14,Math.hypot(dx,dz)));}
   return w;}
-function terrainH(x,z){
+function terrainBase(x,z){
   const hw=1-sstep(6,18,Math.min(Math.abs(x),Math.abs(z))),bm=1-sstep(BR+8,BR+30,Math.max(Math.abs(x),Math.abs(z))),keep=(1-hw)*(1-bm);
   if(keep<=0)return 0;
   const amp=3+9.5*sstep(.47,.33,vnoise(x/CH*.3,z/CH*.3));
@@ -384,6 +386,29 @@ function terrainH(x,z){
   const lk=sstep(.21,.11,vnoise(x*.0065+51.2,z*.0065-33.7))*cm,rv=sstep(.03,.01,Math.abs(vnoise(x*.0042-71.3,z*.0042+19.9)-.5))*cm;
   return(h*(1-Math.max(lk,rv))-Math.max(lk*3.6,rv*2.6))*keep;
 }
+// graded lots: a building or landmark levels the ground under it to the height at its centre, with a sloped shoulder
+// round it, so the building, its doors and everything inside share one height instead of the downhill side hanging in
+// the air. Pads are kept for the whole run (a chunk rebuilt later finds its own pads already there).
+const PADS=new Map(),PAD_IDS=new Map(),PAD_CELL=16,padK=(i,j)=>i*100003+j;
+let PAD_NEW=null;
+function terrainH(x,z){let h=terrainBase(x,z);const L=PADS.get(padK(Math.floor(x/PAD_CELL),Math.floor(z/PAD_CELL)));
+  if(L)for(const p of L){const dx=x-p.x,dz=z-p.z,ox=Math.max(0,Math.abs(dx*p.c-dz*p.s)-p.hw),oz=Math.max(0,Math.abs(dx*p.s+dz*p.c)-p.hd);
+    if(ox<p.m&&oz<p.m){const d=Math.hypot(ox,oz);if(d<p.m)h=lerp(h,p.h,1-sstep(0,p.m,d));}}
+  return h;}
+function addPad(x,z,rot,hw,hd,m){
+  const id=x.toFixed(2)+','+z.toFixed(2);if(PAD_IDS.has(id))return PAD_IDS.get(id).h;
+  const p={x,z,c:Math.cos(rot),s:Math.sin(rot),hw:hw+.4,hd:hd+.4,m:m||3.5,h:terrainH(x,z)};PAD_IDS.set(id,p);
+  const R=Math.hypot(p.hw,p.hd)+p.m;
+  for(let i=Math.floor((x-R)/PAD_CELL);i<=Math.floor((x+R)/PAD_CELL);i++)for(let j=Math.floor((z-R)/PAD_CELL);j<=Math.floor((z+R)/PAD_CELL);j++){const k=padK(i,j);let L=PADS.get(k);if(!L)PADS.set(k,L=[]);L.push(p);}
+  (PAD_NEW||(PAD_NEW=[])).push(p);return p.h;}
+// re-level the height grid (and the one being built in the background) under pads added since the last flush
+function padFlush(){if(!PAD_NEW)return;const N=TERR.N,c=TERR.cell;
+  const patch=(G,ox,oz,data)=>{for(const p of PAD_NEW){const R=Math.hypot(p.hw,p.hd)+p.m+c;
+    const i0=Math.max(0,Math.floor((p.x-R-ox)/c)),i1=Math.min(N-1,Math.ceil((p.x+R-ox)/c)),j0=Math.max(0,Math.floor((p.z-R-oz)/c)),j1=Math.min(N-1,Math.ceil((p.z+R-oz)/c));
+    for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++){const h=terrainH(ox+(i+.5)*c,oz+(j+.5)*c),k=j*N+i;G[k]=h;
+      if(data){const v=Math.round(clamp((h-TERR.min)/TERR.rng,0,1)*65535);data[k*4]=v>>8;data[k*4+1]=v&255;}}}};
+  patch(TERR.grid,TERR.ox,TERR.oz,TERR.data);TERR.tex.needsUpdate=true;if(terrJob)patch(terrJob.grid,terrJob.ox,terrJob.oz,null);
+  PAD_NEW=null;lastSnap='';}
 let terrJob=null;
 function terrainRows(job,n){const N=TERR.N,c=TERR.cell;for(let k=0;k<n&&job.row<N;k++,job.row++){const j=job.row,z=job.oz+(j+.5)*c;for(let i=0;i<N;i++)job.grid[j*N+i]=terrainH(job.ox+(i+.5)*c,z);}}
 function terrainCommit(job){
@@ -650,7 +675,7 @@ function genChunk(cx,cz){
       if(RK)kFinish(RK,0,0,0,'rail',false);
       highwayFurniture(axis,x0,z0);
     }
-  }finally{RNG=Math.random;for(const o of ch.ghosts)delOb(o);ch.ghosts.length=0;CUR=null;}
+  }finally{RNG=Math.random;for(const o of ch.ghosts)delOb(o);ch.ghosts.length=0;CUR=null;padFlush();}
   chunkLoot(ch);
 }
 function unloadChunk(ch){
@@ -708,7 +733,7 @@ function resetWorld(){
   for(const ch of [...chunks.values()])unloadChunk(ch);
   chunkMem.clear();chunkQueue.length=0;lastPC='';lastSnap='';
   for(let i=props.length-1;i>=0;i--){scene.remove(props[i].g);props.splice(i,1);}
-  WORLD_SEED=(Math.random()*1e9)|0;_bio.clear();terrainRecenter(0,0,true);lastSnap='';
+  WORLD_SEED=(Math.random()*1e9)|0;_bio.clear();PADS.clear();PAD_IDS.clear();PAD_NEW=null;terrainRecenter(0,0,true);lastSnap='';
   setTimeout(()=>{if(S.running)toast(`New world generated · seed ${WORLD_SEED}`);},1800);
 }
 

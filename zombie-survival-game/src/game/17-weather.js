@@ -70,7 +70,7 @@ function updateWeather(dt,cx,cz){
   const wx=Math.cos(W.wdir),wz=Math.sin(W.wdir);
   for(const t of trees){const g=Math.sin(W.time*(1.1+W.wind)+t.ph)*.5+.5;const a=(.02+.05*g)*W.wind*t.k;t.g.rotation.x=wz*a;t.g.rotation.z=-wx*a;}
   // rain
-  const nR=Math.floor(RAIN_N*W.rain*(GFX==='high'?1:.5));rainLines.visible=nR>0;
+  const nR=Math.min(RAIN_N,Math.floor(RAIN_N*W.rain*(GFX==="high"?1:.5)));rainLines.visible=nR>0; // min: a strong front pushes rain past 1
   if(nR){rainGeo.setDrawRange(0,nR*2);const vx=wx*W.wind*8,vz=wz*W.wind*8,vy=-27;
     for(let i=0;i<nR;i++){const d=drops[i];d.y+=vy*d.s*dt;d.x+=vx*dt;d.z+=vz*dt;
       if(d.y<0){if(Math.random()<.07*(GFX==='high'?1:.4))splash(cx+d.x,cz+d.z);d.y+=rand(22,27);d.x=rand(-32,32);d.z=rand(-28,24);}
@@ -81,7 +81,7 @@ function updateWeather(dt,cx,cz){
   const leaves=S.season===2?clamp(W.wind-.3,0,1)*.18:0,pAmt=Math.max(W.ash,W.snow,leaves),pk=W.snow>=W.ash&&W.snow>=leaves?'snow':W.ash>=leaves?'ash':'leaf';
   if(ashPts.userData.k!==pk){ashPts.userData.k=pk;ashPts.material.color.setHex(pk==='snow'?0xf4f8ff:pk==='ash'?0xc4bcae:0xd0782a);ashPts.material.size=pk==='snow'?.2:pk==='leaf'?.3:.17;}
   const fall=pk==='snow'?1.7:pk==='leaf'?1.1:1.3,swy=pk==='leaf'?1.8:pk==='snow'?.9:.6;
-  const nA=Math.floor(ASH_N*pAmt*(GFX==='high'?1:.5));ashPts.visible=nA>0;
+  const nA=Math.min(ASH_N,Math.floor(ASH_N*pAmt*(GFX==="high"?1:.5)));ashPts.visible=nA>0;
   if(nA){ashGeo.setDrawRange(0,nA);const vx=wx*W.wind*3,vz=wz*W.wind*3;
     for(let i=0;i<nA;i++){const f=flakes[i];f.y-=fall*f.s*dt;f.x+=(vx*(pk==='snow'?2:1)+Math.sin(W.time*1.3+f.p)*swy)*dt;f.z+=(vz*(pk==='snow'?2:1)+Math.cos(W.time*1.1+f.p)*swy)*dt;
       if(f.y<0){f.y+=22;f.x=rand(-32,32);f.z=rand(-28,24);}

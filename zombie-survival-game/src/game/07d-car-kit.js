@@ -65,7 +65,7 @@ function kitCarBody(g,role){
 }
 // a stripped wreck: on its rims, rust everywhere, glass gone, the hood thrown up and a door on the ground
 function kitStripLook(c){
-  const u=c.mat.userData.u;u.uRust.value=1;u.uBroken.value=1;for(const w of c.wheels)w.visible=false;c.g.position.y=-.32;
+  const u=c.mat.userData.u;u.uRust.value=1;u.uBroken.value=1;for(const w of c.wheels)w.visible=false;c.g.position.y=(c.g.userData.y0||0)-.32;
   const hood=mk(BOX(c.wid*.86,.06,1.1),CTM('metalwall',0x7a4a34,1.5),0,c.hgt*.62,c.len/2-.6);hood.rotation.x=-1.05;c.g.add(hood);
   const D=CARKIT.types['debris-door'];if(D&&!c.door){c.door=new THREE.Mesh(D.body[0]||D.wheels[0],c.mat);c.door.scale.set(...CAR_SCALE);c.door.rotation.set(-Math.PI/2,0,rand(-.5,.5));c.door.position.set(c.wid/2+.8,.08-c.g.position.y,rand(-.6,.6));c.g.add(c.door);}
 }

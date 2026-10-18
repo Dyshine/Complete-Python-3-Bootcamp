@@ -36,7 +36,7 @@ function townRep(cx,cz){
 const LMM={metal:()=>TM('metal',1,1,0x7a7c78,0xb8bab4),wood:()=>TM('wood',1,1,0x6a4e34,0xb09878),plaster:()=>TM('plaster',1,1,0xd8d0bc,0xe8e0cc)};
 const blinkM=new THREE.MeshBasicMaterial({color:0xff3020}),fireM=new THREE.MeshBasicMaterial({color:0xff8a2a,transparent:true,opacity:.9});
 function buildLandmark(lm){
-  const g=new THREE.Group();g.position.set(lm.x,0,lm.z);g.rotation.y=Math.floor(hash2(lm.cx,lm.cz,12)*4)*Math.PI/2;track(g);
+  const g=new THREE.Group();g.position.set(lm.x,0,lm.z);g.rotation.y=Math.floor(hash2(lm.cx,lm.cz,12)*4)*Math.PI/2;track(g);addPad(lm.x,lm.z,g.rotation.y,7.5,7.5,5);
   const ob=(lx,lz,r,h)=>{const c=Math.cos(g.rotation.y),s=Math.sin(g.rotation.y);const o={x:lm.x+lx*c+lz*s,z:lm.z-lx*s+lz*c,r};if(h)o.h=h;addOb(o);};
   const live={lm,ch:CUR,g,smokeT:0,fire:null};
   if(lm.type==='tower'){

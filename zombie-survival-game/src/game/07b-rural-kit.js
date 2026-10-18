@@ -28,7 +28,7 @@ function addRural(x,z,rot,type,skin){
   if(GFX==='high'){const o=new THREE.Mesh(T.glass.hull,SUB_OL);o.scale.copy(m.scale);g.add(o);}
   track(g);
   const bb=T.geo.boundingBox,hw=(bb.max.x-bb.min.x)/2*s,hd=(bb.max.z-bb.min.z)/2*s;
-  rurSolid(x,z,rot,hw,hd);shellGlass(g,m,x,z,rot,T.glass,hw,hd);
+  rurSolid(x,z,rot,hw,hd);addPad(x,z,rot,hw,hd);shellGlass(g,m,x,z,rot,T.glass,hw,hd);
   const c=Math.abs(Math.cos(rot)),sn=Math.abs(Math.sin(rot)),rec={x,z,rot,hw,hd,h:(bb.max.y-bb.min.y)*s,kind:'house',solid:true,style:'rural'+si,type:T.name,ex:c*hw+sn*hd,ez:sn*hw+c*hd};
   houses.push(rec);if(CUR)CUR.houses.push(rec);
   if(RNG()<.6){const p=l2w(x,z,rot,rand(-hw+2,hw-2),hd+rand(2,4));addProp(pick(['carton','crate','tire','can']),p.x,p.z);}
@@ -41,7 +41,7 @@ function addHayShed(x,z,rot){
   if(!RUR.shed)return bShed(x,z,rot);const s=1.15,g=new THREE.Group();g.position.set(x,0,z);g.rotation.y=rot;
   for(const p of RUR.shed){const m=new THREE.Mesh(p.geo,p.mat);m.scale.setScalar(s);m.castShadow=true;m.receiveShadow=true;g.add(m);}
   track(g);const bb=RUR.shed[0].geo.boundingBox,hw=(bb.max.x-bb.min.x)/2*s,hd=(bb.max.z-bb.min.z)/2*s;
-  rurSolid(x,z,rot,hw,hd);
+  rurSolid(x,z,rot,hw,hd);addPad(x,z,rot,hw,hd);
   const c=Math.abs(Math.cos(rot)),sn=Math.abs(Math.sin(rot)),rec={x,z,rot,hw,hd,h:(bb.max.y-bb.min.y)*s,kind:'house',solid:true,style:'shed',type:'hayshed',ex:c*hw+sn*hd,ez:sn*hw+c*hd};
   houses.push(rec);if(CUR)CUR.houses.push(rec);
   return rec;

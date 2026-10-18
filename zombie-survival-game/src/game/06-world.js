@@ -172,7 +172,7 @@ function addCar(x,z,rot,model){
   model=model||(RNG()<.34?'pickup':RNG()<.3?'wagon':'sedan');
   const g=new THREE.Group();g.position.set(x,0,z);g.rotation.y=rot;g.rotation.z=rand(-.04,.04);track(g);
   const KC=kitCarBody(g,model);
-  if(KC){const obs=[],n=Math.max(2,Math.round(KC.len/1.8)),r=KC.wid/2*1.12;
+  if(KC){const obs=[],n=Math.max(2,Math.round(KC.len/1.8)),r=KC.wid/2*1.12;g.position.y=g.userData.y0=-slopeSink(x,z,KC.len/2,KC.len/2,.45);
     for(let i=0;i<n;i++){const lz=-KC.len/2+r*.8+(KC.len-r*1.6)*i/(n-1),p=l2w(x,z,rot,0,lz);obs.push(addOb({x:p.x,z:p.z,r,h:Math.min(KC.hgt,2.6)}));}
     const key='car'+cutKey(x,z),mem=CUR&&chunkMem.get(CUR.key),left=mem&&mem.cars&&mem.cars.has(key)?mem.cars.get(key):randi(2,4)+PERK('mechanic')+(KC.len>5?1:0);
     const c={x,z,rot,g,model:KC.name,kit:true,mat:KC.mat,body:KC.body,wheels:KC.wheels,wid:KC.wid,hgt:KC.hgt,left,key,ch:CUR,alarm:RNG()<.18&&!CAR_SERVICE.has(KC.name),len:KC.len};
@@ -196,7 +196,7 @@ function addCar(x,z,rot,model){
 function stripLook(c){
   if(c.stripped)return;c.stripped=true;if(c.kit){kitStripLook(c);return;}
   c.body.material=[c.mt.rust,c.mt.rust,c.mt.rust,c.body.material[3],c.mt.rust,c.mt.rust];
-  for(const w of c.wheels)w.visible=false;c.g.position.y=-.3;
+  for(const w of c.wheels)w.visible=false;c.g.position.y=(c.g.userData.y0||0)-.3;
   const hood=mk(BOX(1.9,.06,1.2),c.mt.rust,0,1.55,c.len/2-.1);hood.rotation.x=-1.1;c.g.add(hood);
 }
 function nearestCar(){let best=null,bd=1e9;
@@ -240,7 +240,7 @@ function addSwingDoor(px,pz,a0,len){
   track(g);const d={g,px,pz,a0,len,ang:RNG()<.25?rand(-.45,.45):0,angV:0,home:0};d.home=d.ang;sdoors.push(d);if(CUR)CUR.doors.push(d);return d;
 }
 function addHouse(x,z,rot){
-  const g=new THREE.Group();g.position.set(x,0,z);g.rotation.y=rot;track(g);
+  const g=new THREE.Group();g.position.set(x,0,z);g.rotation.y=rot;track(g);addPad(x,z,rot,4.2,4.2);
   const wallM=TM('plaster',2,1,pick([0x8a7f6c,0x7d7466,0x8f7a62]),pick([0xffffff,0xf0e8dc,0xe4e8e0])),trim=TM('wood',2,1,0x4a3f33,0x8a7a68);
   const fl=mk(BOX(8,.2,8),TM('wood',3,3,0x5b4a39,0xa89880),0,.1,0);fl.castShadow=false;g.add(fl);
   const pieces=[[0,-4,8,.3,2.8],[-4,0,.3,8,2.8],[4,-1.4,.3,5.2,2.8],[4,2.6,.3,2.8,1.1],[-2.6,4,2.8,.3,2.8],[2.9,4,2.2,.3,1.6]];
@@ -394,6 +394,7 @@ function kAutoDoors(K){if(!K.dops)return;
     if(axis==='x'){const p=l2w(K.x,K.z,K.rot,s0+.04,fixed);addSwingDoor(p.x,p.z,-K.rot,len);}
     else{const p=l2w(K.x,K.z,K.rot,fixed,s0+.04),c=Math.cos(K.rot),s=Math.sin(K.rot);addSwingDoor(p.x,p.z,Math.atan2(c,s),len);}}}
 function kFinish(K,hw,hd,h,kind,loot){
+  if(hw>=1.5&&hd>=1.5)addPad(K.x,K.z,K.rot,hw,hd); // buildings level their lot; poles, signs and hydrants just stand on the slope
   kAutoDoors(K);
   const baseG=kBake(K,0);const roof=K.r.size?kBake(K,1):null,upper=K.u&&K.u.size?kBake(K,2):null;
   if(K.wins)kWins(K,baseG,upper);

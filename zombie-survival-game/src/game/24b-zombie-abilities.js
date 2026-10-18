@@ -157,7 +157,7 @@ function zPose(z,dt,pd,pdx,pdz){
   // the boomer's swell is drawn on the whole body (and works on the box infected too)
   if(z.type==='boomer'){const k=s==='swell'?zK(a):0,p=s==='swell'?.55+.45*Math.sin(a.t*(14+k*34)):0;z.glow=p*(.25+.6*k);if(s==='swell')z.g.scale.setScalar(a.s0*(1+(.06+.16*k)*p));}
   if(!B)return;
-  const look=z.aware&&pd<20&&s!=='howl'&&s!=='summon'&&s!=='swell';
+  const look=z.aware&&pd<20&&s!=='howl'&&s!=='summon'&&s!=='swell'&&!z.def.crawl;
   if(!s&&!z.def.crawl&&!look&&a.guard<.02&&a.chg<.02&&!(z.slamT>0))return;
   const e=s?zEnv(a):0,k=s?zK(a):0,t=a.t,R=(b,ax,an)=>zRot(z,b,ax,an);
   if(s==='coil')z.g.position.y-=(z.type==='crawler'?.06:.24)*e;
@@ -165,7 +165,7 @@ function zPose(z,dt,pd,pdx,pdz){
   if(s==='rip')z.g.position.y-=.15*e;
   z.g.updateMatrixWorld(true);
   if(look){let r=Math.atan2(pdx,pdz)-z.yaw;while(r>Math.PI)r-=Math.PI*2;while(r<-Math.PI)r+=Math.PI*2;R(B.neck,'y',clamp(r,-.9,.9)*.6);}
-  if(z.def.crawl&&s!=='lunge'){const c=Math.sin(z.walk*.9);R(B.lArm,'x',-.7+c*.55);R(B.rArm,'x',-.7-c*.55);R(B.chest,'z',c*.12);R(B.neck,'x',-.45);}
+  if(z.def.crawl)zCrawlPose(z,B,s==='lunge'||s==='coil'?.35:1);
   if(a.guard>.02){const g=a.guard;R(B.chest,'x',.15*g);R(B.lArm,'x',-1.3*g);R(B.rArm,'x',-1.3*g);R(B.lArm,'y',-.55*g);R(B.rArm,'y',.55*g);R(B.lFore,'x',-1*g);R(B.rFore,'x',-1*g);}
   if(a.chg>.02){const g=a.chg;R(B.chest,'x',.55*g);R(B.neck,'x',-.3*g);R(B.lArm,'x',.55*g);R(B.rArm,'x',.55*g);R(B.lArm,'z',.3*g);R(B.rArm,'z',-.3*g);}
   if(z.slamT>0){const q=1-z.slamT/.7,up=q<.78?q/.78:1-(q-.78)/.22;const arm=q<.78?-2.7*up:-2.7+3.2*((q-.78)/.22),ch=q<.78?-.4*up:-.4+1.1*((q-.78)/.22);
@@ -187,4 +187,45 @@ function zPose(z,dt,pd,pdx,pdz){
     case 'summon':R(B.chest,'x',-.4*e);R(B.chest,'z',Math.sin(t*30)*.06*e);R(B.neck,'x',-.5*e);R(B.lArm,'z',1.3*e);R(B.rArm,'z',-1.3*e);R(B.lArm,'x',-.9*e);R(B.rArm,'x',-.9*e);break;
     case 'look':case 'sniff':R(B.chest,'x',.25*e);R(B.neck,'y',Math.sin(t*1.7)*.7*e);R(B.head,'x',(s==='sniff'?.25:-.1)*e);break;
   }
+}
+
+/* ----- the crawl: arm over arm on the belly, legs dragging -----
+   Crawlers have no walk clip; the whole body is posed here from rest every frame. Each arm reaches out ahead, plants,
+   and hauls the body forward, then swings back up and over for the next reach, the other arm half a cycle behind.
+   The body surges on each haul instead of gliding, and the cycle runs off the ground actually covered, so hands don't
+   skate. Directions are in the body's own frame: x its left, y toward the head (ahead, lying down), z its front (the ground). */
+const _za=new V3(),_zb=new V3(),_zc=new V3(),_zd=new V3(),_ze=new V3(),_zf=new V3();
+const CRAWL_STRIDE=1.05; // metres covered by one full cycle (two hauls)
+function zAim(z,b,dir,w){
+  if(!b||!b.parent||w<=0)return;const c=b.children.find(o=>o.isBone);if(!c)return;
+  const T=z.touch||(z.touch=new Map());if(!T.has(b))T.set(b,b.quaternion.clone());
+  b.getWorldPosition(_za);c.getWorldPosition(_zb);_zb.sub(_za).normalize();
+  z.g.getWorldQuaternion(_zq0);_zc.copy(dir).normalize().applyQuaternion(_zq0);
+  _zq1.setFromUnitVectors(_zb,_zc);if(w<1)_zq1.slerp(_zq3.identity(),1-w);
+  b.parent.getWorldQuaternion(_zq2);_zq3.copy(_zq2).invert();b.quaternion.premultiply(_zq3.multiply(_zq1).multiply(_zq2));b.updateMatrixWorld(true);
+}
+const crawlPull=u=>u<.55?Math.sin(Math.PI*u/.55):0;
+// advances the crawl cycle and returns the speed multiplier for this moment of it (about 1.25 on average)
+function zCrawlSurge(z,dt,sp){
+  const a=zAb(z);a.cph=(a.cph===undefined?Math.random():a.cph)+dt*Math.max(.12,sp*1.3)/CRAWL_STRIDE;
+  const p=a.cph%1;a.pull=Math.max(crawlPull(p),crawlPull((p+.5)%1));return .3+1.55*a.pull;
+}
+const CR_F=new V3(.35,.85,.4),CR_B=new V3(.3,-.05,.95),CR_L=new V3(.55,.45,-.25);
+function crawlArm(u,side,up,fore){
+  if(u<.55){const t=u/.55,e=t*t*(3-2*t);up.lerpVectors(CR_F,CR_B,e);fore.copy(up).add(_zf.set(0,.25,1).multiplyScalar(Math.sin(Math.PI*t)*.7));}
+  else{const t=(u-.55)/.45;_zd.lerpVectors(CR_B,CR_L,t);_ze.lerpVectors(CR_L,CR_F,t);up.lerpVectors(_zd,_ze,t);fore.copy(up).add(_zf.set(0,.5,-.2));}
+  up.x*=side;fore.x*=side;
+}
+function zCrawlPose(z,B,w){
+  const a=zAb(z),p=(a.cph||0)%1,pl=crawlPull(p),pr=crawlPull((p+.5)%1),R=(b,ax,an)=>zRot(z,b,ax,an);
+  const up=new V3(),fore=new V3();
+  crawlArm(p,1,up,fore);zAim(z,B.lArm,up,w);zAim(z,B.lFore,fore,w);
+  crawlArm((p+.5)%1,-1,up,fore);zAim(z,B.rArm,up,w);zAim(z,B.rFore,fore,w);
+  // the haul twists the chest toward the pulling arm; hips counter-twist and the legs drag, one knee twitching
+  R(B.chest,'y',.2*(pl-pr));R(B.spine,'z',.09*(pl-pr));R(B.hips,'y',-.1*(pl-pr));
+  const kl=Math.max(0,Math.sin(Math.PI*2*(p+.25)))*.8,kr=Math.max(0,Math.sin(Math.PI*2*(p+.75)))*.8;
+  zAim(z,B.lUp,up.set(.14,-1,.06),1);zAim(z,B.rUp,up.set(-.14,-1,.06),1);
+  zAim(z,B.lLeg,up.set(.1,-.9,-.35*kl),1);zAim(z,B.rLeg,up.set(-.1,-.9,-.35*kr),1);
+  // head up, watching where it's going
+  R(B.neck,'x',-.7);R(B.head,'x',-.25+.08*Math.sin(Math.PI*2*p));
 }

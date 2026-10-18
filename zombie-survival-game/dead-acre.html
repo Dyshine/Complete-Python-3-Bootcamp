@@ -1227,7 +1227,7 @@ function addCar(x,z,rot,model){
   model=model||(RNG()<.34?'pickup':RNG()<.3?'wagon':'sedan');
   const g=new THREE.Group();g.position.set(x,0,z);g.rotation.y=rot;g.rotation.z=rand(-.04,.04);track(g);
   const KC=kitCarBody(g,model);
-  if(KC){const obs=[],n=Math.max(2,Math.round(KC.len/1.8)),r=KC.wid/2*1.12;
+  if(KC){const obs=[],n=Math.max(2,Math.round(KC.len/1.8)),r=KC.wid/2*1.12;g.position.y=g.userData.y0=-slopeSink(x,z,KC.len/2,KC.len/2,.45);
     for(let i=0;i<n;i++){const lz=-KC.len/2+r*.8+(KC.len-r*1.6)*i/(n-1),p=l2w(x,z,rot,0,lz);obs.push(addOb({x:p.x,z:p.z,r,h:Math.min(KC.hgt,2.6)}));}
     const key='car'+cutKey(x,z),mem=CUR&&chunkMem.get(CUR.key),left=mem&&mem.cars&&mem.cars.has(key)?mem.cars.get(key):randi(2,4)+PERK('mechanic')+(KC.len>5?1:0);
     const c={x,z,rot,g,model:KC.name,kit:true,mat:KC.mat,body:KC.body,wheels:KC.wheels,wid:KC.wid,hgt:KC.hgt,left,key,ch:CUR,alarm:RNG()<.18&&!CAR_SERVICE.has(KC.name),len:KC.len};
@@ -1251,7 +1251,7 @@ function addCar(x,z,rot,model){
 function stripLook(c){
   if(c.stripped)return;c.stripped=true;if(c.kit){kitStripLook(c);return;}
   c.body.material=[c.mt.rust,c.mt.rust,c.mt.rust,c.body.material[3],c.mt.rust,c.mt.rust];
-  for(const w of c.wheels)w.visible=false;c.g.position.y=-.3;
+  for(const w of c.wheels)w.visible=false;c.g.position.y=(c.g.userData.y0||0)-.3;
   const hood=mk(BOX(1.9,.06,1.2),c.mt.rust,0,1.55,c.len/2-.1);hood.rotation.x=-1.1;c.g.add(hood);
 }
 function nearestCar(){let best=null,bd=1e9;
@@ -1295,7 +1295,7 @@ function addSwingDoor(px,pz,a0,len){
   track(g);const d={g,px,pz,a0,len,ang:RNG()<.25?rand(-.45,.45):0,angV:0,home:0};d.home=d.ang;sdoors.push(d);if(CUR)CUR.doors.push(d);return d;
 }
 function addHouse(x,z,rot){
-  const g=new THREE.Group();g.position.set(x,0,z);g.rotation.y=rot;track(g);
+  const g=new THREE.Group();g.position.set(x,0,z);g.rotation.y=rot;track(g);addPad(x,z,rot,4.2,4.2);
   const wallM=TM('plaster',2,1,pick([0x8a7f6c,0x7d7466,0x8f7a62]),pick([0xffffff,0xf0e8dc,0xe4e8e0])),trim=TM('wood',2,1,0x4a3f33,0x8a7a68);
   const fl=mk(BOX(8,.2,8),TM('wood',3,3,0x5b4a39,0xa89880),0,.1,0);fl.castShadow=false;g.add(fl);
   const pieces=[[0,-4,8,.3,2.8],[-4,0,.3,8,2.8],[4,-1.4,.3,5.2,2.8],[4,2.6,.3,2.8,1.1],[-2.6,4,2.8,.3,2.8],[2.9,4,2.2,.3,1.6]];
@@ -1449,6 +1449,7 @@ function kAutoDoors(K){if(!K.dops)return;
     if(axis==='x'){const p=l2w(K.x,K.z,K.rot,s0+.04,fixed);addSwingDoor(p.x,p.z,-K.rot,len);}
     else{const p=l2w(K.x,K.z,K.rot,fixed,s0+.04),c=Math.cos(K.rot),s=Math.sin(K.rot);addSwingDoor(p.x,p.z,Math.atan2(c,s),len);}}}
 function kFinish(K,hw,hd,h,kind,loot){
+  if(hw>=1.5&&hd>=1.5)addPad(K.x,K.z,K.rot,hw,hd); // buildings level their lot; poles, signs and hydrants just stand on the slope
   kAutoDoors(K);
   const baseG=kBake(K,0);const roof=K.r.size?kBake(K,1):null,upper=K.u&&K.u.size?kBake(K,2):null;
   if(K.wins)kWins(K,baseG,upper);
@@ -1682,7 +1683,7 @@ function addSuburb(x,z,rot,styleKey){
   if(GFX==='high'){const o=new THREE.Mesh(T.glass.hull,SUB_OL);o.scale.copy(m.scale);o.position.copy(m.position);g.add(o);}
   track(g);
   // solid footprint: a ring of obstacles round the walls and a fill inside so nothing spawns in the shell
-  const hw=(T.max.x-T.min.x)/2*s,hd=(T.max.z-T.min.z)/2*s;
+  const hw=(T.max.x-T.min.x)/2*s,hd=(T.max.z-T.min.z)/2*s;addPad(x,z,rot,hw,hd);
   shellGlass(g,m,x,z,rot,T.glass,hw,hd);
   for(let lx=-hw+.8;lx<=hw-.8+.01;lx+=1.5)for(let lz=-hd+.8;lz<=hd-.8+.01;lz+=1.5){const p=l2w(x,z,rot,lx,lz);addOb({x:p.x,z:p.z,r:1.05});}
   const c=Math.abs(Math.cos(rot)),sn=Math.abs(Math.sin(rot)),rec={x,z,rot,hw,hd,h:(T.max.y-T.min.y)*s,kind:'house',solid:true,style:key,type:T.name,ex:c*hw+sn*hd,ez:sn*hw+c*hd};
@@ -1933,11 +1934,13 @@ function addTree(x,z,s,dead){
   const t={g,ph,k:dead?.6:1/s,kind:dead?'dead':'pine',x,z,s,hp:dead?3:4.5,ob,ch:CUR};ob.tree=t;trees.push(t);if(CUR)CUR.trees.push(t);
 }
 const rocks=[];
+// how far a thing of half-size hx by hz must sink so its downhill edge meets a slope (it is drawn at the height under its middle)
+function slopeSink(x,z,hx,hz,max){const h0=terrainH(x,z);let lo=h0;for(const [a,b] of [[1,0],[-1,0],[0,1],[0,-1],[.7,.7],[-.7,.7],[.7,-.7],[-.7,-.7]])lo=Math.min(lo,terrainH(x+a*hx,z+b*hz));return clamp(h0-lo,0,max);}
 const cutKey=(x,z)=>Math.round(x*2)+','+Math.round(z*2);
 function addRock(x,z,s){
   const tint=pick([0xb8b4a8,0xa8a498,0xc4bfb2]),k1=rand(.9,1.4),k2=rand(.5,.9),r1=rand(0,3),r2=rand(0,3);
   if(CUR&&CUR.cut&&CUR.cut.has(cutKey(x,z))){CUR.ghosts.push(addOb({x,z,r:1.05*s}));return;}
-  const r=mki(ROCK_G,TM('concrete',1,1,0x6d6a60,tint),x,.35*s,z,.07);r.scale.set(s*k1,s*k2,s);r.rotation.set(r1,r2,0);
+  const r=mki(ROCK_G,TM('concrete',1,1,0x6d6a60,tint),x,.35*s-slopeSink(x,z,.9*s*k1,.9*s,.9),z,.07);r.scale.set(s*k1,s*k2,s);r.rotation.set(r1,r2,0);
   track(r);const ob=addOb({x,z,r:1.05*s,h:.62*s});const rk={m:r,x,z,s,hp:3+s*1.5,ob,ch:CUR,sc:r.scale.clone()};ob.rock=rk;rocks.push(rk);if(CUR)CUR.rocks.push(rk);
 }
 const barrelM=M(0x8a2e22),bandM=new THREE.MeshStandardMaterial({color:0xf2a516,roughness:.7,emissive:0x3a2200});
@@ -1979,7 +1982,7 @@ function townW(x,z){const cx=Math.floor(x/CH),cz=Math.floor(z/CH);if(bioC(cx,cz)
   for(let i=-1;i<=1;i++)for(let j=-1;j<=1;j++){if((!i&&!j)||bioC(cx+i,cz+j)!=='town')continue;
     const x0=(cx+i)*CH,z0=(cz+j)*CH,dx=Math.max(x0-x,0,x-(x0+CH)),dz=Math.max(z0-z,0,z-(z0+CH));w=Math.max(w,1-sstep(0,14,Math.hypot(dx,dz)));}
   return w;}
-function terrainH(x,z){
+function terrainBase(x,z){
   const hw=1-sstep(6,18,Math.min(Math.abs(x),Math.abs(z))),bm=1-sstep(BR+8,BR+30,Math.max(Math.abs(x),Math.abs(z))),keep=(1-hw)*(1-bm);
   if(keep<=0)return 0;
   const amp=3+9.5*sstep(.47,.33,vnoise(x/CH*.3,z/CH*.3));
@@ -1993,6 +1996,29 @@ function terrainH(x,z){
   const lk=sstep(.21,.11,vnoise(x*.0065+51.2,z*.0065-33.7))*cm,rv=sstep(.03,.01,Math.abs(vnoise(x*.0042-71.3,z*.0042+19.9)-.5))*cm;
   return(h*(1-Math.max(lk,rv))-Math.max(lk*3.6,rv*2.6))*keep;
 }
+// graded lots: a building or landmark levels the ground under it to the height at its centre, with a sloped shoulder
+// round it, so the building, its doors and everything inside share one height instead of the downhill side hanging in
+// the air. Pads are kept for the whole run (a chunk rebuilt later finds its own pads already there).
+const PADS=new Map(),PAD_IDS=new Map(),PAD_CELL=16,padK=(i,j)=>i*100003+j;
+let PAD_NEW=null;
+function terrainH(x,z){let h=terrainBase(x,z);const L=PADS.get(padK(Math.floor(x/PAD_CELL),Math.floor(z/PAD_CELL)));
+  if(L)for(const p of L){const dx=x-p.x,dz=z-p.z,ox=Math.max(0,Math.abs(dx*p.c-dz*p.s)-p.hw),oz=Math.max(0,Math.abs(dx*p.s+dz*p.c)-p.hd);
+    if(ox<p.m&&oz<p.m){const d=Math.hypot(ox,oz);if(d<p.m)h=lerp(h,p.h,1-sstep(0,p.m,d));}}
+  return h;}
+function addPad(x,z,rot,hw,hd,m){
+  const id=x.toFixed(2)+','+z.toFixed(2);if(PAD_IDS.has(id))return PAD_IDS.get(id).h;
+  const p={x,z,c:Math.cos(rot),s:Math.sin(rot),hw:hw+.4,hd:hd+.4,m:m||3.5,h:terrainH(x,z)};PAD_IDS.set(id,p);
+  const R=Math.hypot(p.hw,p.hd)+p.m;
+  for(let i=Math.floor((x-R)/PAD_CELL);i<=Math.floor((x+R)/PAD_CELL);i++)for(let j=Math.floor((z-R)/PAD_CELL);j<=Math.floor((z+R)/PAD_CELL);j++){const k=padK(i,j);let L=PADS.get(k);if(!L)PADS.set(k,L=[]);L.push(p);}
+  (PAD_NEW||(PAD_NEW=[])).push(p);return p.h;}
+// re-level the height grid (and the one being built in the background) under pads added since the last flush
+function padFlush(){if(!PAD_NEW)return;const N=TERR.N,c=TERR.cell;
+  const patch=(G,ox,oz,data)=>{for(const p of PAD_NEW){const R=Math.hypot(p.hw,p.hd)+p.m+c;
+    const i0=Math.max(0,Math.floor((p.x-R-ox)/c)),i1=Math.min(N-1,Math.ceil((p.x+R-ox)/c)),j0=Math.max(0,Math.floor((p.z-R-oz)/c)),j1=Math.min(N-1,Math.ceil((p.z+R-oz)/c));
+    for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++){const h=terrainH(ox+(i+.5)*c,oz+(j+.5)*c),k=j*N+i;G[k]=h;
+      if(data){const v=Math.round(clamp((h-TERR.min)/TERR.rng,0,1)*65535);data[k*4]=v>>8;data[k*4+1]=v&255;}}}};
+  patch(TERR.grid,TERR.ox,TERR.oz,TERR.data);TERR.tex.needsUpdate=true;if(terrJob)patch(terrJob.grid,terrJob.ox,terrJob.oz,null);
+  PAD_NEW=null;lastSnap='';}
 let terrJob=null;
 function terrainRows(job,n){const N=TERR.N,c=TERR.cell;for(let k=0;k<n&&job.row<N;k++,job.row++){const j=job.row,z=job.oz+(j+.5)*c;for(let i=0;i<N;i++)job.grid[j*N+i]=terrainH(job.ox+(i+.5)*c,z);}}
 function terrainCommit(job){
@@ -2259,7 +2285,7 @@ function genChunk(cx,cz){
       if(RK)kFinish(RK,0,0,0,'rail',false);
       highwayFurniture(axis,x0,z0);
     }
-  }finally{RNG=Math.random;for(const o of ch.ghosts)delOb(o);ch.ghosts.length=0;CUR=null;}
+  }finally{RNG=Math.random;for(const o of ch.ghosts)delOb(o);ch.ghosts.length=0;CUR=null;padFlush();}
   chunkLoot(ch);
 }
 function unloadChunk(ch){
@@ -2317,7 +2343,7 @@ function resetWorld(){
   for(const ch of [...chunks.values()])unloadChunk(ch);
   chunkMem.clear();chunkQueue.length=0;lastPC='';lastSnap='';
   for(let i=props.length-1;i>=0;i--){scene.remove(props[i].g);props.splice(i,1);}
-  WORLD_SEED=(Math.random()*1e9)|0;_bio.clear();terrainRecenter(0,0,true);lastSnap='';
+  WORLD_SEED=(Math.random()*1e9)|0;_bio.clear();PADS.clear();PAD_IDS.clear();PAD_NEW=null;terrainRecenter(0,0,true);lastSnap='';
   setTimeout(()=>{if(S.running)toast(`New world generated · seed ${WORLD_SEED}`);},1800);
 }
 
@@ -2351,7 +2377,7 @@ function addRural(x,z,rot,type,skin){
   if(GFX==='high'){const o=new THREE.Mesh(T.glass.hull,SUB_OL);o.scale.copy(m.scale);g.add(o);}
   track(g);
   const bb=T.geo.boundingBox,hw=(bb.max.x-bb.min.x)/2*s,hd=(bb.max.z-bb.min.z)/2*s;
-  rurSolid(x,z,rot,hw,hd);shellGlass(g,m,x,z,rot,T.glass,hw,hd);
+  rurSolid(x,z,rot,hw,hd);addPad(x,z,rot,hw,hd);shellGlass(g,m,x,z,rot,T.glass,hw,hd);
   const c=Math.abs(Math.cos(rot)),sn=Math.abs(Math.sin(rot)),rec={x,z,rot,hw,hd,h:(bb.max.y-bb.min.y)*s,kind:'house',solid:true,style:'rural'+si,type:T.name,ex:c*hw+sn*hd,ez:sn*hw+c*hd};
   houses.push(rec);if(CUR)CUR.houses.push(rec);
   if(RNG()<.6){const p=l2w(x,z,rot,rand(-hw+2,hw-2),hd+rand(2,4));addProp(pick(['carton','crate','tire','can']),p.x,p.z);}
@@ -2364,7 +2390,7 @@ function addHayShed(x,z,rot){
   if(!RUR.shed)return bShed(x,z,rot);const s=1.15,g=new THREE.Group();g.position.set(x,0,z);g.rotation.y=rot;
   for(const p of RUR.shed){const m=new THREE.Mesh(p.geo,p.mat);m.scale.setScalar(s);m.castShadow=true;m.receiveShadow=true;g.add(m);}
   track(g);const bb=RUR.shed[0].geo.boundingBox,hw=(bb.max.x-bb.min.x)/2*s,hd=(bb.max.z-bb.min.z)/2*s;
-  rurSolid(x,z,rot,hw,hd);
+  rurSolid(x,z,rot,hw,hd);addPad(x,z,rot,hw,hd);
   const c=Math.abs(Math.cos(rot)),sn=Math.abs(Math.sin(rot)),rec={x,z,rot,hw,hd,h:(bb.max.y-bb.min.y)*s,kind:'house',solid:true,style:'shed',type:'hayshed',ex:c*hw+sn*hd,ez:sn*hw+c*hd};
   houses.push(rec);if(CUR)CUR.houses.push(rec);
   return rec;
@@ -2573,7 +2599,7 @@ function kitCarBody(g,role){
 }
 // a stripped wreck: on its rims, rust everywhere, glass gone, the hood thrown up and a door on the ground
 function kitStripLook(c){
-  const u=c.mat.userData.u;u.uRust.value=1;u.uBroken.value=1;for(const w of c.wheels)w.visible=false;c.g.position.y=-.32;
+  const u=c.mat.userData.u;u.uRust.value=1;u.uBroken.value=1;for(const w of c.wheels)w.visible=false;c.g.position.y=(c.g.userData.y0||0)-.32;
   const hood=mk(BOX(c.wid*.86,.06,1.1),CTM('metalwall',0x7a4a34,1.5),0,c.hgt*.62,c.len/2-.6);hood.rotation.x=-1.05;c.g.add(hood);
   const D=CARKIT.types['debris-door'];if(D&&!c.door){c.door=new THREE.Mesh(D.body[0]||D.wheels[0],c.mat);c.door.scale.set(...CAR_SCALE);c.door.rotation.set(-Math.PI/2,0,rand(-.5,.5));c.door.position.set(c.wid/2+.8,.08-c.g.position.y,rand(-.6,.6));c.g.add(c.door);}
 }
@@ -3281,7 +3307,7 @@ function updateWeather(dt,cx,cz){
   const wx=Math.cos(W.wdir),wz=Math.sin(W.wdir);
   for(const t of trees){const g=Math.sin(W.time*(1.1+W.wind)+t.ph)*.5+.5;const a=(.02+.05*g)*W.wind*t.k;t.g.rotation.x=wz*a;t.g.rotation.z=-wx*a;}
   // rain
-  const nR=Math.floor(RAIN_N*W.rain*(GFX==='high'?1:.5));rainLines.visible=nR>0;
+  const nR=Math.min(RAIN_N,Math.floor(RAIN_N*W.rain*(GFX==="high"?1:.5)));rainLines.visible=nR>0; // min: a strong front pushes rain past 1
   if(nR){rainGeo.setDrawRange(0,nR*2);const vx=wx*W.wind*8,vz=wz*W.wind*8,vy=-27;
     for(let i=0;i<nR;i++){const d=drops[i];d.y+=vy*d.s*dt;d.x+=vx*dt;d.z+=vz*dt;
       if(d.y<0){if(Math.random()<.07*(GFX==='high'?1:.4))splash(cx+d.x,cz+d.z);d.y+=rand(22,27);d.x=rand(-32,32);d.z=rand(-28,24);}
@@ -3292,7 +3318,7 @@ function updateWeather(dt,cx,cz){
   const leaves=S.season===2?clamp(W.wind-.3,0,1)*.18:0,pAmt=Math.max(W.ash,W.snow,leaves),pk=W.snow>=W.ash&&W.snow>=leaves?'snow':W.ash>=leaves?'ash':'leaf';
   if(ashPts.userData.k!==pk){ashPts.userData.k=pk;ashPts.material.color.setHex(pk==='snow'?0xf4f8ff:pk==='ash'?0xc4bcae:0xd0782a);ashPts.material.size=pk==='snow'?.2:pk==='leaf'?.3:.17;}
   const fall=pk==='snow'?1.7:pk==='leaf'?1.1:1.3,swy=pk==='leaf'?1.8:pk==='snow'?.9:.6;
-  const nA=Math.floor(ASH_N*pAmt*(GFX==='high'?1:.5));ashPts.visible=nA>0;
+  const nA=Math.min(ASH_N,Math.floor(ASH_N*pAmt*(GFX==="high"?1:.5)));ashPts.visible=nA>0;
   if(nA){ashGeo.setDrawRange(0,nA);const vx=wx*W.wind*3,vz=wz*W.wind*3;
     for(let i=0;i<nA;i++){const f=flakes[i];f.y-=fall*f.s*dt;f.x+=(vx*(pk==='snow'?2:1)+Math.sin(W.time*1.3+f.p)*swy)*dt;f.z+=(vz*(pk==='snow'?2:1)+Math.cos(W.time*1.1+f.p)*swy)*dt;
       if(f.y<0){f.y+=22;f.x=rand(-32,32);f.z=rand(-28,24);}
@@ -3811,7 +3837,7 @@ function makeZombieGLB(type){
   if(GFX==='high')for(const o of meshes){const sk=!!o.isSkinnedMesh;const ol=sk?new THREE.SkinnedMesh(o.geometry,zOutlineMat(sk,o.userData.olTh)):new THREE.Mesh(o.geometry,zOutlineMat(sk,o.userData.olTh));
     if(sk){ol.bind(o.skeleton,o.bindMatrix);ol.bindMode=o.bindMode;}ol.position.copy(o.position);ol.quaternion.copy(o.quaternion);ol.scale.copy(o.scale);ol.frustumCulled=false;o.parent.add(ol);}
   const mixer=new THREE.AnimationMixer(inst),acts={};
-  if(T.walk){acts.walk=mixer.clipAction(T.walk);acts.walk.play();acts.walk.time=Math.random()*T.walk.duration;}
+  if(T.walk){acts.walk=mixer.clipAction(T.walk);if(type!=='crawler'){acts.walk.play();acts.walk.time=Math.random()*T.walk.duration;}} // crawlers are posed by hand (zCrawlPose)
   for(const n of ['attack','death']){if(!T[n]&&ZCLIP[n])T[n]=stripRootMotion(ZCLIP[n].clone(),T.rootBone);
     if(T[n]){const a=mixer.clipAction(T[n]);a.setLoop(THREE.LoopOnce,1);a.clampWhenFinished=true;acts[n]=a;}}
   const v=type==='runner'?rand(.84,.94):type==='walker'?rand(.9,1.1):type==='boss'?1.45:1;g.scale.setScalar(v);
@@ -4013,6 +4039,14 @@ function updateZombies(dt){
       if(z.summonCd<=0&&!(z.slamT>0)&&!zBusy(z)){z.summonCd=12;zSet(z,'summon',1.3);Sound.play('roar',1,z.x,z.z);}
     }
     sp=zAbility(z,dt,pd,pdx,pdz,sp,zH===pH&&pIn===zIn);if(z.dying)continue;
+    // in reach: stop and swing instead of walking into the player and being shoved back (which reads as walking backwards)
+    z.halt=player.alive&&z.aware&&!lu&&pd<d.r+.7&&zH===pH&&Math.abs((player.jy||0)-(z.jy||0))<1&&!zBusy(z);if(z.halt)sp=0;
+    if(d.crawl&&z.bones)sp*=zCrawlSurge(z,dt,sp);
+    // crowding in: when one of the dead nearer the player is in the way, work round it to the side instead of shoving into
+    // it (the crowd's push-apart would throw this one backwards); the pack spreads into a ring round the player
+    if(z.aware&&sp>0&&pd<7){let bs=0;for(const o of zombies){if(o===z||o.dying)continue;const ox=o.x-z.x,oz=o.z-z.z,rr=d.r+o.def.r+.3;if(Math.abs(ox)>rr||Math.abs(oz)>rr)continue;
+        const dd=Math.hypot(ox,oz)||1;if(dd<rr&&(ox*dx+oz*dz)/dd>.45&&pd0(o)<pd-.2){bs=(ox*dz-oz*dx)>0?-1:1;break;}}
+      if(bs){const nx=dx*.25-dz*bs,nz=dz*.25+dx*bs,nl=Math.hypot(nx,nz)||1;dx=nx/nl;dz=nz/nl;sp*=.55;}}
     // at night they charge the last few metres
     if(S.phase==='night'&&z.aware&&pd<4.5&&pd>1.2&&zH===pH)sp*=1.28;
     if(zClimb(z,dt,pd))sp=0;
@@ -4037,8 +4071,10 @@ function updateZombies(dt){
     const fy=sp>0?Math.atan2(dx,dz):z.aware?Math.atan2(pdx,pdz):z.yaw;
     let dy=fy-z.yaw;while(dy>Math.PI)dy-=Math.PI*2;while(dy<-Math.PI)dy+=Math.PI*2;z.yaw+=dy*Math.min(1,dt*8);
     z.walk+=dt*(sp+.5)*2.2;const sw=Math.sin(z.walk);
+    // the legs follow the ground actually covered: shoved backwards, they step backwards rather than walking on the spot
+    {const ax=(z.x-(z.lx??z.x))/dt,az=(z.z-(z.lz??z.z))/dt;z.lx=z.x;z.lz=z.z;z.fv=lerp(z.fv||0,ax*Math.sin(z.yaw)+az*Math.cos(z.yaw),Math.min(1,dt*8));}
     if(z.mixer){
-      if(z.acts.walk)z.acts.walk.timeScale=clamp(sp/(d.speed*.8),.25,2.4)*(z.type==='runner'?1.5:1);
+      if(z.acts.walk){const f=clamp(z.fv,-d.speed,d.speed*3)/(d.speed*.8);z.acts.walk.timeScale=(z.fv<-.25?-clamp(-f,.3,1.2):clamp(Math.max(f,sp/(d.speed*.8)*.3),.2,2.4))*(z.type==='runner'?1.5:1);}
       zUndo(z);z.mixer.update(dt);z.g.position.set(z.x,(z.lvlY||0)+zLift(z),z.z);
     }else{
       z.legs[0].rotation.x=sw*.6;z.legs[1].rotation.x=-sw*.6;
@@ -4046,8 +4082,8 @@ function updateZombies(dt){
       z.g.position.set(z.x,Math.abs(Math.cos(z.walk))*.06+(z.lvlY||0)+zLift(z),z.z);
     }
     z.g.rotation.y=z.yaw;
-    z.g.rotation.x=z.type==='boss'&&z.slamT>0?-.35:d.crawl?1.32:z.climbT>0?.55*Math.sin(Math.PI*(1-z.climbT/z.climbD)):0;
-    if(d.crawl){z.g.position.x-=Math.sin(z.yaw)*.75;z.g.position.z-=Math.cos(z.yaw)*.75;}
+    z.g.rotation.x=z.type==='boss'&&z.slamT>0?-.35:d.crawl?(z.bones?1.42:1.32):z.climbT>0?.55*Math.sin(Math.PI*(1-z.climbT/z.climbD)):0;
+    if(d.crawl){z.g.position.x-=Math.sin(z.yaw)*.8;z.g.position.z-=Math.cos(z.yaw)*.8;if(z.ab)z.g.position.y+=.05*(z.ab.pull||0);}
     zPose(z,dt,pd,pdx,pdz);
     const fl=z.flash>0?.7:0,gl=z.glow||0;for(const m of z.mats)if(m.emissive)m.emissive.setRGB(fl+gl,fl*.2+gl*.5,fl*.1+gl*.08);
     const dmgd=z.hp<z.maxHp;z.bg.visible=z.fg.visible=dmgd;
@@ -4055,7 +4091,7 @@ function updateZombies(dt){
   }
   for(let i=0;i<zombies.length;i++){const a=zombies[i];if(a.dying)continue;
     for(let j=i+1;j<zombies.length;j++){const b=zombies[j];if(b.dying)continue;const dx=b.x-a.x,dz=b.z-a.z,rr=a.def.r+b.def.r;if(Math.abs(dx)>rr||Math.abs(dz)>rr)continue;
-      const d2=dx*dx+dz*dz;if(d2<rr*rr&&d2>1e-6){const d=Math.sqrt(d2),o=(rr-d)/2,ux=dx/d,uz=dz/d;const wa=a.def.r>b.def.r?.25:a.def.r<b.def.r?.75:.5;
+      const d2=dx*dx+dz*dz;if(d2<rr*rr&&d2>1e-6){const d=Math.sqrt(d2),o=(rr-d)/2,ux=dx/d,uz=dz/d;const wa=a.halt!==b.halt?(a.halt?0:1):a.def.r>b.def.r?.25:a.def.r<b.def.r?.75:.5; // one already at the player holds its ground
         a.x-=ux*o*2*wa;a.z-=uz*o*2*wa;b.x+=ux*o*2*(1-wa);b.z+=uz*o*2*(1-wa);}}
     if(player.alive&&Math.abs((a.jy||0)-(player.jy||0))<1&&inHome(a.x,a.z)===pH){const dx=a.x-player.x,dz=a.z-player.z,rr=a.def.r+.5,d2=dx*dx+dz*dz;if(d2<rr*rr&&d2>1e-6){const d=Math.sqrt(d2);a.x=player.x+dx/d*rr;a.z=player.z+dz/d*rr;}}
   }
@@ -4222,7 +4258,7 @@ function zPose(z,dt,pd,pdx,pdz){
   // the boomer's swell is drawn on the whole body (and works on the box infected too)
   if(z.type==='boomer'){const k=s==='swell'?zK(a):0,p=s==='swell'?.55+.45*Math.sin(a.t*(14+k*34)):0;z.glow=p*(.25+.6*k);if(s==='swell')z.g.scale.setScalar(a.s0*(1+(.06+.16*k)*p));}
   if(!B)return;
-  const look=z.aware&&pd<20&&s!=='howl'&&s!=='summon'&&s!=='swell';
+  const look=z.aware&&pd<20&&s!=='howl'&&s!=='summon'&&s!=='swell'&&!z.def.crawl;
   if(!s&&!z.def.crawl&&!look&&a.guard<.02&&a.chg<.02&&!(z.slamT>0))return;
   const e=s?zEnv(a):0,k=s?zK(a):0,t=a.t,R=(b,ax,an)=>zRot(z,b,ax,an);
   if(s==='coil')z.g.position.y-=(z.type==='crawler'?.06:.24)*e;
@@ -4230,7 +4266,7 @@ function zPose(z,dt,pd,pdx,pdz){
   if(s==='rip')z.g.position.y-=.15*e;
   z.g.updateMatrixWorld(true);
   if(look){let r=Math.atan2(pdx,pdz)-z.yaw;while(r>Math.PI)r-=Math.PI*2;while(r<-Math.PI)r+=Math.PI*2;R(B.neck,'y',clamp(r,-.9,.9)*.6);}
-  if(z.def.crawl&&s!=='lunge'){const c=Math.sin(z.walk*.9);R(B.lArm,'x',-.7+c*.55);R(B.rArm,'x',-.7-c*.55);R(B.chest,'z',c*.12);R(B.neck,'x',-.45);}
+  if(z.def.crawl)zCrawlPose(z,B,s==='lunge'||s==='coil'?.35:1);
   if(a.guard>.02){const g=a.guard;R(B.chest,'x',.15*g);R(B.lArm,'x',-1.3*g);R(B.rArm,'x',-1.3*g);R(B.lArm,'y',-.55*g);R(B.rArm,'y',.55*g);R(B.lFore,'x',-1*g);R(B.rFore,'x',-1*g);}
   if(a.chg>.02){const g=a.chg;R(B.chest,'x',.55*g);R(B.neck,'x',-.3*g);R(B.lArm,'x',.55*g);R(B.rArm,'x',.55*g);R(B.lArm,'z',.3*g);R(B.rArm,'z',-.3*g);}
   if(z.slamT>0){const q=1-z.slamT/.7,up=q<.78?q/.78:1-(q-.78)/.22;const arm=q<.78?-2.7*up:-2.7+3.2*((q-.78)/.22),ch=q<.78?-.4*up:-.4+1.1*((q-.78)/.22);
@@ -4252,6 +4288,47 @@ function zPose(z,dt,pd,pdx,pdz){
     case 'summon':R(B.chest,'x',-.4*e);R(B.chest,'z',Math.sin(t*30)*.06*e);R(B.neck,'x',-.5*e);R(B.lArm,'z',1.3*e);R(B.rArm,'z',-1.3*e);R(B.lArm,'x',-.9*e);R(B.rArm,'x',-.9*e);break;
     case 'look':case 'sniff':R(B.chest,'x',.25*e);R(B.neck,'y',Math.sin(t*1.7)*.7*e);R(B.head,'x',(s==='sniff'?.25:-.1)*e);break;
   }
+}
+
+/* ----- the crawl: arm over arm on the belly, legs dragging -----
+   Crawlers have no walk clip; the whole body is posed here from rest every frame. Each arm reaches out ahead, plants,
+   and hauls the body forward, then swings back up and over for the next reach, the other arm half a cycle behind.
+   The body surges on each haul instead of gliding, and the cycle runs off the ground actually covered, so hands don't
+   skate. Directions are in the body's own frame: x its left, y toward the head (ahead, lying down), z its front (the ground). */
+const _za=new V3(),_zb=new V3(),_zc=new V3(),_zd=new V3(),_ze=new V3(),_zf=new V3();
+const CRAWL_STRIDE=1.05; // metres covered by one full cycle (two hauls)
+function zAim(z,b,dir,w){
+  if(!b||!b.parent||w<=0)return;const c=b.children.find(o=>o.isBone);if(!c)return;
+  const T=z.touch||(z.touch=new Map());if(!T.has(b))T.set(b,b.quaternion.clone());
+  b.getWorldPosition(_za);c.getWorldPosition(_zb);_zb.sub(_za).normalize();
+  z.g.getWorldQuaternion(_zq0);_zc.copy(dir).normalize().applyQuaternion(_zq0);
+  _zq1.setFromUnitVectors(_zb,_zc);if(w<1)_zq1.slerp(_zq3.identity(),1-w);
+  b.parent.getWorldQuaternion(_zq2);_zq3.copy(_zq2).invert();b.quaternion.premultiply(_zq3.multiply(_zq1).multiply(_zq2));b.updateMatrixWorld(true);
+}
+const crawlPull=u=>u<.55?Math.sin(Math.PI*u/.55):0;
+// advances the crawl cycle and returns the speed multiplier for this moment of it (about 1.25 on average)
+function zCrawlSurge(z,dt,sp){
+  const a=zAb(z);a.cph=(a.cph===undefined?Math.random():a.cph)+dt*Math.max(.12,sp*1.3)/CRAWL_STRIDE;
+  const p=a.cph%1;a.pull=Math.max(crawlPull(p),crawlPull((p+.5)%1));return .3+1.55*a.pull;
+}
+const CR_F=new V3(.35,.85,.4),CR_B=new V3(.3,-.05,.95),CR_L=new V3(.55,.45,-.25);
+function crawlArm(u,side,up,fore){
+  if(u<.55){const t=u/.55,e=t*t*(3-2*t);up.lerpVectors(CR_F,CR_B,e);fore.copy(up).add(_zf.set(0,.25,1).multiplyScalar(Math.sin(Math.PI*t)*.7));}
+  else{const t=(u-.55)/.45;_zd.lerpVectors(CR_B,CR_L,t);_ze.lerpVectors(CR_L,CR_F,t);up.lerpVectors(_zd,_ze,t);fore.copy(up).add(_zf.set(0,.5,-.2));}
+  up.x*=side;fore.x*=side;
+}
+function zCrawlPose(z,B,w){
+  const a=zAb(z),p=(a.cph||0)%1,pl=crawlPull(p),pr=crawlPull((p+.5)%1),R=(b,ax,an)=>zRot(z,b,ax,an);
+  const up=new V3(),fore=new V3();
+  crawlArm(p,1,up,fore);zAim(z,B.lArm,up,w);zAim(z,B.lFore,fore,w);
+  crawlArm((p+.5)%1,-1,up,fore);zAim(z,B.rArm,up,w);zAim(z,B.rFore,fore,w);
+  // the haul twists the chest toward the pulling arm; hips counter-twist and the legs drag, one knee twitching
+  R(B.chest,'y',.2*(pl-pr));R(B.spine,'z',.09*(pl-pr));R(B.hips,'y',-.1*(pl-pr));
+  const kl=Math.max(0,Math.sin(Math.PI*2*(p+.25)))*.8,kr=Math.max(0,Math.sin(Math.PI*2*(p+.75)))*.8;
+  zAim(z,B.lUp,up.set(.14,-1,.06),1);zAim(z,B.rUp,up.set(-.14,-1,.06),1);
+  zAim(z,B.lLeg,up.set(.1,-.9,-.35*kl),1);zAim(z,B.rLeg,up.set(-.1,-.9,-.35*kr),1);
+  // head up, watching where it's going
+  R(B.neck,'x',-.7);R(B.head,'x',-.25+.08*Math.sin(Math.PI*2*p));
 }
 /* ================= ZOMBIE SKINS (hand-inked outfit atlas + grime/blood shader) ================= */
 // shared GLSL: value noise for grime, rot and blood, driven per zombie by seed/blood/hue
@@ -5656,7 +5733,7 @@ function townRep(cx,cz){
 const LMM={metal:()=>TM('metal',1,1,0x7a7c78,0xb8bab4),wood:()=>TM('wood',1,1,0x6a4e34,0xb09878),plaster:()=>TM('plaster',1,1,0xd8d0bc,0xe8e0cc)};
 const blinkM=new THREE.MeshBasicMaterial({color:0xff3020}),fireM=new THREE.MeshBasicMaterial({color:0xff8a2a,transparent:true,opacity:.9});
 function buildLandmark(lm){
-  const g=new THREE.Group();g.position.set(lm.x,0,lm.z);g.rotation.y=Math.floor(hash2(lm.cx,lm.cz,12)*4)*Math.PI/2;track(g);
+  const g=new THREE.Group();g.position.set(lm.x,0,lm.z);g.rotation.y=Math.floor(hash2(lm.cx,lm.cz,12)*4)*Math.PI/2;track(g);addPad(lm.x,lm.z,g.rotation.y,7.5,7.5,5);
   const ob=(lx,lz,r,h)=>{const c=Math.cos(g.rotation.y),s=Math.sin(g.rotation.y);const o={x:lm.x+lx*c+lz*s,z:lm.z-lx*s+lz*c,r};if(h)o.h=h;addOb(o);};
   const live={lm,ch:CUR,g,smokeT:0,fire:null};
   if(lm.type==='tower'){

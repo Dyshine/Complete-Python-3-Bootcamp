@@ -91,7 +91,7 @@ function makeZombieGLB(type){
   if(GFX==='high')for(const o of meshes){const sk=!!o.isSkinnedMesh;const ol=sk?new THREE.SkinnedMesh(o.geometry,zOutlineMat(sk,o.userData.olTh)):new THREE.Mesh(o.geometry,zOutlineMat(sk,o.userData.olTh));
     if(sk){ol.bind(o.skeleton,o.bindMatrix);ol.bindMode=o.bindMode;}ol.position.copy(o.position);ol.quaternion.copy(o.quaternion);ol.scale.copy(o.scale);ol.frustumCulled=false;o.parent.add(ol);}
   const mixer=new THREE.AnimationMixer(inst),acts={};
-  if(T.walk){acts.walk=mixer.clipAction(T.walk);acts.walk.play();acts.walk.time=Math.random()*T.walk.duration;}
+  if(T.walk){acts.walk=mixer.clipAction(T.walk);if(type!=='crawler'){acts.walk.play();acts.walk.time=Math.random()*T.walk.duration;}} // crawlers are posed by hand (zCrawlPose)
   for(const n of ['attack','death']){if(!T[n]&&ZCLIP[n])T[n]=stripRootMotion(ZCLIP[n].clone(),T.rootBone);
     if(T[n]){const a=mixer.clipAction(T[n]);a.setLoop(THREE.LoopOnce,1);a.clampWhenFinished=true;acts[n]=a;}}
   const v=type==='runner'?rand(.84,.94):type==='walker'?rand(.9,1.1):type==='boss'?1.45:1;g.scale.setScalar(v);
@@ -293,6 +293,14 @@ function updateZombies(dt){
       if(z.summonCd<=0&&!(z.slamT>0)&&!zBusy(z)){z.summonCd=12;zSet(z,'summon',1.3);Sound.play('roar',1,z.x,z.z);}
     }
     sp=zAbility(z,dt,pd,pdx,pdz,sp,zH===pH&&pIn===zIn);if(z.dying)continue;
+    // in reach: stop and swing instead of walking into the player and being shoved back (which reads as walking backwards)
+    z.halt=player.alive&&z.aware&&!lu&&pd<d.r+.7&&zH===pH&&Math.abs((player.jy||0)-(z.jy||0))<1&&!zBusy(z);if(z.halt)sp=0;
+    if(d.crawl&&z.bones)sp*=zCrawlSurge(z,dt,sp);
+    // crowding in: when one of the dead nearer the player is in the way, work round it to the side instead of shoving into
+    // it (the crowd's push-apart would throw this one backwards); the pack spreads into a ring round the player
+    if(z.aware&&sp>0&&pd<7){let bs=0;for(const o of zombies){if(o===z||o.dying)continue;const ox=o.x-z.x,oz=o.z-z.z,rr=d.r+o.def.r+.3;if(Math.abs(ox)>rr||Math.abs(oz)>rr)continue;
+        const dd=Math.hypot(ox,oz)||1;if(dd<rr&&(ox*dx+oz*dz)/dd>.45&&pd0(o)<pd-.2){bs=(ox*dz-oz*dx)>0?-1:1;break;}}
+      if(bs){const nx=dx*.25-dz*bs,nz=dz*.25+dx*bs,nl=Math.hypot(nx,nz)||1;dx=nx/nl;dz=nz/nl;sp*=.55;}}
     // at night they charge the last few metres
     if(S.phase==='night'&&z.aware&&pd<4.5&&pd>1.2&&zH===pH)sp*=1.28;
     if(zClimb(z,dt,pd))sp=0;
@@ -317,8 +325,10 @@ function updateZombies(dt){
     const fy=sp>0?Math.atan2(dx,dz):z.aware?Math.atan2(pdx,pdz):z.yaw;
     let dy=fy-z.yaw;while(dy>Math.PI)dy-=Math.PI*2;while(dy<-Math.PI)dy+=Math.PI*2;z.yaw+=dy*Math.min(1,dt*8);
     z.walk+=dt*(sp+.5)*2.2;const sw=Math.sin(z.walk);
+    // the legs follow the ground actually covered: shoved backwards, they step backwards rather than walking on the spot
+    {const ax=(z.x-(z.lx??z.x))/dt,az=(z.z-(z.lz??z.z))/dt;z.lx=z.x;z.lz=z.z;z.fv=lerp(z.fv||0,ax*Math.sin(z.yaw)+az*Math.cos(z.yaw),Math.min(1,dt*8));}
     if(z.mixer){
-      if(z.acts.walk)z.acts.walk.timeScale=clamp(sp/(d.speed*.8),.25,2.4)*(z.type==='runner'?1.5:1);
+      if(z.acts.walk){const f=clamp(z.fv,-d.speed,d.speed*3)/(d.speed*.8);z.acts.walk.timeScale=(z.fv<-.25?-clamp(-f,.3,1.2):clamp(Math.max(f,sp/(d.speed*.8)*.3),.2,2.4))*(z.type==='runner'?1.5:1);}
       zUndo(z);z.mixer.update(dt);z.g.position.set(z.x,(z.lvlY||0)+zLift(z),z.z);
     }else{
       z.legs[0].rotation.x=sw*.6;z.legs[1].rotation.x=-sw*.6;
@@ -326,8 +336,8 @@ function updateZombies(dt){
       z.g.position.set(z.x,Math.abs(Math.cos(z.walk))*.06+(z.lvlY||0)+zLift(z),z.z);
     }
     z.g.rotation.y=z.yaw;
-    z.g.rotation.x=z.type==='boss'&&z.slamT>0?-.35:d.crawl?1.32:z.climbT>0?.55*Math.sin(Math.PI*(1-z.climbT/z.climbD)):0;
-    if(d.crawl){z.g.position.x-=Math.sin(z.yaw)*.75;z.g.position.z-=Math.cos(z.yaw)*.75;}
+    z.g.rotation.x=z.type==='boss'&&z.slamT>0?-.35:d.crawl?(z.bones?1.42:1.32):z.climbT>0?.55*Math.sin(Math.PI*(1-z.climbT/z.climbD)):0;
+    if(d.crawl){z.g.position.x-=Math.sin(z.yaw)*.8;z.g.position.z-=Math.cos(z.yaw)*.8;if(z.ab)z.g.position.y+=.05*(z.ab.pull||0);}
     zPose(z,dt,pd,pdx,pdz);
     const fl=z.flash>0?.7:0,gl=z.glow||0;for(const m of z.mats)if(m.emissive)m.emissive.setRGB(fl+gl,fl*.2+gl*.5,fl*.1+gl*.08);
     const dmgd=z.hp<z.maxHp;z.bg.visible=z.fg.visible=dmgd;
@@ -335,7 +345,7 @@ function updateZombies(dt){
   }
   for(let i=0;i<zombies.length;i++){const a=zombies[i];if(a.dying)continue;
     for(let j=i+1;j<zombies.length;j++){const b=zombies[j];if(b.dying)continue;const dx=b.x-a.x,dz=b.z-a.z,rr=a.def.r+b.def.r;if(Math.abs(dx)>rr||Math.abs(dz)>rr)continue;
-      const d2=dx*dx+dz*dz;if(d2<rr*rr&&d2>1e-6){const d=Math.sqrt(d2),o=(rr-d)/2,ux=dx/d,uz=dz/d;const wa=a.def.r>b.def.r?.25:a.def.r<b.def.r?.75:.5;
+      const d2=dx*dx+dz*dz;if(d2<rr*rr&&d2>1e-6){const d=Math.sqrt(d2),o=(rr-d)/2,ux=dx/d,uz=dz/d;const wa=a.halt!==b.halt?(a.halt?0:1):a.def.r>b.def.r?.25:a.def.r<b.def.r?.75:.5; // one already at the player holds its ground
         a.x-=ux*o*2*wa;a.z-=uz*o*2*wa;b.x+=ux*o*2*(1-wa);b.z+=uz*o*2*(1-wa);}}
     if(player.alive&&Math.abs((a.jy||0)-(player.jy||0))<1&&inHome(a.x,a.z)===pH){const dx=a.x-player.x,dz=a.z-player.z,rr=a.def.r+.5,d2=dx*dx+dz*dz;if(d2<rr*rr&&d2>1e-6){const d=Math.sqrt(d2);a.x=player.x+dx/d*rr;a.z=player.z+dz/d*rr;}}
   }
