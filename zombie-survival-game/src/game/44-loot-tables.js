@@ -31,10 +31,16 @@ const trinkSlots=()=>2+PERK('trinketeer');
 function toggleTrinket(id){const e=player.trinkEq||(player.trinkEq=[]);const i=e.indexOf(id);if(i>=0)e.splice(i,1);else if(e.length<trinkSlots())e.push(id);else{toast(`All ${trinkSlots()} trinket slots are full. Unequip one first.`);return;}Sound.play('ui');}
 function trinketHTML(){const own=player.trinkets||[];if(!own.length)return'<p class="next">No trinkets yet. They turn up as epic and legendary finds: caches, lockers, airdrops and the biggest infected.</p>';
   return own.map(id=>{const t=TRINKETS[id],on=(player.trinkEq||[]).includes(id);return`<article class="perk ${on?'has':''}"><header><b>${t.name}</b></header><p>${t.desc}</p><button data-trink="${id}">${on?'Unequip':'Equip'}</button></article>`;}).join('')+`<p class="next">${(player.trinkEq||[]).length} of ${trinkSlots()} slots in use</p>`;}
-// rarity roll: base weights shifted by the container's quality, luck and perks
-function rollRar(q,floor){const luck=q+.15*ATTR('per')/10+TK('luck')+(PERK('treasure')?.1:0);const r=Math.random();
-  let i=r<(.01+.07*luck)*(PERK('treasure')?2:1)?4:r<.06+.2*luck?3:r<.2+.3*luck?2:r<.5+.2*luck?1:0;
-  if(Math.random()<.08*PERK('lucky'))i=Math.min(4,i+1);return RARS[Math.max(i,floor||0)];}
+/* rarity: an explicit table per tier, leaned on by the container's quality, how far into the run you are, luck
+   (Perception, trinkets, perks) and a pity counter that grows with every container that gave nothing rare and resets
+   when something does. Roughly, a plain crate on day one: 58% common, 27% uncommon, 11% rare, 3% epic, 0.6% legendary. */
+const LOOTSTATE={pity:0,recent:[]};
+function rarWeights(q){q=clamp(q+Math.min(.25,(S.wave||0)*.025),0,1.3);
+  const luck=.15*ATTR('per')/10+TK('luck')+(PERK('treasure')?.1:0)+LOOTSTATE.pity;
+  const W=[58-30*q,27+2*q,11+13*q,3+10*q,.6+3.5*q];for(let i=1;i<5;i++)W[i]*=1+luck*i*.55;if(PERK('treasure'))W[4]*=2;return W;}
+function rollRar(q,floor){const W=rarWeights(q);let t=0;for(let i=(floor||0);i<5;i++)t+=W[i];let r=Math.random()*t,i=floor||0;
+  for(;i<4;i++){r-=W[i];if(r<=0)break;}
+  if(Math.random()<.08*PERK('lucky'))i=Math.min(4,i+1);return RARS[i];}
 const ri=(a,b)=>a+Math.floor(Math.random()*(b-a+1));
 // what each rarity of find looks like, by category
 const GEN={
@@ -54,7 +60,7 @@ const GEN={
   trinket:r=>{const own=new Set(player.trinkets||[]),pool=Object.keys(TRINKETS).filter(k=>!own.has(k));return pool.length?{t:'trinket',id:pick(pool)}:{t:'res',k:'scrap',n:40};},
 };
 const TABLES={
-  crate:[['scrap',5],['parts',2],['ammo',3],['cloth',2],['comp',2.5],['food',1.5],['seeds',1],['bandage',1],['med',.8],['gren',.5],['weapon',.7],['repairkit',.5]],
+  crate:[['scrap',3.5],['parts',2],['ammo',3],['cloth',2],['comp',2.5],['food',1.5],['seeds',1],['bandage',1],['med',.8],['gren',.5],['weapon',.7],['repairkit',.5]],
   cupboard:[['food',5],['cloth',3],['seeds',2],['scrap',2],['herbs',1.2],['bandage',1],['molotov',.3],['sewingkit',.4],['comp',.6]],
   medcab:[['bandage',4],['med',2.5],['herbs',3],['poultice',2],['cloth',1.5],['comp',.8],['scrap',.6]],
   toolbox:[['scrap',4],['parts',3],['comp',4],['repairkit',1.5],['sewingkit',.6],['ammo',.8],['pipebomb',.3]],
@@ -70,12 +76,33 @@ function kindFor(k){if(!k)return'crate';if(k==='car')return Math.random()<.6?'to
   if(k==='supercenter'){const r=Math.random();return r<.45?'shelf':r<.6?'medcab':r<.75?'toolbox':r<.88?'locker':'cupboard';}
   if(k==='gas'||k==='garage'||k==='depot')return Math.random()<.75?'toolbox':'locker';if(k==='church')return'cupboard';
   const r=Math.random();return r<.5?'cupboard':r<.75?'medcab':r<.85?'locker':r<.93?'toolbox':'crate';}
-function rollLoot(kind,rar){
-  const T=TABLES[kind]||TABLES.crate,q=QUAL[rar]||0,n=ri(...{common:[2,3],rare:[3,5],epic:[5,6],relic:[5,7],drop:[6,7]}[rar]||[2,3])+(Math.random()<.3*PERK('keeneye')?1:0)+TK('extra');
+/* what a container holds leans toward what you need: low ammo for the guns you carry, wounded with no medkit, an empty
+   larder. What you're full on, and what you've been finding a lot of lately, turns up less. Farms run to seeds, food and
+   tools, towns to medicine and ammunition, the woods to herbs; winter trades food for cloth. */
+const BIOME_LOOT={farm:{seeds:1.9,food:1.3,comp:1.2,repairkit:1.2,ammo:.85},town:{med:1.4,bandage:1.3,poultice:1.2,ammo:1.15,cloth:1.2,seeds:.6},forest:{herbs:1.7,food:.8,weapon:.9,cloth:.8}};
+function lootWeight(cat,w,biome){
+  const RES={scrap:'scrap',parts:'parts',cloth:'cloth',food:'food',seeds:'seeds',herbs:'herbs'};
+  if(cat==='ammo'){const am=ownedAmmo();if(!am.length)w*=.3;else{const low=Math.min(...am.map(k=>(ammo[k]||0)/(AMMO[k].pack*4)));w*=low<.25?2.6:low<.6?1.6:low>2?.5:1;}}
+  if(cat==='med'){w*=player.med>=5?.15:player.med===0||player.hp<player.maxHp*.5?2:1;}
+  if(cat==='bandage'||cat==='poultice'){if(player.hp<player.maxHp*.5)w*=1.6;}
+  if(cat==='food'&&(player.food||0)<2)w*=1.7;
+  if(RES[cat]&&cat!=='scrap'&&cat!=='parts'&&(player[cat]||0)>=capOf(cat))w*=.25;
+  if(cat==='weapon')w*=Object.keys(LO).length<3?1.5:1;
+  if(cat==='trinket'){const own=new Set(player.trinkets||[]);if(Object.keys(TRINKETS).every(k=>own.has(k)))w=0;}
+  const B=BIOME_LOOT[biome];if(B&&B[cat])w*=B[cat];
+  if(S.season===3){if(cat==='food')w*=.7;if(cat==='herbs')w*=.45;if(cat==='cloth')w*=1.5;}
+  let seen=0;for(const c of LOOTSTATE.recent)if(c===cat)seen++;w*=Math.pow(.8,seen);
+  return w;}
+function rollLoot(kind,rar,x,z){
+  const biome=x!=null?bioC(Math.floor(x/CH),Math.floor(z/CH)):null;
+  const T0=TABLES[kind]||TABLES.crate,T=T0.map(([k,w])=>[k,lootWeight(k,w,biome)]),q=QUAL[rar]||0,n=ri(...{common:[2,3],rare:[3,5],epic:[5,6],relic:[5,7],drop:[6,7]}[rar]||[2,3])+(Math.random()<.3*PERK('keeneye')?1:0)+TK('extra');
   const out=[];let tw=0;for(const [,w] of T)tw+=w;
   for(let i=0;i<n;i++){let r=Math.random()*tw,cat='scrap';for(const [k,w] of T){r-=w;if(r<=0){cat=k;break;}}
     const F={common:0,rare:1,epic:2,relic:3,drop:2}[rar]||0,ra=rollRar(q,i===0?F:Math.max(0,F-1)),e=GEN[cat](ra);e.rar=cat==='trinket'?(Math.random()<.4?'legendary':'epic'):cat==='bp'?'epic':ra;
+    LOOTSTATE.recent.push(cat);if(LOOTSTATE.recent.length>14)LOOTSTATE.recent.shift();
     const same=out.find(o=>o.t===e.t&&o.k&&o.k===e.k);if(same&&e.n){same.n+=e.n;if(RARS.indexOf(e.rar)>RARS.indexOf(same.rar))same.rar=e.rar;}else out.push(e);}
+  // the pity counter: a dry spell raises the odds until something rare turns up
+  if(out.some(o=>RARS.indexOf(o.rar)>=2))LOOTSTATE.pity=0;else LOOTSTATE.pity=Math.min(.9,LOOTSTATE.pity+.07);
   if(rar==='relic'&&!out.some(o=>o.t==='trinket'))out.push(Object.assign(GEN.trinket(),{rar:'legendary'}));
   out.sort((a,b)=>RARS.indexOf(b.rar)-RARS.indexOf(a.rar));return out;
 }

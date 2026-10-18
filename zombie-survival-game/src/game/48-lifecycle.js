@@ -16,9 +16,11 @@ function resetGame(){
   for(const p of pickups)scene.remove(p.m);pickups.length=0;
   for(const p of projs)scene.remove(p.m);projs.length=0;
   for(const a of acids)scene.remove(a.m);acids.length=0;
+  clearZRocks();
   closePanel();closeLoot();endBuild();resetSeasons();clearAnimals();resetRPG();resetWorld();resetExplore();resetHordes();resetGarden();
   Object.assign(base,{wallLv:0,turrets:0,turretLv:1,spikeLv:0,infLv:0,floods:0,radar:0});
   for(const s of segs){s.maxHp=WALL_HP[0];s.open=false;s.openAmt=0;}applyWalls(true);resetHome();applyTurrets();applyFloods();
+  LOOTSTATE.pity=0;LOOTSTATE.recent.length=0;
   Object.assign(player,{x:0,z:1,vx:0,vz:0,kx:0,kz:0,yaw:0,hp:100,maxHp:100,st:100,alive:true,scrap:40,parts:0,med:1,gren:0,weapon:'pistol',fireCd:0,reloadT:0,hurtT:0,acidT:0,recoil:0});
   resetInv();pl.rotation.x=0;heroReset();
   Object.assign(player,{bld:null,wood:0,stone:0,food:1,seeds:3,swim:false,swing:0,drownMsg:0,crouch:false,crouchT:false,sprinting:false,moving:false,lvl:0,lvlY:0});S.takedowns=0;ALARMS.length=0;Object.assign(player,{jy:0,jvy:0,air:false,climb:null,mantle:0,winded:false,tired:0,landT:0,fall0:null});resetCraft();clearStealthHUD();S.armSel=null;clearDmgNums();

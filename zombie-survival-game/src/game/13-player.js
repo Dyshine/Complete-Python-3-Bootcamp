@@ -82,25 +82,51 @@ function setupHero(gltf){
   if(!HERO.acts.walk){const base=gltf.animations.find(a=>/walk/i.test(a.name))||gltf.animations[0];
     if(base){addHeroClip('walk',base);if(/idle/i.test(base.name))HERO.acts.idle=HERO.acts.walk;}}
   for(const p of boxParts)if(p!==gun)p.visible=false;
-  HERO.ready=true;heroPlay(HERO.acts.idle?'idle':'walk',0);
+  HERO.ready=true;heroPlay(HERO.acts.idle?'idle':'walk',0);applyUAL();
   const L=new THREE.GLTFLoader();
   for(const [k,url] of Object.entries(HERO_ANIMS))if(!packed.has(k))L.load(url,g=>{if(g.animations[0])addHeroClip(k,g.animations[0]);},undefined,()=>{});
 }
+/* ---- motion-capture style clips from Quaternius' Universal Animation Library (CC0), retargeted onto the hero's skeleton
+   offline (torso by rotation, limbs by bone direction; models/hero_anims.json). They replace the packed walk/run/idle,
+   and add crouch movement plus full-body actions: the chop and melee swing, kneeling to strip a car or butcher, picking
+   loot out of a box. Until the file loads the packed clips play. ---- */
+const UAL_MAP={idle:'Idle_Loop',walk:'Walk_Loop',jog:'Jog_Fwd_Loop',run:'Sprint_Loop',crouchIdle:'Crouch_Idle_Loop',crouch:'Crouch_Fwd_Loop',
+  hit:'Hit_Chest',death:'Death01',chop:'Sword_Attack',jab:'Punch_Jab',cross:'Punch_Cross',fix:'Fixing_Kneeling',pickup:'PickUp_Table'};
+let UAL=null;
+fetch('models/hero_anims.json').then(r=>r.ok?r.json():Promise.reject(r.status)).then(d=>{UAL=d;if(HERO.ready)applyUAL();}).catch(()=>{});
+function applyUAL(){if(!UAL||!HERO.mixer||HERO.ual)return;HERO.ual=true;const fps=UAL.fps;
+  for(const [k,src] of Object.entries(UAL_MAP)){const C=UAL.clips[src];if(!C)continue;const n=C.hp.length/3,times=new Float32Array(n);for(let i=0;i<n;i++)times[i]=Math.min(C.d,i/fps);
+    const tracks=[new THREE.VectorKeyframeTrack('Hips.position',times,C.hp)];
+    for(const [b,q] of Object.entries(C.b))tracks.push(new THREE.QuaternionKeyframeTrack(b+'.quaternion',times,q));
+    const was=HERO.acts[k];if(was){was.stop();HERO.mixer.uncacheAction(was.getClip());}
+    addHeroClip(k,new THREE.AnimationClip(k,C.d,tracks));}
+  HERO.cur=null;heroPlay('idle',0);}
+// a one-shot full-body action; from/speed pick the part of the clip to play; it hands back to locomotion when it ends
+function heroAction(name,o){const a=HERO.ready&&!HERO.dead&&HERO.acts[name];if(!a)return false;o=o||{};
+  a.reset();a.setLoop(THREE.LoopOnce,1);a.clampWhenFinished=true;a.timeScale=o.speed||1;a.time=o.from||0;a.setEffectiveWeight(1);a.play();
+  if(HERO.cur&&HERO.cur!==a)HERO.cur.crossFadeTo(a,o.fade==null?.08:o.fade,false);HERO.cur=a;HERO.act=name;
+  HERO.actT=o.dur||((a.getClip().duration-(o.from||0))/(o.speed||1)-.12);HERO.actStill=!!o.still;return true;}
 const _hp=new V3();
 function updateHero(dt,moving,sprint,fwd,sp){
   if(!HERO.ready)return;HERO.hitT-=dt;
-  if(!HERO.dead){
+  if(HERO.act){HERO.actT-=dt;if(HERO.actT<=0||(HERO.actStill&&moving)||player.swim||player.climb)HERO.act=null;}
+  if(!HERO.dead&&!HERO.act){
     const A=HERO.acts;
     // one-handed carries walk with a natural arm swing; rifles use the shouldered walk
     const cas=A.casual&&CARRY.cur&&CARRY.cur.cas&&WA.aim<.5;
     if(player.swim||player.climb)heroPlay(A.idle?'idle':'walk',.3);
-    else if(!moving)heroPlay(A.idle?'idle':'walk',.25);
+    else if(!moving)heroPlay(player.crouch&&A.crouchIdle?'crouchIdle':A.idle?'idle':'walk',.25);
+    else if(player.crouch&&A.crouch)heroPlay('crouch',.2);
     else if(sprint&&A.run)heroPlay('run',.18);
     else if(fwd<-.3&&A.back)heroPlay('back',.2);
-    else heroPlay(cas?'casual':'walk',.2);
+    else if(A.jog&&sp>3.6&&!(cas&&!HERO.ual))heroPlay('jog',.2);
+    else heroPlay(cas&&!HERO.ual?'casual':'walk',.2);
+    // feet keep pace with the ground: each clip's stride is matched to the speed it covers
     const c=HERO.cur;
-    if(c===A.walk||c===A.back||c===A.casual)c.timeScale=A.idle?clamp(sp/6.5,.6,1.6):(moving?(sp/6.5)*1.15*(fwd<-.3?-1:1):0);
-    else if(c===A.run)c.timeScale=clamp(sp/10.5,.7,1.3);
+    if(c===A.jog)c.timeScale=clamp(sp/6.2,.7,1.35);
+    else if(c===A.crouch)c.timeScale=clamp(sp/2.4,.6,1.5);
+    else if(c===A.walk||c===A.back||c===A.casual)c.timeScale=HERO.ual&&c===A.walk?clamp(sp/2.2,.6,1.6):A.idle?clamp(sp/6.5,.6,1.6):(moving?(sp/6.5)*1.15*(fwd<-.3?-1:1):0);
+    else if(c===A.run)c.timeScale=HERO.ual?clamp(sp/10,.8,1.35):clamp(sp/10.5,.7,1.3);
     else if(c)c.timeScale=1;
   }
   heroUndo();HERO.mixer.update(dt);heroProcedural(dt,moving);

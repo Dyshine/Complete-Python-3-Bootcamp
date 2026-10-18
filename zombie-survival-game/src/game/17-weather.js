@@ -61,7 +61,8 @@ function lightning(cx,cz,strike){
 }
 function updateWeather(dt,cx,cz){
   W.time+=dt;const T=WEATHER[W.type];
-  for(const k of ['rain','ash','fog','cloud','wind','snow'])W[k]=(W[k]||0)+((T[k]||0)-(W[k]||0))*Math.min(1,dt*.18);
+  updateFronts(dt);const str=typeof FRONT!=='undefined'?FRONT.str:1;
+  for(const k of ['rain','ash','fog','cloud','wind','snow'])W[k]=(W[k]||0)+(clamp((T[k]||0)*(k==='cloud'?1:str),0,1.3)+(k==='wind'&&typeof FRONT!=='undefined'?FRONT.gust:0)-(W[k]||0))*Math.min(1,dt*(k==='wind'?.6:.18));
   W.wdir+=dt*.025;
   W.wet=clamp(W.wet+(W.rain>.1?dt*.07*W.rain:-dt*.012),0,1);
   // wind uniforms + trees

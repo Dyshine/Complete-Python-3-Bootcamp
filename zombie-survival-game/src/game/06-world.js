@@ -207,7 +207,7 @@ function nearestCar(){let best=null,bd=1e9;
 function stripCar(c){
   if(player.fireCd>0||!player.alive||player.swim)return;
   if(c.left<=0){toast('Nothing left worth taking.');player.fireCd=.6;return;}
-  player.fireCd=1.1;player.swing=.3;rumble(.3,.3,90);S.shake=Math.max(S.shake,.06);
+  player.fireCd=1.1;player.swing=.3;heroAction('fix',{from:1.1,dur:1.05,still:true});rumble(.3,.3,90);S.shake=Math.max(S.shake,.06);
   Sound.play('clink');Sound.play('thud',.7);burst(c.x,1,c.z,6,'spark',4);burst(c.x,.8,c.z,3,'debris',3);
   makeNoise(c.x,c.z,22);
   if(c.alarm){c.alarm=false;carAlarm(c);}
@@ -462,7 +462,7 @@ function kLot(K,w,z0,d,stalls){const asph=ITM('asphalt',0x34362f,0xc8c8c4,6),str
 // world-space box covering a building and its lot, so grass doesn't grow up through the asphalt
 function lotMask(x,z,rot,hx,z0,z1){const P=[[-hx,z0],[hx,z0],[-hx,z1],[hx,z1]].map(([a,b])=>l2w(x,z,rot,a,b));return[Math.min(...P.map(p=>p.x)),Math.min(...P.map(p=>p.z)),Math.max(...P.map(p=>p.x)),Math.max(...P.map(p=>p.z))];}
 function kLight(K,x,z){const m=FLAT(0x5a5c5a);kBox(K,0,m,.24,7,.24,x,3.5,z);kBox(K,0,m,1.6,.22,.5,x,7,z);kBox(K,0,FLAT(0xfff2c0),1.2,.06,.36,x,6.86,z);kSolid(K,x,z,.3);}
-function lotCars(K,x,z,rot,spots,p){for(const [lx,lz] of spots)if(RNG()<p){const q=l2w(x,z,rot,lx+rand(-.15,.15),lz+rand(-.3,.3));addCar(q.x,q.z,rot+(RNG()<.5?0:Math.PI)+rand(-.08,.08),RNG()<.4?'pickup':null);}}
+function lotCars(K,x,z,rot,spots,p){p*=.55;for(const [lx,lz] of spots)if(RNG()<p){const q=l2w(x,z,rot,lx+rand(-.15,.15),lz+rand(-.3,.3));addCar(q.x,q.z,rot+(RNG()<.5?0:Math.PI)+rand(-.08,.08),RNG()<.4?'pickup':null);}}
 function bGrocery(x,z,rot){
   const K=Kit(x,z,rot),hw=9,hd=7,h=4.6,R=RNG,lot=10,wk=()=>R()<.3?'b':'w';
   const wall=R()<.5?CTM('brick',pick([0xe8d8c8,0xd0b8a8,0xf0e8dc]),2):CTM('metalwall',pick([0xe8e0d0,0xd8dcd0]),2),band=FLAT(pick([0x2f5a3a,0x8a2a24,0x2a4a6a]));

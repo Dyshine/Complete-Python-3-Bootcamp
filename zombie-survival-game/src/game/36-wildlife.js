@@ -174,7 +174,7 @@ function nearestCarcass(){let best=null,bd=2.3;for(const a of animals){if(!a.dea
 function butcher(a){
   a.done=true;a.deadT=Math.max(a.deadT,40);const f=a.d.meat+(a.d.meat?PERK('forager')+PERK('wilds'):0),h=a.d.hide?a.d.hide+PERK('hunter'):0;
   player.meat=(player.meat||0)+f;player.hide=(player.hide||0)+h;floatText(a.x,1.2,a.z,`+${f} raw meat${h?` · +${h} hide`:''}`);
-  burst(a.x,.5,a.z,8,'blood',3);decal(a.x,a.z,rand(.8,1.1),0x4a0a08,.75);Sound.play('swing',.6);player.swing=.25;gainXP(5);
+  burst(a.x,.5,a.z,8,'blood',3);decal(a.x,a.z,rand(.8,1.1),0x4a0a08,.75);Sound.play('swing',.6);player.swing=.25;heroAction('fix',{from:1.1,dur:1,still:true});gainXP(5);
 }
 function animalsInArc(range){const fx=Math.sin(player.yaw),fz=Math.cos(player.yaw),out=[];
   for(const a of animals){if(a.dead||a.state==='fly')continue;const dx=a.x-player.x,dz=a.z-player.z,d=Math.hypot(dx,dz);if(d<range+a.d.r&&(dx*fx+dz*fz)/(d||1)>.3)out.push(a);}return out;}

@@ -32,7 +32,7 @@ function addRural(x,z,rot,type,skin){
   const c=Math.abs(Math.cos(rot)),sn=Math.abs(Math.sin(rot)),rec={x,z,rot,hw,hd,h:(bb.max.y-bb.min.y)*s,kind:'house',solid:true,style:'rural'+si,type:T.name,ex:c*hw+sn*hd,ez:sn*hw+c*hd};
   houses.push(rec);if(CUR)CUR.houses.push(rec);
   if(RNG()<.6){const p=l2w(x,z,rot,rand(-hw+2,hw-2),hd+rand(2,4));addProp(pick(['carton','crate','tire','can']),p.x,p.z);}
-  if(RNG()<.35){const p=l2w(x,z,rot,hw+rand(2,3.5),rand(-hd,hd));if(!blockedSpot(p.x,p.z,2.4))addCar(p.x,p.z,rot+(RNG()<.6?0:Math.PI)+rand(-.06,.06),pick(['pickup','pickup','wagon','sedan']));}
+  if(RNG()<.2){const p=l2w(x,z,rot,hw+rand(2,3.5),rand(-hd,hd));if(!blockedSpot(p.x,p.z,2.4))addCar(p.x,p.z,rot+(RNG()<.6?0:Math.PI)+rand(-.06,.06),pick(['pickup','pickup','wagon','sedan']));}
   return rec;
 }
 const ruralOrFarm=(x,z,r)=>addRural(x,z,r)||(RNG()<.5?bFarmhouse:bFarmhouse2)(x,z,r);

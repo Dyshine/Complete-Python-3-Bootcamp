@@ -124,7 +124,7 @@ function heroProcedural(dt,moving){
 }
 // whole-body pose: lie flat to swim, lean into the ladder, sink a little when exhausted
 function bodyPose(dt){
-  const swimMove=player.swim&&player.moving?1:0;HA.pitch=(HA.pitch||0)+((swimMove?1.32:player.swim?.18:player.crouch?.22:0)-(HA.pitch||0))*Math.min(1,dt*6);
+  const swimMove=player.swim&&player.moving?1:0;HA.pitch=(HA.pitch||0)+((swimMove?1.32:player.swim?.18:player.crouch&&!HERO.ual?.22:0)-(HA.pitch||0))*Math.min(1,dt*6);
   return HA.pitch;
 }
 

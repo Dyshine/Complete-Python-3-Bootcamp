@@ -316,7 +316,7 @@ function meleeTargets(range,max){
   out.sort((a,b)=>a.d-b.d);return out.slice(0,max);
 }
 function meleeSwing(w){
-  player.fireCd=w.rate;player.swing=.25;Sound.play('swing');rumble(w.rum[0],w.rum[1],w.rum[2]);
+  player.fireCd=w.rate;player.swing=.25;heroAction('chop',{from:.36,speed:clamp(1/Math.max(.25,w.rate),1.4,2.6),dur:Math.min(.55,w.rate)});Sound.play('swing');rumble(w.rum[0],w.rum[1],w.rum[2]);
   const T=meleeTargets(w.range,w.cleave+PERK('whirl')),fx=Math.sin(player.yaw),fz=Math.cos(player.yaw);SHOT={w,I:curW(),kills:0};
   const md=w.dmg*(1+.2*PERK('brawler')+.05*ATTR('str')+TK('melee'))*(wdur(curW())<=0?.3:1)*(PERK('laststand')&&player.hp<player.maxHp*.25?1.3:1),kn=w.knock*(PERK('bonebreak')?1.5:1);
   for(const o of T){dmgTarget(o.t,o.k,md,fx*kn,fz*kn,true);onHit(o.t,o.k,md,true);}

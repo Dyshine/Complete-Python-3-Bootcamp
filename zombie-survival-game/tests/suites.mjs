@@ -63,6 +63,7 @@ export const suites = [
       const r = await page.evaluate(() => {
         const w = __w(); __P.x = 30; __P.z = 30; w.setView('fp'); w.camYaw = 0; w.camPitch = .05; __sim(30, .05); w.updateCamera(.05);
         const o = { eye: +(__cam.position.y - w.gH(__P.x, __P.z)).toFixed(2), vm: w.gun.parent === w.VM, body: w.pl.visible };
+        for (const q of [...__Z]) w.removeZombie(q); __Z.length = 0; // a roamer wandering into the line would take the shot
         const z = __spawn('walker', __P.x, __P.z + 9); z.hp = 1; z.aware = 0; w.updateCamera(.05);
         for (let i = 0; i < 60 && !z.dying; i++) { w.tryFire(); __sim(1, .05); } o.killed = !!z.dying || z.hp <= 0;
         return o;
@@ -102,6 +103,7 @@ export const suites = [
   {
     name: 'loot-placement',
     async run(page, { expect }) {
+      await page.waitForFunction(() => __w().SUB.ready, null, { timeout: 30000 }).catch(() => {}); // the kit can still be loading on a busy machine
       const r = await page.evaluate(() => {
         const w = __w(); const P = [...w.TPLAN.values()][0]; if (!P) return null;
         const lot = P.items.find(i => i.type === 'bungalow'); __P.x = lot.x; __P.z = lot.z; __sim(3, .05);

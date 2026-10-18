@@ -62,7 +62,7 @@ const _d1=new V3(),_d2=new V3(),_d3=new V3(),_d4=new V3();
 const dirP=(v,x,y,z,pitch,yaw)=>{v.set(x,y,z).normalize();if(pitch)v.applyAxisAngle(AX,pitch);if(yaw)v.applyAxisAngle(AY,yaw);return v;};
 function weaponPose(dt){
   if(!HB.rArm||HERO.dead)return;
-  const I=curW(),w=I&&wstat(I),melee=w&&w.melee&&!w.saw,busy=player.swim||player.climb||player.mantle>0;
+  const I=curW(),w=I&&wstat(I),melee=w&&w.melee&&!w.saw,busy=player.swim||player.climb||player.mantle>0||!!HERO.act;
   // how much of the shouldered pose: full when firing or aiming, low-ready otherwise; the walk clip already shoulders the gun
   const firing=player.fireCd>-.6&&!melee,reloading=player.reloadT>0;
   const want=busy||!w?0:melee?0:(firing||player.ads>.1||reloading)?1:0;
@@ -72,15 +72,24 @@ function weaponPose(dt){
   const reload=player.reloadT>0&&player.reloadMax?1-player.reloadT/player.reloadMax:-1,rl=reload>=0?Math.sin(Math.PI*reload):0;
   const low=firing||player.ads>.1?0:.42,pitch=(TP?clamp(camPitch-.3,-.4,.6)*.45:0)+low-WA.kick*.55+rl*.55;
   if(aim>.01){
-    bRot(HB.spine2,AX,-WA.kick*.12);
-    aimBone(HB.rArm,HB.rFore,dirP(_d1,.28,-.38,.88,pitch),aim);
-    aimBone(HB.rFore,HB.rHand,dirP(_d2,.22,.12,1,pitch),aim);
-    // the support hand: on the foregrip, or down to the magazine well while reloading
-    aimBone(HB.lArm,HB.lFore,dirP(_d3,-.12,-.32-rl*.25,.95,pitch),aim);
-    aimBone(HB.lFore,HB.lHand,dirP(_d4,-.5,.08-rl*.5,.86,pitch),aim);
+    const cls=w&&w.cls,heavy=cls==='shot'||cls==='hunt'||cls==='rev'||cls==='gl';
+    // the shot rocks the shoulders back; heavy guns push the whole upper body and turn the head away a touch
+    bRot(HB.spine2,AX,-WA.kick*(heavy?.24:.12));bRot(HB.spine1,AX,-WA.kick*(heavy?.1:.03));if(heavy)bRot(HB.head,AX,WA.kick*.08);
+    // pump-action shotguns rack the fore-end after each shot; bolt rifles cycle the bolt with the right hand
+    const pump=WA.pump>0?Math.sin(Math.PI*(1-WA.pump/.45)):0,bolt=WA.bolt>0?Math.sin(Math.PI*(1-WA.bolt/.6)):0;
+    let lPull=pump*.42,lDrop=0,rLift=bolt;
+    // reloads by class: shells one at a time from the belt, a fresh magazine from the hip, or the bolt worked at the end
+    if(reload>=0){if(cls==='shot'||cls==='rev'){const k=Math.abs(Math.sin(reload*Math.PI*(cls==='shot'?4:3)));lDrop=k*.75;lPull-=k*.2;}
+      else if(cls==='hunt'){lDrop=rl*.6;rLift=Math.max(rLift,Math.sin(Math.PI*clamp((reload-.72)/.28,0,1)));}
+      else lDrop=Math.sin(Math.PI*clamp(reload*1.4,0,1))*.8;}
+    aimBone(HB.rArm,HB.rFore,dirP(_d1,.28,-.38+rLift*.12,.88,pitch),aim);
+    aimBone(HB.rFore,HB.rHand,dirP(_d2,.22-rLift*.18,.12+rLift*.75,1-rLift*.55,pitch),aim);
+    // the support hand: on the foregrip, sliding back to rack it, or down to the belt and back while reloading
+    aimBone(HB.lArm,HB.lFore,dirP(_d3,-.12,-.32-lDrop*.45,.95-lPull*.5,pitch),aim);
+    aimBone(HB.lFore,HB.lHand,dirP(_d4,-.5+lPull*.25,.08-lDrop,.86-lPull*1.3,pitch),aim);
   }
   // melee: a full swing from the right shoulder across the body (or an overhead chop when felling trees)
-  if(player.swing>0&&(melee||WA.chop)){const t=1-player.swing/.28,s=clamp(t,0,1);
+  if(player.swing>0&&(melee||WA.chop)&&!HERO.act){const t=1-player.swing/.28,s=clamp(t,0,1);
     if(WA.chop){const p=lerp(-2.2,.7,s*s);aimBone(HB.rArm,HB.rFore,dirP(_d1,.2,.2,1,p),1);aimBone(HB.rFore,HB.rHand,dirP(_d2,.15,.2,1,p+.3),1);aimBone(HB.lArm,HB.lFore,dirP(_d3,-.2,.1,1,p+.1),.8);}
     else{const yaw=lerp(-1.7,1,s*s*(3-2*s));aimBone(HB.rArm,HB.rFore,dirP(_d1,0,-.15,1,.1,yaw),1);aimBone(HB.rFore,HB.rHand,dirP(_d2,0,0,1,0,yaw+.4),1);bRot(HB.spine,AY,yaw*.35);}}
   // grenade throw: arm cocked back and over the top
@@ -128,12 +137,12 @@ function applyRecoil(w){const R=w.saw||w.melee?null:RECOIL[w.cls];if(!R)return;
 function onShotFx(w){S.lastShot=S.time;
   const k=clamp(.18+w.kick*.22+w.shake*1.3,.15,1)*(1-.45*(player.ads||0))*(player.crouch?.8:1);
   WA.kick=Math.min(1.2,WA.kick+k);WA.bloom=Math.min(1,WA.bloom+.12+w.shake*.8);WA.fov=Math.min(5,WA.fov+.6+w.shake*5+w.kick*.6);
-  applyRecoil(w);
+  applyRecoil(w);if(w.cls==='shot'&&!w.sp)WA.pump=.45;else if(w.cls==='hunt'&&!w.sp)WA.bolt=.6;
   if(w.noise>=10&&w.cls!=='bow'){muzzleFlash.t=.05;muzzleFlash.s=clamp(.6+w.dmg/60,.6,1.8);}
   haptic(w.rum[0],w.rum[1],w.rum[2],clamp(.25+w.rum[0]*.8,.2,1));
 }
 function updateWeaponFx(dt){
-  WA.kick*=Math.exp(-dt*11);WA.bloom*=Math.exp(-dt*4);WA.fov*=Math.exp(-dt*12);WA.swap=Math.max(0,WA.swap-dt);WA.throwT=Math.max(0,WA.throwT-dt);WA.reachT=Math.max(0,WA.reachT-dt);
+  WA.kick*=Math.exp(-dt*11);WA.pump=Math.max(0,(WA.pump||0)-dt);WA.bolt=Math.max(0,(WA.bolt||0)-dt);WA.bloom*=Math.exp(-dt*4);WA.fov*=Math.exp(-dt*12);WA.swap=Math.max(0,WA.swap-dt);WA.throwT=Math.max(0,WA.throwT-dt);WA.reachT=Math.max(0,WA.reachT-dt);
   // recovery waits a beat after the last shot, then pulls the muzzle back down
   const settle=S.time-(S.lastShot||-9)>.09?Math.min(1,dt*8):Math.min(1,dt*2);
   if(WA.camRec>1e-4){const r=WA.camRec*settle;camPitch=clamp(camPitch+r,pitchLo(),pitchHi());WA.camRec-=r;}

@@ -134,8 +134,9 @@ function crateUp(c,b){c.lvl=1;c.bld=b;c.g.position.y=b.fh;if(c.ob)c.ob.lvl=1;b.u
 function dropCrate(c){scene.remove(c.g);if(c.beam){c.beam.geometry.dispose();c.beam.material.dispose();c.beam=null;}c.strapM.dispose();if(c.ob){delOb(c.ob);c.ob=null;}if(c.bld){const i=c.bld.upCrates.indexOf(c);if(i>=0)c.bld.upCrates.splice(i,1);c.bld=null;}
 }
 function openCrate(c){
+  if(!c.loot)heroAction('pickup',{speed:1.25,still:true});
   if(!c.loot){c.opened=true;c.t=0;S.looted++;gainXP({common:6,rare:14,epic:28,drop:30,relic:40}[c.rar]||6);jobProg('crate',1);if(c.beam){c.g.remove(c.beam);c.beam.geometry.dispose();c.beam=null;}c.strapM.color.setHex(0x3a3a34);
-    c.loot=rollLoot(c.kind,c.rar);
+    c.loot=rollLoot(c.kind,c.rar,c.x,c.z);
     if(c.rar==='relic'){const sp=c.sp&&!SPOWN.has(c.sp)?c.sp:null;if(sp)c.loot.unshift({t:'weapon',I:mkW(null,0,sp),rar:'legendary'});else c.loot.unshift({t:'comp',k:'RC',n:1,rar:'legendary'});}
     rumble(.2,.4,120);crateContents(c);}
   const CK=CONT[c.kind]||CONT.crate;openLoot(c,c.rar==='drop'?'Military airdrop':c.rar==='relic'?'Relic cache':`${CK.name}${c.rar!=='common'&&c.kind!=='remains'?' · '+RARITY[c.rar].label.toLowerCase():''}`);

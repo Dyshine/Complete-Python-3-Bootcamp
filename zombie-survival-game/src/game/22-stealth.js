@@ -18,7 +18,7 @@ function takedownTarget(){
   return best;
 }
 function doTakedown(o){
-  const t=o.t;player.swing=.3;player.fireCd=.6;Sound.play('swing',.6);Sound.play('thud',.7);rumble(.4,.3,120);S.shake=Math.max(S.shake,.1);
+  const t=o.t;player.swing=.3;player.fireCd=.6;heroAction('cross',{from:.15,speed:1.3});Sound.play('swing',.6);Sound.play('thud',.7);rumble(.4,.3,120);S.shake=Math.max(S.shake,.1);
   burst(t.x,1.4,t.z,8,'blood',4);decal(t.x,t.z,rand(1,1.4),0x4a0a08,.8);
   if(o.k==='z'){dmgNum(t,t.hp,'sneak',(t.barY||2.35*t.def.scale)+.3);t.hp=0;killZombie(t);}
   else{dmgNum(t,t.hp,'sneak',2.6*t.s);t.hp=0;killAgent(t);}

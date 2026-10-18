@@ -58,7 +58,7 @@ function updatePlayer(dt){
   player.recoil=Math.max(0,player.recoil-dt);
   if(player.climb)player.yaw=player.climb.yaw;
   {const pitch=bodyPose(dt),flat=clamp(pitch/1.32,0,1);let ox=0,oz=0;if(player.swim&&flat>.05){ox=-Math.sin(player.yaw)*.95*flat;oz=-Math.cos(player.yaw)*.95*flat;}
-    pl.position.set(player.x+ox,(player.swim?depthAt(player.x,player.z)-lerp(1.35,.42,flat):moving&&!HERO.ready?Math.abs(Math.cos(player.walk))*.07:0)-(player.crouch?.22:0)+(player.lvlY||0)+(player.jy||0)+(ICE&&!player.swim?Math.max(0,depthAt(player.x,player.z)):0)-(player.tired>.5&&!moving&&!player.swim?.2*player.tired:0),player.z+oz);pl.rotation.x=pitch;}
+    pl.position.set(player.x+ox,(player.swim?depthAt(player.x,player.z)-lerp(1.35,.42,flat):moving&&!HERO.ready?Math.abs(Math.cos(player.walk))*.07:0)-(player.crouch&&!HERO.ual?.22:0)+(player.lvlY||0)+(player.jy||0)+(ICE&&!player.swim?Math.max(0,depthAt(player.x,player.z)):0)-(player.tired>.5&&!moving&&!player.swim?.2*player.tired:0),player.z+oz);pl.rotation.x=pitch;}
   gun.visible=!player.swim&&!HERO.dead&&!player.climb&&!(player.mantle>0);pl.rotation.y=player.yaw;gun.position.z=.62-player.recoil*2;
   player.swing=Math.max(0,(player.swing||0)-dt);gun.rotation.y=player.swing>0?Math.sin(player.swing/.25*Math.PI)*1.1:0;
   if(HERO.ready)updateHero(dt,moving,sprint,moving?(mx*Math.sin(player.yaw)+mz*Math.cos(player.yaw))/(ml||1):1,sp);
@@ -122,7 +122,7 @@ function updateWorld(dt){
         if(p.x!==ox||p.z!==oz){const nx=p.x-ox,nz=p.z-oz,nl=Math.hypot(nx,nz);const ux=nx/nl,uz=nz/nl,vn=p.vx*ux+p.vz*uz;if(vn<0){p.vx-=1.6*vn*ux;p.vz-=1.6*vn*uz;Sound.play('clink',.6);}}
         p.m.rotation.x+=p.vz*dt*3;p.m.rotation.z-=p.vx*dt*3;
       }
-      if(boom){scene.remove(p.m);projs.splice(i,1);if(onThrownLand(p))continue;if(p.siren)addLure(p.x,p.z,p.dmg,p.radius);else explode(p.x,p.z,p.radius,p.dmg,{color:0xff9a3a});continue;}
+      if(boom){scene.remove(p.m);projs.splice(i,1);if(onThrownLand(p))continue;if(p.siren)addLure(p.x,p.z,p.dmg,p.radius);else explode(p.x,p.z,p.radius,p.dmg,{color:0xff9a3a,hurt:p.hurt});continue;}
     }
     p.m.position.set(p.x,p.y,p.z);}
   for(let i=acids.length-1;i>=0;i--){const a=acids[i];a.t-=dt;a.m.material.opacity=Math.min(.6,a.t/2*.6);if(a.t<=0){scene.remove(a.m);a.m.material.dispose();acids.splice(i,1);}}
@@ -146,6 +146,7 @@ function updateEnv(dt){
   wxCol.setHex(0xc8d0d8).lerp(NIGHT_FOG,v*.85);fogCol.lerp(wxCol,clamp((W.snow||0)*.7+SEA.blend.snowCover*.25,0,1));
   scene.fog.color.copy(fogCol);
   scene.fog.near=lerp(lerp(40,16,v),23,W.fog);scene.fog.far=lerp(lerp(125,68,v),lerp(54,46,v),W.fog);
+  updateMist(dt);
   const fl=W.flash*(Math.random()<.3?.45:1);
   hemi.intensity=lerp(.78,.16,v)*(1-.28*W.cloud)+fl*2.4;sun.intensity=lerp(1,.18,v)*(1-.65*W.cloud);sun.color.copy(SUN_DAY).lerp(SUN_NIGHT,v);
   if(gradePass){gradePass.uniforms.flash.value=fl*.35;gradePass.uniforms.night.value=v;gradePass.uniforms.time.value=W.time;gradePass.uniforms.sat.value=.95-.14*W.cloud-.18*W.ash;}

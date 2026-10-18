@@ -76,7 +76,7 @@ function addSuburb(x,z,rot,styleKey){
   houses.push(rec);if(CUR)CUR.houses.push(rec);
   // a porch light that stays on, now and then, and junk in the yard
   if(RNG()<.5){const p=l2w(x,z,rot,rand(-hw+2,hw-2),hd+rand(2,4));addProp(pick(['carton','crate','tire','can']),p.x,p.z);}
-  if(RNG()<.45){const s=RNG()<.5?-1:1,p=l2w(x,z,rot,s*(hw+1.7),hd-1.5);if(!blockedSpot(p.x,p.z,2.2))addCar(p.x,p.z,rot+(RNG()<.6?0:Math.PI)+rand(-.06,.06),pick(['sedan','wagon','pickup']));}
+  if(RNG()<.22){const s=RNG()<.5?-1:1,p=l2w(x,z,rot,s*(hw+1.7),hd-1.5);if(!blockedSpot(p.x,p.z,2.2))addCar(p.x,p.z,rot+(RNG()<.6?0:Math.PI)+rand(-.06,.06),pick(['sedan','wagon','pickup']));}
   return rec;
 }
 function bApartment(x,z,rot){
@@ -129,7 +129,7 @@ function bGas(x,z,rot,name){
   // price sign pole
   kBox(K,0,FLAT(0x3a3a38),.25,6,.25,hw-.6,3,hd-.6);kBox(K,0,signMat('$9.99','#1d1d1b','#f2a516'),2.4,1.1,.2,hw-.6,6,hd-.6);kSolid(K,hw-.6,hd-.6,.3);
   const door=l2w(x,z,rot,.4,kz+2);addSwingDoor(door.x,door.z,-rot,1.2);
-  if(RNG()<.6){const s=RNG()<.5?-1:1,p=l2w(x,z,rot,s*3.05,2.6);addCar(p.x,p.z,rot+(RNG()<.5?0:Math.PI)+rand(-.05,.05),RNG()<.3?'pickup':null);}
+  if(RNG()<.45){const s=RNG()<.5?-1:1,p=l2w(x,z,rot,s*3.05,2.6);addCar(p.x,p.z,rot+(RNG()<.5?0:Math.PI)+rand(-.05,.05),RNG()<.3?'pickup':null);}
   return kFinish(K,hw,hd,5,'gas');
 }
 function bChurch(x,z,rot){
@@ -292,11 +292,11 @@ function addFarmstead(cx,cz,r0,clear){
   if(RNG()<.7)tryB(bShed,-1,10,2.5,Math.PI);
   tryB(addWell,3.8,8,1.4);
   if(RNG()<.6)tryB(addHayShed,-3,-15,4.5);
-  if(RNG()<.6){const p=at(7,8.6);if(!blockedSpot(p.x,p.z,2.2))addCar(p.x,p.z,r0+rand(-.2,.2),'tractor');}
-  if(RNG()<.55){const p=at(-1.5,4.5);if(!blockedSpot(p.x,p.z,2.2))addCar(p.x,p.z,r0+(RNG()<.5?0:Math.PI)+rand(-.1,.1),'pickup');}
+  if(RNG()<.4){const p=at(7,8.6);if(!blockedSpot(p.x,p.z,2.2))addCar(p.x,p.z,r0+rand(-.2,.2),'tractor');}
+  if(RNG()<.3){const p=at(-1.5,4.5);if(!blockedSpot(p.x,p.z,2.2))addCar(p.x,p.z,r0+(RNG()<.5?0:Math.PI)+rand(-.1,.1),'pickup');}
 }
 // a lone farm building gets its truck or tractor parked alongside, square to the building
-function farmVehicles(ch){if(RNG()>.45)return;const h=ch.houses.find(h=>h.hw>3);if(!h)return;
+function farmVehicles(ch){if(RNG()>.28)return;const h=ch.houses.find(h=>h.hw>3);if(!h)return;
   const side=RNG()<.5?1:-1,p=l2w(h.x,h.z,h.rot,side*(h.hw+2.6),rand(-h.hd*.4,h.hd*.4));if(blockedSpot(p.x,p.z,2.2))return;
   addCar(p.x,p.z,h.rot+(RNG()<.5?0:Math.PI)+rand(-.08,.08),h.kind==='barn'?(RNG()<.6?'tractor':'pickup'):pick(['pickup','pickup','sedan','wagon']));}
 
@@ -499,7 +499,7 @@ function genTown(ch){
       case 'church':bChurch(p.x,p.z,p.rot);break;
       case 'well':addWell(p.x,p.z,p.rot);break;
       case 'coop':bGas(p.x,p.z,p.rot,'CO-OP');break;
-      case 'park':if(RNG()<.85)addCar(p.x,p.z,p.rot+rand(-.12,.12),RNG()<.45?'pickup':null);break;
+      case 'park':if(RNG()<.45)addCar(p.x,p.z,p.rot+rand(-.12,.12),RNG()<.45?'pickup':null);break;
       case 'stree':addTree(p.x,p.z,rand(.95,1.35),RNG()<.2);break;
       case 'lamp':bLamp(p.x,p.z,p.rot,p.state);break;
       case 'stop':bStopSign(p.x,p.z,p.rot);break;

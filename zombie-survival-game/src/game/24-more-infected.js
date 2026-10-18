@@ -53,7 +53,7 @@ function applyVariant(type,inst,gu,T){
   return k;
 }
 
-const ZMODEL_FOR={walker:['office','grandma','office','grandma','soldier'],trooper:['soldier'],crawler:['office','grandma'],runner:['office','grandma'],boomer:['trucker'],brute:['hulk']};
+const ZMODEL_FOR={walker:['office','grandma','office','grandma','soldier'],trooper:['soldier'],crawler:['office','grandma'],runner:['office','grandma'],boomer:['trucker'],brute:['hulk'],spitter:['office','grandma'],boss:['hulk']};
 const ZSHARED={attack:'models/zombies/anim/attack.gltf.json',death:'models/zombies/anim/death.gltf.json'};
 const ZM={},ZCLIP={},zOlMats={};
 function prepZModel(k,gltf,h){retargetMixamo(gltf);
@@ -86,15 +86,16 @@ function makeZombieGLB(type){
   const inst=THREE.SkeletonUtils.clone(T.root);inst.scale.setScalar(T.s);inst.position.set(T.offX,T.offY,T.offZ);g.add(inst);
   const mats=[],meshes=[];const gu={uSeed:{value:rand(0,50)},uBlood:{value:rand(.12,.4)},uHue:{value:pick([0,0,.4,.8,2.5,3.0])},uForce:{value:new THREE.Vector3(0,0,0)}};
   inst.traverse(o=>{if(o.isMesh){o.material=o.material.clone();o.material.emissive=new THREE.Color(0);o.material.userData.grime=gu;applyGrime(o.material,o.userData.gmn,o.userData.ginv);mats.push(o.material);meshes.push(o);}});
-  const variant=applyVariant(type,inst,gu,T);
+  const variant=applyVariant(type,inst,gu,T);zTypeProps(type,inst);
+  if(type==='boss'){gu.uHue.value=.8;gu.uBlood.value=.75;}
   if(GFX==='high')for(const o of meshes){const sk=!!o.isSkinnedMesh;const ol=sk?new THREE.SkinnedMesh(o.geometry,zOutlineMat(sk,o.userData.olTh)):new THREE.Mesh(o.geometry,zOutlineMat(sk,o.userData.olTh));
     if(sk){ol.bind(o.skeleton,o.bindMatrix);ol.bindMode=o.bindMode;}ol.position.copy(o.position);ol.quaternion.copy(o.quaternion);ol.scale.copy(o.scale);ol.frustumCulled=false;o.parent.add(ol);}
   const mixer=new THREE.AnimationMixer(inst),acts={};
   if(T.walk){acts.walk=mixer.clipAction(T.walk);acts.walk.play();acts.walk.time=Math.random()*T.walk.duration;}
   for(const n of ['attack','death']){if(!T[n]&&ZCLIP[n])T[n]=stripRootMotion(ZCLIP[n].clone(),T.rootBone);
     if(T[n]){const a=mixer.clipAction(T[n]);a.setLoop(THREE.LoopOnce,1);a.clampWhenFinished=true;acts[n]=a;}}
-  const v=type==='runner'?rand(.84,.94):type==='walker'?rand(.9,1.1):1;g.scale.setScalar(v);
-  return{g,mats,mixer,acts,glb:true,barY:T.h*v+.35};
+  const v=type==='runner'?rand(.84,.94):type==='walker'?rand(.9,1.1):type==='boss'?1.45:1;g.scale.setScalar(v);
+  return{g,mats,mixer,acts,glb:true,barY:T.h*v+.35,bones:zBones(inst)};
 }
 function zAttackAnim(z){
   const a=z.acts&&z.acts.attack;if(!a)return;a.reset();a.setEffectiveWeight(1);a.fadeIn(.08);a.play();
@@ -164,7 +165,7 @@ function collideSeg(o,r,s){
   return true;
 }
 function damageZombie(z,dmg,kx,kz,silent,lift){
-  if(z.dying)return;z.hp-=dmg;
+  if(z.dying)return;dmg=zArmor(z,dmg,kx,kz);z.hp-=dmg;
   if(!silent)dmgNum(z,dmg,z.hp<=0?'kill':SNEAKF?'sneak':CRITF?'crit':'',(z.barY||2.35*z.def.scale)+.25);
   if(!z.aware&&!silent)zAlert(z);
   if(!silent){bloodUp(z,dmg/z.maxHp*.7);z.flash=.09;if(Math.random()<.3)decal(z.x+rand(-.5,.5),z.z+rand(-.5,.5),rand(.4,.8),z.type==='spitter'?0x3f6a14:0x4a0a08,.7);burst(z.x,1.3*z.def.scale,z.z,3,z.type==='spitter'?'acid':'blood',4);Sound.play('hit',.7,z.x,z.z);
@@ -172,7 +173,7 @@ function damageZombie(z,dmg,kx,kz,silent,lift){
   if(z.hp<=0)killZombie(z);
 }
 function killZombie(z){
-  if(z.dying)return;z.dying=true;z.dieT=0;z.y=z.jy||0;S.kills++;z.bg.visible=z.fg.visible=false;gainXP(z.def.score*.8);jobProg('kill',1);
+  if(z.dying)return;z.dying=true;z.dieT=0;zOnDeath(z);z.y=z.jy||0;S.kills++;z.bg.visible=z.fg.visible=false;gainXP(z.def.score*.8);jobProg('kill',1);
   const d=z.def;burst(z.x,1,z.z,10,z.type==='spitter'?'acid':'gore',5);
   if(z.type!=='boomer')decal(z.x+z.hx*.12,z.z+z.hz*.12,rand(1.3,2.1)*Math.sqrt(d.scale),z.type==='spitter'?0x3f6a14:0x4a0a08,.85);
   // ragdoll fling
@@ -237,7 +238,7 @@ function zVertical(z,dt){if(z.climbT>0||!(z.jy>0))return;const s=supportAt(z.x,z
   if(s<z.jy-.02){z.jvy=(z.jvy||0)-GRAV*dt;z.jy=Math.max(s,z.jy+z.jvy*dt);if(z.jy<=s)z.jvy=0;}else{z.jy=s;z.jvy=0;}}
 const zLift=z=>(z.jy||0)+(z.def.crawl?.2:0);
 function updateZombies(dt){
-  const px=player.x,pz=player.z,pIn=inYard(px,pz),pH=inHome(px,pz);PERCH=perchOf();
+  const px=player.x,pz=player.z,pIn=inYard(px,pz),pH=inHome(px,pz);PERCH=perchOf();updateZRocks(dt);
   for(const z of zombies){
     const d=z.def;
     if(z.dying){updateDying(z,dt);continue;}
@@ -271,6 +272,7 @@ function updateZombies(dt){
       const o=z.hOp;if(o){const sd=zH?-1:1,lat=o.horiz?z.x-o.cx:z.z-o.cz,al=(z.x-o.cx)*o.nx+(z.z-o.cz)*o.nz;
         if(Math.abs(lat)<o.w/2-.15&&Math.abs(al)<2){tx=o.cx-o.nx*2.2*sd;tz=o.cz-o.nz*2.2*sd;}else{tx=o.cx+o.nx*1.4*sd;tz=o.cz+o.nz*1.4*sd;}}}
     if(z.aware&&player.alive&&!lu&&(player.bld||z.bld)){const nv=lvlNav(z);if(nv){tx=nv[0];tz=nv[1];}}
+    {const st=zSteer(z,dt,tx,tz,lu);if(st){tx=st[0];tz=st[1];}}
     let dx=tx-z.x,dz=tz-z.z;const dist=Math.hypot(dx,dz)||1;dx/=dist;dz/=dist;
     // unstick: if an aware infected has barely moved for a while, slide sideways round whatever is in the way
     if(z.aware){z.stT=(z.stT||0)+dt;if(z.stT>2.5){const mv=Math.hypot(z.x-(z.stX??z.x),z.z-(z.stZ??z.z));
@@ -282,26 +284,18 @@ function updateZombies(dt){
     let sp=d.speed*nightRage*(1-.15*W.ash)*(SEA.temp<0?.85:W.type==='heat'?.9:1)*(z.pinT>0?0:1)*(z.aware||lu?1:z.sus>.3?.45:.32);
     // climbing in through a broken window is slow going
     if(Math.abs(z.x)<12&&Math.abs(z.z)<6)for(const s of hsegs)if(s.kind==='win'&&!homeSolid(s)&&segDist(s,z.x,z.z)<.5){sp*=.4;break;}
-    if(z.type==='spitter'&&player.alive&&z.aware){
-      if(pd<10)sp=0;
-      if(pd<16&&z.spitCd<=0){z.spitCd=rand(2.6,3.4);const T=clamp(pd/14,.5,1.2);spitAcid(z.x,z.z,px+player.vx*T*.6,pz+player.vz*T*.6);}
-    }
-    if(z.type==='brute'&&player.alive&&z.aware){
-      if(z.chargeT>0){z.chargeT-=dt;sp*=3.4;burst(z.x,.2,z.z,1,'debris',2);}
-      else if(z.chargeCd<=0&&pd<15&&pd>4&&pIn===zIn){z.chargeT=1.1;z.chargeCd=rand(5,8);Sound.play('roar',.5);}
-    }
     if(z.type==='boss'&&player.alive){
       if(z.slamT>0){z.slamT-=dt;sp=0;if(z.slamT<=0){blastFx(z.x,z.z,6,0xc0a080);S.shake=Math.max(S.shake,.7);Sound.play('crash',1);burst(z.x,.3,z.z,20,'debris',9);rumble(.9,.6,300);
         const bd=Math.hypot(px-z.x,pz-z.z);if(bd<6.5){hurtPlayer(35);knockPlayer((px-z.x)/(bd||1),(pz-z.z)/(bd||1),16);}
         for(const s of ALLSEG)if((s.home||s.alive)&&segDist(s,z.x,z.z)<6.5)hitSeg(s,90);
         for(const p of props){const pd2=Math.hypot(p.x-z.x,p.z-z.z);if(pd2<7)impulseProp(p,(p.x-z.x)/(pd2||1)*4,(p.z-z.z)/(pd2||1)*4,7);}}}
       else if(z.slamCd<=0&&pd<6){z.slamT=.7;z.slamCd=4.5;}
-      if(z.summonCd<=0){z.summonCd=12;for(let i=0;i<3;i++)spawnZombie('runner',z.x+rand(-3,3),z.z+rand(-3,3));}
+      if(z.summonCd<=0&&!(z.slamT>0)&&!zBusy(z)){z.summonCd=12;zSet(z,'summon',1.3);Sound.play('roar',1,z.x,z.z);}
     }
+    sp=zAbility(z,dt,pd,pdx,pdz,sp,zH===pH&&pIn===zIn);if(z.dying)continue;
     // at night they charge the last few metres
     if(S.phase==='night'&&z.aware&&pd<4.5&&pd>1.2&&zH===pH)sp*=1.28;
     if(zClimb(z,dt,pd))sp=0;
-    if(z.type==='boomer'&&player.alive&&(pd<2.1||z.blocked)){z.hp=0;killZombie(z);continue;}
     const ozx=z.x,ozz=z.z;z.x+=dx*sp*dt+z.kx*dt;z.z+=dz*sp*dt+z.kz*dt;
     if(depthAt(z.x,z.z)>1.15){z.x=ozx;z.z=ozz;}else{z.dryX=z.x;z.dryZ=z.z;}
     const kd=Math.pow(.01,dt);z.kx*=kd;z.kz*=kd;
@@ -316,15 +310,16 @@ function updateZombies(dt){
       if(base.spikeLv&&!z.blocked.door&&!z.blocked.home){damageZombie(z,SPIKE_DPS[base.spikeLv]*dt,0,0,true);z.spikeT-=dt;if(z.spikeT<=0){z.spikeT=.5;burst(z.x,.8,z.z,2,'blood',3);}}
       if(z.dying)continue;
     }
-    if(player.alive&&z.aware&&pd<d.r+.85&&z.atkCd<=0&&Math.abs((z.lvlY||0)-(player.lvlY||0))<1.3&&Math.abs((player.jy||0)-(z.jy||0))<1.25&&!(z.climbT>0)&&(zH===pH||homeLOS(z.x,z.z,px,pz))){z.atkCd=(z.type==='runner'?.75:1.1)*(S.phase==='night'?.78:1);z.lunge=.25;zAttackAnim(z);hurtPlayer(d.dmg*(1+.04*(S.wave-1)));
+    if(player.alive&&z.aware&&pd<d.r+.85&&z.atkCd<=0&&Math.abs((z.lvlY||0)-(player.lvlY||0))<1.3&&Math.abs((player.jy||0)-(z.jy||0))<1.25&&!(z.climbT>0)&&!zBusy(z)&&(zH===pH||homeLOS(z.x,z.z,px,pz))){z.atkCd=(z.type==='runner'?.75:1.1)*(S.phase==='night'?.78:1);z.lunge=.25;zAttackAnim(z);
+      if(!zOnAttack(z)){hurtPlayer(d.dmg*(1+.04*(S.wave-1)));
       if(d.crawl){player.grabT=1.2;if(!S.grabMsg){S.grabMsg=1;toast('A crawler has your ankle! Shake it off.','bad');}}
-      const kf=z.type==='brute'?(z.chargeT>0?20:9):z.type==='boss'?12:2.5;knockPlayer(pdx/(pd||1),pdz/(pd||1),kf);if(z.type==='brute')z.chargeT=0;}
+      const kf=z.type==='brute'?(z.chargeT>0?20:9):z.type==='boss'?12:2.5;knockPlayer(pdx/(pd||1),pdz/(pd||1),kf);if(z.type==='brute')z.chargeT=0;}}
     const fy=sp>0?Math.atan2(dx,dz):z.aware?Math.atan2(pdx,pdz):z.yaw;
     let dy=fy-z.yaw;while(dy>Math.PI)dy-=Math.PI*2;while(dy<-Math.PI)dy+=Math.PI*2;z.yaw+=dy*Math.min(1,dt*8);
     z.walk+=dt*(sp+.5)*2.2;const sw=Math.sin(z.walk);
     if(z.mixer){
       if(z.acts.walk)z.acts.walk.timeScale=clamp(sp/(d.speed*.8),.25,2.4)*(z.type==='runner'?1.5:1);
-      z.mixer.update(dt);z.g.position.set(z.x,(z.lvlY||0)+zLift(z),z.z);
+      zUndo(z);z.mixer.update(dt);z.g.position.set(z.x,(z.lvlY||0)+zLift(z),z.z);
     }else{
       z.legs[0].rotation.x=sw*.6;z.legs[1].rotation.x=-sw*.6;
       z.arms[0].rotation.x=-1.4+Math.sin(z.walk*.7)*.15-(z.lunge>0?.5:0);z.arms[1].rotation.x=-1.4-Math.sin(z.walk*.7)*.15-(z.lunge>0?.5:0);
@@ -333,7 +328,8 @@ function updateZombies(dt){
     z.g.rotation.y=z.yaw;
     z.g.rotation.x=z.type==='boss'&&z.slamT>0?-.35:d.crawl?1.32:z.climbT>0?.55*Math.sin(Math.PI*(1-z.climbT/z.climbD)):0;
     if(d.crawl){z.g.position.x-=Math.sin(z.yaw)*.75;z.g.position.z-=Math.cos(z.yaw)*.75;}
-    const fl=z.flash>0?.7:0;for(const m of z.mats)if(m.emissive)m.emissive.setRGB(fl,fl*.2,fl*.1);
+    zPose(z,dt,pd,pdx,pdz);
+    const fl=z.flash>0?.7:0,gl=z.glow||0;for(const m of z.mats)if(m.emissive)m.emissive.setRGB(fl+gl,fl*.2+gl*.5,fl*.1+gl*.08);
     const dmgd=z.hp<z.maxHp;z.bg.visible=z.fg.visible=dmgd;
     if(dmgd){const y=(d.crawl?.95:(z.barY||(z.type==='boss'?2.6:2.35)*d.scale))+gH(z.x,z.z)+(z.lvlY||0)+(z.jy||0);z.bg.position.set(z.x-z.bw/2,y,z.z);z.fg.position.set(z.x-z.bw/2,y,z.z+.01);z.fg.scale.x=z.bw*Math.max(0,z.hp/z.maxHp);}
   }

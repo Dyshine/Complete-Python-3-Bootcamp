@@ -10,7 +10,7 @@ function floatText(x,y,z,txt,cls){const d=DN[dnI=(dnI+1)%DN.length];Object.assig
 function gather(t){
   if(player.fireCd>0||player.swim||!player.alive)return;
   const I=curW(),w=I&&wstat(I),melee=w&&w.melee&&!w.saw,axe=melee&&I.tier>=4,saw=w&&w.saw;
-  const isTree=!!t.g;player.fireCd=saw?.25:.5;player.swing=.28;WA.chop=isTree?1:0;if(isTree&&player.axeT)toolWear('axe');else if(!isTree&&player.pickT)toolWear('pick');rumble(.25,.2,70);S.shake=Math.max(S.shake,.05);
+  const isTree=!!t.g;player.fireCd=saw?.25:.5;player.swing=.28;WA.chop=isTree?1:0;heroAction('chop',{from:.32,speed:saw?2.6:1.75,dur:saw?.25:.48});if(isTree&&player.axeT)toolWear('axe');else if(!isTree&&player.pickT)toolWear('pick');rumble(.25,.2,70);S.shake=Math.max(S.shake,.05);
   const hit=(isTree?(saw?1.5:axe?2:melee?1.4:1):(melee?1.3:1))*[1,1.6,2.4][isTree?player.axeT||0:player.pickT||0];t.hp-=hit;
   if(isTree){Sound.play('thud',.8);Sound.play(saw?'saw':'swing',.5);burst(t.x,1.1,t.z,5,'debris',4);t.g.rotation.z=rand(-.06,.06);makeNoise(t.x,t.z,saw?40:18);}
   else{Sound.play('clink',1);Sound.play('thud',.6);burst(t.x,.8,t.z,6,'spark',5);burst(t.x,.6,t.z,3,'debris',3);makeNoise(t.x,t.z,24);}
