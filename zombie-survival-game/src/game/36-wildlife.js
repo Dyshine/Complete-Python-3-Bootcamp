@@ -52,7 +52,9 @@ function makeAnimalGLB(type){
   const o=new V3(T.offX,T.offY,T.offZ);inst.position.copy(o);g.add(piv);
   if(type==='deer'){inst.scale.set(T.s*.82,T.s,T.s*.95);let head=null;inst.traverse(b=>{if(b.isBone&&b.name==='Head')head=b;});if(head&&Math.random()<.5)antlers(head,T.s);}
   const mats=[];inst.traverse(m=>{if(m.isSkinnedMesh){m.material=m.material.clone();m.material.emissive=new THREE.Color(0);mats.push(m.material);}});
-  if(GFX==='high')inst.traverse(m=>{if(!m.isSkinnedMesh||m.userData.ol)return;const ol=new THREE.SkinnedMesh(m.geometry,zOutlineMat(true,(.012/T.s).toFixed(4)));ol.userData.ol=1;ol.bind(m.skeleton,m.bindMatrix);ol.bindMode=m.bindMode;ol.frustumCulled=false;m.parent.add(ol);});
+  // outline thickness in the mesh's own units: some models carry a scale on the mesh node (the deer's is 100), and
+  // ignoring it pushed the hull a hundred times too far, leaving black shards floating round the animal
+  if(GFX==='high'){piv.updateMatrixWorld(true);const ws=new V3();inst.traverse(m=>{if(!m.isSkinnedMesh||m.userData.ol)return;m.getWorldScale(ws);const ol=new THREE.SkinnedMesh(m.geometry,zOutlineMat(true,(.012/(ws.x||T.s)).toFixed(5)));ol.userData.ol=1;ol.bind(m.skeleton,m.bindMatrix);ol.bindMode=m.bindMode;ol.frustumCulled=false;m.parent.add(ol);});}
   const mixer=new THREE.AnimationMixer(inst),acts={};
   for(const n of ['idle','walk','run','fly','death'])if(T.clips[n]){const a=mixer.clipAction(T.clips[n]);acts[n]=a;if(n==='death'){a.setLoop(THREE.LoopOnce,1);a.clampWhenFinished=true;}}
   const start=acts.idle||acts.walk||acts.run||acts.fly;if(start){start.play();start.time=Math.random()*start.getClip().duration;}

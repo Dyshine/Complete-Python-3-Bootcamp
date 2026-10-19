@@ -36,6 +36,9 @@ sounds/               recorded gunshots, reloads and level-up stingers (sounds/C
 music/                the soundtrack, streamed per mood (music/CREDITS.txt)
 tools/pack-guns.mjs   regenerates models/guns/guns.json from Quaternius' Ultimate Gun Pack (OBJ folder)
 tools/pack-rural.mjs  regenerates models/rural/ from the Family house collection (baked OBJs and textures)
+tools/blender/        Blender scripts (pip install bpy): clean_model.py slims models, zombie_anims.py keys the
+                      infected's crawl/shamble/swipe/fall clips, interiors.py models the furniture kit, cars.py cuts
+                      glass, cabins and wrecks into the car kit; glb2json.cjs turns their GLB output into *.gltf.json
 ```
 
 ### How the game files fit together
@@ -70,7 +73,8 @@ list of per-tick updates. Add a new system's `update…(dt)` there; the tests us
 - Hero animations (walk, jog, sprint, crouch, chop, kneel, pick-up): Universal Animation Library by Quaternius, CC0.
 - Animals: wolf, bird, red fox and horse (as the deer) by Quaternius; rabbit by Čestmír Dammer. CC0.
 - Level-up crowd, horn, boing, honk and "ooo": see sounds/CREDITS.txt, all CC0.
-- Vehicles: Car Kit by Kenney, CC0.
+- Vehicles: Car Kit by Kenney, CC0 (glass, cabins and wrecks added in Blender).
+- Furniture and the infected's crawl, shamble, swipe and fall clips: made for the game in Blender (tools/blender).
 - Music: nine CC0 tracks from OpenGameArt, credited in music/CREDITS.txt.
 - Gunshots: The Free Firearm Sound Library (Ben Jaszczak et al.), CC0. Reloads: Gun Reload Sounds by SpringySpringo and
   Shotgun Reload Sound Effects by zer0_sol, CC0.

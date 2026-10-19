@@ -165,7 +165,7 @@ function zPose(z,dt,pd,pdx,pdz){
   if(s==='rip')z.g.position.y-=.15*e;
   z.g.updateMatrixWorld(true);
   if(look){let r=Math.atan2(pdx,pdz)-z.yaw;while(r>Math.PI)r-=Math.PI*2;while(r<-Math.PI)r+=Math.PI*2;R(B.neck,'y',clamp(r,-.9,.9)*.6);}
-  if(z.def.crawl)zCrawlPose(z,B,s==='lunge'||s==='coil'?.35:1);
+  if(z.def.crawl&&!(z.acts&&z.acts.crawl))zCrawlPose(z,B,s==='lunge'||s==='coil'?.35:1); // the Blender crawl clip, when loaded, does this
   if(a.guard>.02){const g=a.guard;R(B.chest,'x',.15*g);R(B.lArm,'x',-1.3*g);R(B.rArm,'x',-1.3*g);R(B.lArm,'y',-.55*g);R(B.rArm,'y',.55*g);R(B.lFore,'x',-1*g);R(B.rFore,'x',-1*g);}
   if(a.chg>.02){const g=a.chg;R(B.chest,'x',.55*g);R(B.neck,'x',-.3*g);R(B.lArm,'x',.55*g);R(B.rArm,'x',.55*g);R(B.lArm,'z',.3*g);R(B.rArm,'z',-.3*g);}
   if(z.slamT>0){const q=1-z.slamT/.7,up=q<.78?q/.78:1-(q-.78)/.22;const arm=q<.78?-2.7*up:-2.7+3.2*((q-.78)/.22),ch=q<.78?-.4*up:-.4+1.1*((q-.78)/.22);

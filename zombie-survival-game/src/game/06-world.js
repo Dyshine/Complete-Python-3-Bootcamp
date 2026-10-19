@@ -171,10 +171,11 @@ const CAR_LOOT=[
 function addCar(x,z,rot,model){
   model=model||(RNG()<.34?'pickup':RNG()<.3?'wagon':'sedan');
   const g=new THREE.Group();g.position.set(x,0,z);g.rotation.y=rot;g.rotation.z=rand(-.04,.04);track(g);
-  const KC=kitCarBody(g,model);
-  if(KC){const obs=[],n=Math.max(2,Math.round(KC.len/1.8)),r=KC.wid/2*1.12;g.position.y=g.userData.y0=-slopeSink(x,z,KC.len/2,KC.len/2,.45);
+  // about one in eight is a wreck (smashed in, on its rims), most of those burnt out
+  const wreck=model!=='tractor'&&RNG()<.12,KC=kitCarBody(g,model,wreck,wreck&&RNG()<.65);
+  if(KC){const obs=[],n=Math.max(2,Math.round(KC.len/1.8)),r=KC.wid/2*1.12;g.userData.y0=-slopeSink(x,z,KC.len/2,KC.len/2,.45);g.position.y=g.userData.y0-(wreck?.3:0);
     for(let i=0;i<n;i++){const lz=-KC.len/2+r*.8+(KC.len-r*1.6)*i/(n-1),p=l2w(x,z,rot,0,lz);obs.push(addOb({x:p.x,z:p.z,r,h:Math.min(KC.hgt,2.6)}));}
-    const key='car'+cutKey(x,z),mem=CUR&&chunkMem.get(CUR.key),left=mem&&mem.cars&&mem.cars.has(key)?mem.cars.get(key):randi(2,4)+PERK('mechanic')+(KC.len>5?1:0);
+    const key='car'+cutKey(x,z),mem=CUR&&chunkMem.get(CUR.key),left=mem&&mem.cars&&mem.cars.has(key)?mem.cars.get(key):wreck?randi(0,1):randi(2,4)+PERK('mechanic')+(KC.len>5?1:0);
     const c={x,z,rot,g,model:KC.name,kit:true,mat:KC.mat,body:KC.body,wheels:KC.wheels,wid:KC.wid,hgt:KC.hgt,left,key,ch:CUR,alarm:RNG()<.18&&!CAR_SERVICE.has(KC.name),len:KC.len};
     carSpots.push(c);if(CUR)CUR.cars.push(c);if(!left)stripLook(c);return c;}
   const col=pick(CAR_COLS),mt=carMats(col,model),len=model==='pickup'?4.9:model==='wagon'?4.6:4.3;

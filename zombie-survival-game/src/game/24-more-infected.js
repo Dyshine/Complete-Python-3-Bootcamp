@@ -54,7 +54,9 @@ function applyVariant(type,inst,gu,T){
 }
 
 const ZMODEL_FOR={walker:['office','grandma','office','grandma','soldier'],trooper:['soldier'],crawler:['office','grandma'],runner:['office','grandma'],boomer:['trucker'],brute:['hulk'],spitter:['office','grandma'],boss:['hulk']};
-const ZSHARED={attack:'models/zombies/anim/attack.gltf.json',death:'models/zombies/anim/death.gltf.json'};
+const ZSHARED={attack:'models/zombies/anim/attack.gltf.json',death:'models/zombies/anim/death.gltf.json',
+  extra:'models/zombies/anim/extra.gltf.json'}; // extra: crawl, shamble, swipe, fall (keyed in Blender, tools/blender/zombie_anims.py)
+const ZEXTRA=['crawl','shamble','swipe','fall'];
 const ZM={},ZCLIP={},zOlMats={};
 function prepZModel(k,gltf,h){retargetMixamo(gltf);
   const root=gltf.scene;const fit=rigFit(root,h);const s=fit.s;
@@ -77,7 +79,7 @@ function zOutlineMat(sk,th){
 if(THREE.GLTFLoader&&THREE.SkeletonUtils){try{
   const L=new THREE.GLTFLoader();
   for(const [k,[url,h]] of Object.entries(ZMODEL_FILES))L.load(url,g=>{try{prepZModel(k,g,h);}catch(e){console.warn('Zombie model '+k+' failed; using box infected.',e);}},undefined,()=>{});
-  for(const [k,url] of Object.entries(ZSHARED))L.load(url,g=>{if(g.animations[0])ZCLIP[k]=g.animations[0];},undefined,()=>{});
+  for(const [k,url] of Object.entries(ZSHARED))L.load(url,g=>{if(k==='extra'){for(const a of g.animations)ZCLIP[a.name]=a;}else if(g.animations[0])ZCLIP[k]=g.animations[0];},undefined,()=>{});
 }catch(e){}}
 function makeZombieGLB(type){
   const opts=ZMODEL_FOR[type];if(!opts)return null;const avail=opts.filter(k=>ZM[k]);if(!avail.length)return null;
@@ -92,14 +94,21 @@ function makeZombieGLB(type){
     if(sk){ol.bind(o.skeleton,o.bindMatrix);ol.bindMode=o.bindMode;}ol.position.copy(o.position);ol.quaternion.copy(o.quaternion);ol.scale.copy(o.scale);ol.frustumCulled=false;o.parent.add(ol);}
   const mixer=new THREE.AnimationMixer(inst),acts={};
   if(T.walk){acts.walk=mixer.clipAction(T.walk);if(type!=='crawler'){acts.walk.play();acts.walk.time=Math.random()*T.walk.duration;}} // crawlers are posed by hand (zCrawlPose)
+  // the Blender clips are keyed on the skeleton the office, grandma, trucker and hulk share (not the soldier's)
+  if(T.key!=='soldier')for(const n of ZEXTRA){if(!T[n]&&ZCLIP[n])T[n]=stripRootMotion(ZCLIP[n].clone(),T.rootBone);
+    if(T[n]){const a=mixer.clipAction(T[n]);if(n==='swipe'||n==='fall'){a.setLoop(THREE.LoopOnce,1);a.clampWhenFinished=true;}acts[n]=a;}}
+  // crawlers crawl; about half the walkers shamble, dragging a leg, instead of walking
+  const loco=type==='crawler'&&acts.crawl?acts.crawl:type==='walker'&&acts.shamble&&Math.random()<.5?acts.shamble:null;
+  if(loco){if(acts.walk)acts.walk.stop();loco.play();loco.time=Math.random()*loco.getClip().duration;acts.loco=loco;}
   for(const n of ['attack','death']){if(!T[n]&&ZCLIP[n])T[n]=stripRootMotion(ZCLIP[n].clone(),T.rootBone);
     if(T[n]){const a=mixer.clipAction(T[n]);a.setLoop(THREE.LoopOnce,1);a.clampWhenFinished=true;acts[n]=a;}}
   const v=type==='runner'?rand(.84,.94):type==='walker'?rand(.9,1.1):type==='boss'?1.45:1;g.scale.setScalar(v);
   return{g,mats,mixer,acts,glb:true,barY:T.h*v+.35,bones:zBones(inst)};
 }
 function zAttackAnim(z){
-  const a=z.acts&&z.acts.attack;if(!a)return;a.reset();a.setEffectiveWeight(1);a.fadeIn(.08);a.play();
-  setTimeout(()=>{if(a.isRunning())a.fadeOut(.25);},520);
+  // now and then the wound-up two-handed swipe instead of the quick claw
+  const sw=z.acts&&z.acts.swipe&&!z.def.crawl&&Math.random()<.45,a=z.acts&&(sw?z.acts.swipe:z.acts.attack);if(!a)return;a.reset();a.setEffectiveWeight(1);a.fadeIn(.08);a.play();
+  setTimeout(()=>{if(a.isRunning())a.fadeOut(.25);},sw?700:520);
 }
 function makeZombie(type){
   const gm=makeZombieGLB(type);if(gm)return gm;
@@ -181,7 +190,8 @@ function killZombie(z){
   const hl=Math.hypot(z.hx,z.hz);
   z.dvx=z.hx*1.4*heavy;z.dvz=z.hz*1.4*heavy;z.dvy=(z.lift?z.lift:rand(1,2.5)+hl*.25)*heavy;z.dspin=rand(-6,6)*heavy*(z.lift?1.5:.4);
   if(hl>.5)z.yaw=Math.atan2(-z.hx,-z.hz);
-  if(z.acts&&z.acts.death){if(z.acts.walk)z.acts.walk.fadeOut(.12);if(z.acts.attack)z.acts.attack.stop();const a=z.acts.death;a.reset();a.fadeIn(.08);a.play();z.animDeath=true;}
+  if(z.acts&&z.acts.death){if(z.acts.walk)z.acts.walk.fadeOut(.12);if(z.acts.loco)z.acts.loco.fadeOut(.12);if(z.acts.attack)z.acts.attack.stop();if(z.acts.swipe)z.acts.swipe.stop();
+    const a=z.acts.fall&&!z.def.crawl&&Math.random()<.5?z.acts.fall:z.acts.death;a.reset();a.fadeIn(.08);a.play();z.animDeath=true;}
   spawnPickup('scrap',z.x+rand(-.4,.4),z.z+rand(-.4,.4),randi(d.drop[0],d.drop[1]));
   if(d.parts)spawnPickup('parts',z.x+rand(-.6,.6),z.z+rand(-.6,.6),d.parts);
   if(Math.random()<.16&&ownedAmmo().length)spawnPickup('ammo',z.x+rand(-.6,.6),z.z+rand(-.6,.6),1);
@@ -328,7 +338,9 @@ function updateZombies(dt){
     // the legs follow the ground actually covered: shoved backwards, they step backwards rather than walking on the spot
     {const ax=(z.x-(z.lx??z.x))/dt,az=(z.z-(z.lz??z.z))/dt;z.lx=z.x;z.lz=z.z;z.fv=lerp(z.fv||0,ax*Math.sin(z.yaw)+az*Math.cos(z.yaw),Math.min(1,dt*8));}
     if(z.mixer){
-      if(z.acts.walk){const f=clamp(z.fv,-d.speed,d.speed*3)/(d.speed*.8);z.acts.walk.timeScale=(z.fv<-.25?-clamp(-f,.3,1.2):clamp(Math.max(f,sp/(d.speed*.8)*.3),.2,2.4))*(z.type==='runner'?1.5:1);}
+      // a crawler's clip is scrubbed to its crawl cycle, so the hauls and the surges in speed line up
+      if(z.acts.crawl&&z.acts.loco===z.acts.crawl&&z.ab){z.acts.crawl.timeScale=0;z.acts.crawl.time=((z.ab.cph||0)%1)*z.acts.crawl.getClip().duration;}
+      else if(z.acts.loco||z.acts.walk){const f=clamp(z.fv,-d.speed,d.speed*3)/(d.speed*.8);(z.acts.loco||z.acts.walk).timeScale=(z.fv<-.25?-clamp(-f,.3,1.2):clamp(Math.max(f,sp/(d.speed*.8)*.3),.2,2.4))*(z.type==='runner'?1.5:1);}
       zUndo(z);z.mixer.update(dt);z.g.position.set(z.x,(z.lvlY||0)+zLift(z),z.z);
     }else{
       z.legs[0].rotation.x=sw*.6;z.legs[1].rotation.x=-sw*.6;

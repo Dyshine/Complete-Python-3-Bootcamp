@@ -1,0 +1,1 @@
+furniture.gltf.json: furniture kit modelled for Dead Acre in Blender by tools/blender/interiors.py. Released with the game.

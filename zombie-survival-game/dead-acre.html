@@ -1226,10 +1226,11 @@ const CAR_LOOT=[
 function addCar(x,z,rot,model){
   model=model||(RNG()<.34?'pickup':RNG()<.3?'wagon':'sedan');
   const g=new THREE.Group();g.position.set(x,0,z);g.rotation.y=rot;g.rotation.z=rand(-.04,.04);track(g);
-  const KC=kitCarBody(g,model);
-  if(KC){const obs=[],n=Math.max(2,Math.round(KC.len/1.8)),r=KC.wid/2*1.12;g.position.y=g.userData.y0=-slopeSink(x,z,KC.len/2,KC.len/2,.45);
+  // about one in eight is a wreck (smashed in, on its rims), most of those burnt out
+  const wreck=model!=='tractor'&&RNG()<.12,KC=kitCarBody(g,model,wreck,wreck&&RNG()<.65);
+  if(KC){const obs=[],n=Math.max(2,Math.round(KC.len/1.8)),r=KC.wid/2*1.12;g.userData.y0=-slopeSink(x,z,KC.len/2,KC.len/2,.45);g.position.y=g.userData.y0-(wreck?.3:0);
     for(let i=0;i<n;i++){const lz=-KC.len/2+r*.8+(KC.len-r*1.6)*i/(n-1),p=l2w(x,z,rot,0,lz);obs.push(addOb({x:p.x,z:p.z,r,h:Math.min(KC.hgt,2.6)}));}
-    const key='car'+cutKey(x,z),mem=CUR&&chunkMem.get(CUR.key),left=mem&&mem.cars&&mem.cars.has(key)?mem.cars.get(key):randi(2,4)+PERK('mechanic')+(KC.len>5?1:0);
+    const key='car'+cutKey(x,z),mem=CUR&&chunkMem.get(CUR.key),left=mem&&mem.cars&&mem.cars.has(key)?mem.cars.get(key):wreck?randi(0,1):randi(2,4)+PERK('mechanic')+(KC.len>5?1:0);
     const c={x,z,rot,g,model:KC.name,kit:true,mat:KC.mat,body:KC.body,wheels:KC.wheels,wid:KC.wid,hgt:KC.hgt,left,key,ch:CUR,alarm:RNG()<.18&&!CAR_SERVICE.has(KC.name),len:KC.len};
     carSpots.push(c);if(CUR)CUR.cars.push(c);if(!left)stripLook(c);return c;}
   const col=pick(CAR_COLS),mt=carMats(col,model),len=model==='pickup'?4.9:model==='wagon'?4.6:4.3;
@@ -2539,7 +2540,7 @@ function townCurbCars(P,x0,z0,x1,z1){
    mud climbs the sills and dust settles on the roof. Stripped cars sit on their rims with the hood up. */
 const CARKIT={ready:false,types:{},mat:null};
 // stretched to real proportions: the kit's cars are short and wide
-const CAR_SCALE=[1.28,1.3,1.68];
+const CAR_SCALE=[1.28,1.3,1.68],CAR_WHEEL=1.42; // wheels scale evenly (round) at a size between the body's height and length stretch
 const CAR_PAINT=[0x7a3a30,0x3e5670,0x8e877a,0x4a5e3a,0xa4844a,0x5e2e36,0xc8c0ac,0x2e3644,0x6a6e70,0x8a5a2e,0x3a4a3e];
 const CAR_SERVICE=new Set(['police','taxi','ambulance','firetruck','garbage-truck','delivery','delivery-flat','tractor']);
 const CAR_GLSL=`
@@ -2564,36 +2565,57 @@ vec3 carStyle(vec3 c,vec3 p,vec3 n,vec2 uv){
   c=mix(c,vec3(.34,.17,.08)*(.7+.6*cN(sp*20.)),clamp(r,0.,1.));
   c*=.9+.14*cN(sp*9.-uSeed);
   return c;}
+// burnt out: soot black, scorched to bare metal and orange rust in blotches, grey ash settled on top
+vec3 carBurn(vec3 c,vec3 p){if(uBurnt<.01)return c;
+  float n=cN(p.xz*7.+uSeed)*.6+cN(p.xy*15.-uSeed)*.4;
+  vec3 b=mix(vec3(.05,.045,.04),vec3(.42,.2,.08),smoothstep(.55,.8,n));b=mix(b,vec3(.32,.31,.29),smoothstep(.62,.95,cN(p.xz*4.+3.))*.6*step(.6,p.y));
+  return mix(c,b,uBurnt);}
 `;
 function carMaterial(base){
   const m=new THREE.MeshToonMaterial({map:base.map,gradientMap:TOON_GRAD,side:THREE.FrontSide});
-  m.userData.u={uPaint:{value:new THREE.Color()},uKeep:{value:0},uRust:{value:.3},uBroken:{value:0},uSeed:{value:0}};
+  m.side=THREE.DoubleSide; // the inside of the shell shows through the glass
+  m.userData.u={uPaint:{value:new THREE.Color()},uKeep:{value:0},uRust:{value:.3},uBroken:{value:0},uSeed:{value:0},uBurnt:{value:0}};
   m.onBeforeCompile=sh=>{Object.assign(sh.uniforms,m.userData.u);
     sh.vertexShader='varying vec3 vCP;varying vec3 vCN;\n'+sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n vCP=position;vCN=normal;');
-    sh.fragmentShader='varying vec3 vCP;varying vec3 vCN;uniform vec3 uPaint;uniform float uKeep,uRust,uBroken,uSeed;\n'+CAR_GLSL+
-      sh.fragmentShader.replace('#include <map_fragment>','#include <map_fragment>\n diffuseColor.rgb=carStyle(diffuseColor.rgb,vCP,normalize(vCN),vUv);');};
+    sh.fragmentShader='varying vec3 vCP;varying vec3 vCN;uniform vec3 uPaint;uniform float uKeep,uRust,uBroken,uSeed,uBurnt;\n'+CAR_GLSL+
+      sh.fragmentShader.replace('#include <map_fragment>','#include <map_fragment>\n diffuseColor.rgb=carBurn(carStyle(diffuseColor.rgb,vCP,normalize(vCN),vUv),vCP);\n if(!gl_FrontFacing)diffuseColor.rgb*=.35;');};
   m.customProgramCacheKey=()=>'carkit';return m;}
 if(THREE.GLTFLoader){try{new THREE.GLTFLoader().load('models/cars/cars.gltf.json',g=>{try{
   const root=g.scene.getObjectByName('cars')||g.scene;let base=null;
-  for(const t of root.children){const parts={body:[],wheels:[]};t.updateMatrixWorld(true);
-    t.traverse(o=>{if(!o.isMesh)return;if(!base)base=o.material;const geo=o.geometry.clone();o.updateMatrixWorld(true);geo.applyMatrix4(new THREE.Matrix4().copy(t.matrixWorld).invert().multiply(o.matrixWorld));
-      geo.computeBoundingBox();(/wheel/.test(o.name||o.parent.name)?parts.wheels:parts.body).push(geo);});
-    const b=new THREE.Box3();for(const geo of [...parts.body,...parts.wheels])b.union(geo.boundingBox);
+  // each car (reworked in Blender, tools/blender/cars.py): body parts, its smashed body, glass, a cabin, and wheels pivoting on
+  // their hubs (names lose their dots on the way in: body.010 arrives as body010)
+  for(const t of root.children){const parts={body:[],wheels:[],hubs:[],wreck:null,glass:null,cabin:null,main:-1};t.updateMatrixWorld(true);
+    t.traverse(o=>{if(!o.isMesh)return;const nm=o.name||o.parent.name;if(!base&&!/^(glass|interior)/.test(nm))base=o.material;const geo=o.geometry.clone();o.updateMatrixWorld(true);geo.applyMatrix4(new THREE.Matrix4().copy(t.matrixWorld).invert().multiply(o.matrixWorld));
+      geo.computeBoundingBox();
+      if(/^glass/.test(nm))parts.glass=geo;else if(/^interior/.test(nm))parts.cabin=geo;else if(/^body-wreck/.test(nm))parts.wreck=geo;
+      else if(/wheel/.test(nm)){const c=geo.boundingBox.getCenter(new V3());geo.translate(-c.x,-c.y,-c.z);geo.computeBoundingBox();parts.wheels.push(geo);parts.hubs.push(c);}
+      else{if(/^body\d*$/.test(nm))parts.main=parts.body.length;parts.body.push(geo);}});
+    const b=new THREE.Box3();for(const geo of parts.body)b.union(geo.boundingBox);parts.wheels.forEach((geo,i)=>b.union(geo.boundingBox.clone().translate(parts.hubs[i])));
     CARKIT.types[t.name]={...parts,min:b.min.clone(),max:b.max.clone()};}
   CARKIT.mat=base;CARKIT.ready=!!CARKIT.types.sedan;
+  CARKIT.glass=new THREE.MeshToonMaterial({color:0x1c262c,gradientMap:TOON_GRAD,transparent:true,opacity:.42,depthWrite:false,side:THREE.DoubleSide,emissive:0x05080a});
+  CARKIT.cabin=new THREE.MeshToonMaterial({color:0x2a2622,gradientMap:TOON_GRAD});
 }catch(e){console.warn('Car kit failed; keeping the drawn cars.',e);}},undefined,()=>{});}catch(e){}}
 // which kit model plays each of the game's car roles
 const CAR_ROLE={sedan:['sedan','sedan','hatchback-sports','sedan-sports','suv-luxury'],wagon:['suv','suv-luxury','van'],pickup:['truck-flat','truck-flat','truck'],
   van:['van','delivery'],truck:['truck','delivery','delivery-flat','garbage-truck'],police:['police'],taxi:['taxi'],ambulance:['ambulance'],fire:['firetruck'],tractor:['tractor']};
 // builds the visible car (body, wheels, outline); returns null when the kit isn't loaded
-function kitCarBody(g,role){
+// wreck: the smashed body, glass gone; burnt: scorched as well (the game's car-fire wrecks)
+function kitCarBody(g,role,wreck,burnt){
   if(!CARKIT.ready)return null;const opts=CAR_ROLE[role]||CAR_ROLE.sedan,name=pick(opts),T=CARKIT.types[name]||CARKIT.types.sedan;
   const mat=carMaterial(CARKIT.mat),u=mat.userData.u;
-  u.uPaint.value.setHex(pick(CAR_PAINT));u.uKeep.value=CAR_SERVICE.has(name)?1:0;u.uRust.value=rand(.04,.32);u.uSeed.value=rand(0,50);u.uBroken.value=RNG()<.3?1:0;
+  u.uPaint.value.setHex(pick(CAR_PAINT));u.uKeep.value=CAR_SERVICE.has(name)?1:0;u.uRust.value=rand(.04,.32);u.uSeed.value=rand(0,50);u.uBroken.value=wreck||RNG()<.3?1:0;u.uBurnt.value=burnt?rand(.8,1):0;
+  if(wreck)u.uRust.value=rand(.4,.8);
   const k=new THREE.Group();k.scale.set(...CAR_SCALE);k.position.set(-(T.min.x+T.max.x)/2*CAR_SCALE[0],0,-(T.min.z+T.max.z)/2*CAR_SCALE[2]);g.add(k);
-  let body=null;for(const geo of T.body){const m=new THREE.Mesh(geo,mat);m.castShadow=true;m.receiveShadow=true;k.add(m);body=body||m;
+  const geos=T.body.map((geo,i)=>wreck&&T.wreck&&i===T.main?T.wreck:geo);
+  let body=null;for(const geo of geos){const m=new THREE.Mesh(geo,mat);m.castShadow=true;m.receiveShadow=true;k.add(m);body=body||m;
     if(GFX==='high'){const o=new THREE.Mesh(geo,SUB_OL);k.add(o);}}
-  const wheels=T.wheels.map(geo=>{const w=new THREE.Mesh(geo,mat);w.castShadow=true;k.add(w);return w;});
+  // windows: real glass, unless it's been smashed out; a dark cabin behind it either way
+  if(T.cabin)k.add(new THREE.Mesh(T.cabin,CARKIT.cabin));
+  if(T.glass&&!u.uBroken.value){const gm=new THREE.Mesh(T.glass,CARKIT.glass);gm.renderOrder=2;k.add(gm);}
+  // wheels stay round: they hang off the car, not the stretched body, at their hub positions
+  const wheels=T.wheels.map((geo,i)=>{const w=new THREE.Mesh(geo,mat),h=T.hubs[i];w.castShadow=true;w.position.set(k.position.x+h.x*CAR_SCALE[0],h.y*CAR_WHEEL,k.position.z+h.z*CAR_SCALE[2]);
+    w.scale.set(CAR_SCALE[0],CAR_WHEEL,CAR_WHEEL);g.add(w);if(wreck)w.visible=false;return w;});
   const len=(T.max.z-T.min.z)*CAR_SCALE[2],wid=(T.max.x-T.min.x)*CAR_SCALE[0],hgt=(T.max.y-T.min.y)*CAR_SCALE[1];
   return{name,mat,body,wheels,len,wid,hgt,k};
 }
@@ -2650,6 +2672,7 @@ function shellGlass(g,body,x,z,rot,G,hw,hd){
   // a bare floor for the empty rooms you can now see into
   const fl=new THREE.Mesh(new THREE.PlaneGeometry(Math.max(1,hw*2-.5),Math.max(1,hd*2-.5)),FLAT(0x2c241d,true));
   fl.rotation.x=-Math.PI/2;fl.position.y=clamp(low-.9,.04,.6);fl.receiveShadow=true;g.add(fl);if(CUR)CUR.geos.push(fl.geometry);
+  furnish(g,G.panes,s,o,hw,hd,fl.position.y+.01,Math.imul(Math.round(x*7),73856093)^Math.imul(Math.round(z*7),19349663));
 }
 // the farm skins paint different windows in the same corner of the atlas: pane rectangles in pixels from (764, 0),
 // [x0, y0, x1, y1, dark] where dark keeps the light muntins and drops only the dark glass between them
@@ -2660,6 +2683,74 @@ function rurWinMat(m,skin){
   m.onBeforeCompile=sh=>{sh.fragmentShader=sh.fragmentShader.replace('#include <map_fragment>',
     '#include <map_fragment>\n {float px=vUv.x*1024.-764.,py=(1.-vUv.y)*1024.;if(px>0.&&py<500.){'+test+'}}\n if(!gl_FrontFacing)diffuseColor.rgb*=.42;');};
   m.customProgramCacheKey=()=>'rurwin'+skin;return m;
+}
+
+/* ----- furniture behind the glass -----
+   A low-poly kit modelled in Blender (tools/blender/interiors.py): sofas, armchairs, beds, a kitchen run and fridge,
+   a dining set, a dresser, a bookshelf, a TV, rugs, a lamp, a knocked-over chair, junk on the floor and wall panels.
+   Each kit house gets a living room on one side and a kitchen or a bedroom on the other (a partition between them in
+   the wider houses), laid out from a seed of its position. Tall pieces only go against walls with no window there.
+   A house's furniture is merged into one mesh in one material, drawn but not solid: the houses stay sealed. */
+const FURN={ready:false,P:{},mat:null,wait:[]};
+if(THREE.GLTFLoader){try{new THREE.GLTFLoader().load('models/interiors/furniture.gltf.json',g=>{try{
+  g.scene.traverse(o=>{if(!o.isMesh)return;let geo=o.geometry.index?o.geometry.toNonIndexed():o.geometry.clone();
+    // the kit's colours come as RGBA shorts; keep RGB floats so pieces merge into one attribute
+    const C=geo.attributes.color,n=geo.attributes.position.count,c3=new Float32Array(n*3);
+    // normalised shorts or bytes: this three.js hands back the raw integers, so scale them here
+    const k=C&&C.normalized?(C.array instanceof Uint16Array?1/65535:C.array instanceof Uint8Array?1/255:1):1;
+    for(let i=0;i<n;i++){c3[i*3]=C?C.getX(i)*k:.6;c3[i*3+1]=C?C.getY(i)*k:.6;c3[i*3+2]=C?C.getZ(i)*k:.6;}
+    const out=new THREE.BufferGeometry();out.setAttribute('position',geo.attributes.position);out.setAttribute('normal',geo.attributes.normal);out.setAttribute('color',new THREE.BufferAttribute(c3,3));
+    out.computeBoundingBox();FURN.P[o.name]=out;});
+  FURN.mat=new THREE.MeshToonMaterial({vertexColors:true,gradientMap:TOON_GRAD});FURN.ready=!!FURN.P.sofa_a;
+  if(FURN.ready){for(const a of FURN.wait)if(a[0].parent)furnish(...a);FURN.wait.length=0;}
+}catch(e){console.warn('Furniture kit failed; the houses stay empty.',e);}},undefined,()=>{});}catch(e){}}
+const _fm=new THREE.Matrix4(),_fr=new THREE.Matrix4(),_fs=new THREE.Matrix4(),_fn=new THREE.Matrix3(),_fv=new V3();
+// lays out and merges one house's furniture; x/z in the house's frame (front +z), floor at y
+function furnish(g,panes,s,o,hw,hd,y,seed,ch){
+  if(hw<2.6||hd<2.4)return;ch=ch||CUR;
+  if(!FURN.ready){FURN.wait.push([g,panes,s,o,hw,hd,y,seed,ch]);return;} // houses built before the kit loaded get theirs when it does
+  const R=mulberry(seed|0),rr=(a,b)=>a+R()*(b-a),W=hw-.42,D=hd-.42,parts=[];
+  // ground-floor panes in the house's frame: [x, z, nx, nz]
+  const P=panes.filter(p=>p.min.y*s+o.y<2.3).map(p=>[p.c.x*s+o.x,p.c.z*s+o.z,p.n.x,p.n.z]);
+  // a wall is free between a and b if no window on it overlaps that span
+  const free=(wall,a,b)=>!P.some(([px,pz,nx,nz])=>wall==='back'?nz<-.6&&px>a-.3&&px<b+.3:wall==='front'?nz>.6&&px>a-.3&&px<b+.3:wall==='left'?nx<-.6&&pz>a-.3&&pz<b+.3:nx>.6&&pz>a-.3&&pz<b+.3);
+  const put=(name,x,z,ry,sx)=>{if(FURN.P[name])parts.push([name,x,z,ry||0,sx||1]);};
+  const dims=n=>{const b=FURN.P[n].boundingBox;return[b.max.x-b.min.x,b.max.z-b.min.z];};
+  const split=hw*2>=7.2,L0=-W,L1=split?-.15:W,R0=.15,R1=W,lc=(L0+L1)/2,rc=(R0+R1)/2,lw=L1-L0;
+  // living room
+  put(R()<.5?'rug_a':'rug_b',lc,rr(-.3,.3),0);
+  const sofa=R()<.5&&lw>2.8?'sofa_a':'sofa_b',[sw,sd]=dims(sofa);
+  put(sofa,lc,-D+sd/2+.05,0);put('coffee_table',lc+rr(-.2,.2),-D+sd+.75,rr(-.15,.15));
+  if(lw>3.2)put(R()<.5?'armchair_a':'armchair_b',lc+Math.min(lw/2-.6,sw/2+.55),-D+sd+.8,-Math.PI/2+rr(-.4,.2));
+  if(free('front',lc-.7,lc+.7))put('tv',lc,D-.25,Math.PI);else if(lw>3.6)put('tv',L0+.25,0,Math.PI/2);
+  if(free('left',-D,-D+1))put('bookshelf',L0+.18,-D+.6,Math.PI/2);
+  put('lamp',L0+.35,-D+.35,0);
+  if(split){const doorZ=rr(-D+1.4,D-1.4);   // a partition with a doorway in it
+    for(const [a,b] of [[-D,doorZ-.55],[doorZ+.55,D]])if(b-a>.2)put('wall',0,(a+b)/2,Math.PI/2,b-a);}
+  // the other side: a kitchen and dining table, or a bedroom
+  const kit=R()<.55,rw=split?R1-R0:0;
+  if(split&&kit){
+    if(free('back',rc-1.3,rc+1.3)&&rw>2.6){put('kitchen',rc-.2,-D+.32,0);put('fridge',Math.min(R1-.4,rc+1.4),-D+.38,0);}
+    else if(free('right',-D,-D+2.5)){put('kitchen',R1-.32,-D+1.35,-Math.PI/2);put('fridge',R1-.38,-D+.4+2.55,-Math.PI/2);}
+    put('dining',rc,rr(.2,D-1.2),rr(-.3,.3));
+  }else if(split){
+    put(R()<.5?'bed_a':'bed_b',rc,-D+1.08,0);
+    if(free('right',.2,1.4))put('dresser',R1-.28,.8,-Math.PI/2);else put('dresser',rc+rr(-.4,.4),D-.3,Math.PI);
+    put(R()<.5?'rug_a':'rug_b',rc,.9,Math.PI/2);
+  }
+  // signs of the end: a chair on its side, papers and boards, sometimes
+  if(R()<.6)put('chair_down',rr(-W+.8,W-.8),rr(-D+2,D-.8),rr(0,6.28));
+  if(R()<.7)put('debris',rr(-W+1,W-1),rr(-D+1.5,D-1),rr(0,6.28));
+  let n=0;for(const p of parts)n+=FURN.P[p[0]].attributes.position.count;
+  const pos=new Float32Array(n*3),nor=new Float32Array(n*3),col=new Float32Array(n*3);let k=0;
+  const tint=.85+R()*.25;
+  for(const [name,x,z,ry,sx] of parts){const G=FURN.P[name],A=G.attributes.position,N=G.attributes.normal,C=G.attributes.color;
+    _fm.makeTranslation(x,y,z).multiply(_fr.makeRotationY(ry)).multiply(_fs.makeScale(sx,1,1));_fn.getNormalMatrix(_fm);
+    for(let i=0;i<A.count;i++,k++){_fv.fromBufferAttribute(A,i).applyMatrix4(_fm);pos[k*3]=_fv.x;pos[k*3+1]=_fv.y;pos[k*3+2]=_fv.z;
+      _fv.fromBufferAttribute(N,i).applyMatrix3(_fn).normalize();nor[k*3]=_fv.x;nor[k*3+1]=_fv.y;nor[k*3+2]=_fv.z;
+      col[k*3]=C.getX(i)*tint;col[k*3+1]=C.getY(i)*tint;col[k*3+2]=C.getZ(i)*tint;}}
+  const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(pos,3));geo.setAttribute('normal',new THREE.BufferAttribute(nor,3));geo.setAttribute('color',new THREE.BufferAttribute(col,3));
+  const m=new THREE.Mesh(geo,FURN.mat);m.receiveShadow=true;g.add(m);if(ch)ch.geos.push(geo);
 }
 /* ================= GRASS (instanced, wind-swayed in the vertex shader) ================= */
 const windU={uTime:{value:0},uWind:{value:.3},uWdir:{value:new THREE.Vector2(1,0)}};
@@ -3800,7 +3891,9 @@ function applyVariant(type,inst,gu,T){
 }
 
 const ZMODEL_FOR={walker:['office','grandma','office','grandma','soldier'],trooper:['soldier'],crawler:['office','grandma'],runner:['office','grandma'],boomer:['trucker'],brute:['hulk'],spitter:['office','grandma'],boss:['hulk']};
-const ZSHARED={attack:'models/zombies/anim/attack.gltf.json',death:'models/zombies/anim/death.gltf.json'};
+const ZSHARED={attack:'models/zombies/anim/attack.gltf.json',death:'models/zombies/anim/death.gltf.json',
+  extra:'models/zombies/anim/extra.gltf.json'}; // extra: crawl, shamble, swipe, fall (keyed in Blender, tools/blender/zombie_anims.py)
+const ZEXTRA=['crawl','shamble','swipe','fall'];
 const ZM={},ZCLIP={},zOlMats={};
 function prepZModel(k,gltf,h){retargetMixamo(gltf);
   const root=gltf.scene;const fit=rigFit(root,h);const s=fit.s;
@@ -3823,7 +3916,7 @@ function zOutlineMat(sk,th){
 if(THREE.GLTFLoader&&THREE.SkeletonUtils){try{
   const L=new THREE.GLTFLoader();
   for(const [k,[url,h]] of Object.entries(ZMODEL_FILES))L.load(url,g=>{try{prepZModel(k,g,h);}catch(e){console.warn('Zombie model '+k+' failed; using box infected.',e);}},undefined,()=>{});
-  for(const [k,url] of Object.entries(ZSHARED))L.load(url,g=>{if(g.animations[0])ZCLIP[k]=g.animations[0];},undefined,()=>{});
+  for(const [k,url] of Object.entries(ZSHARED))L.load(url,g=>{if(k==='extra'){for(const a of g.animations)ZCLIP[a.name]=a;}else if(g.animations[0])ZCLIP[k]=g.animations[0];},undefined,()=>{});
 }catch(e){}}
 function makeZombieGLB(type){
   const opts=ZMODEL_FOR[type];if(!opts)return null;const avail=opts.filter(k=>ZM[k]);if(!avail.length)return null;
@@ -3838,14 +3931,21 @@ function makeZombieGLB(type){
     if(sk){ol.bind(o.skeleton,o.bindMatrix);ol.bindMode=o.bindMode;}ol.position.copy(o.position);ol.quaternion.copy(o.quaternion);ol.scale.copy(o.scale);ol.frustumCulled=false;o.parent.add(ol);}
   const mixer=new THREE.AnimationMixer(inst),acts={};
   if(T.walk){acts.walk=mixer.clipAction(T.walk);if(type!=='crawler'){acts.walk.play();acts.walk.time=Math.random()*T.walk.duration;}} // crawlers are posed by hand (zCrawlPose)
+  // the Blender clips are keyed on the skeleton the office, grandma, trucker and hulk share (not the soldier's)
+  if(T.key!=='soldier')for(const n of ZEXTRA){if(!T[n]&&ZCLIP[n])T[n]=stripRootMotion(ZCLIP[n].clone(),T.rootBone);
+    if(T[n]){const a=mixer.clipAction(T[n]);if(n==='swipe'||n==='fall'){a.setLoop(THREE.LoopOnce,1);a.clampWhenFinished=true;}acts[n]=a;}}
+  // crawlers crawl; about half the walkers shamble, dragging a leg, instead of walking
+  const loco=type==='crawler'&&acts.crawl?acts.crawl:type==='walker'&&acts.shamble&&Math.random()<.5?acts.shamble:null;
+  if(loco){if(acts.walk)acts.walk.stop();loco.play();loco.time=Math.random()*loco.getClip().duration;acts.loco=loco;}
   for(const n of ['attack','death']){if(!T[n]&&ZCLIP[n])T[n]=stripRootMotion(ZCLIP[n].clone(),T.rootBone);
     if(T[n]){const a=mixer.clipAction(T[n]);a.setLoop(THREE.LoopOnce,1);a.clampWhenFinished=true;acts[n]=a;}}
   const v=type==='runner'?rand(.84,.94):type==='walker'?rand(.9,1.1):type==='boss'?1.45:1;g.scale.setScalar(v);
   return{g,mats,mixer,acts,glb:true,barY:T.h*v+.35,bones:zBones(inst)};
 }
 function zAttackAnim(z){
-  const a=z.acts&&z.acts.attack;if(!a)return;a.reset();a.setEffectiveWeight(1);a.fadeIn(.08);a.play();
-  setTimeout(()=>{if(a.isRunning())a.fadeOut(.25);},520);
+  // now and then the wound-up two-handed swipe instead of the quick claw
+  const sw=z.acts&&z.acts.swipe&&!z.def.crawl&&Math.random()<.45,a=z.acts&&(sw?z.acts.swipe:z.acts.attack);if(!a)return;a.reset();a.setEffectiveWeight(1);a.fadeIn(.08);a.play();
+  setTimeout(()=>{if(a.isRunning())a.fadeOut(.25);},sw?700:520);
 }
 function makeZombie(type){
   const gm=makeZombieGLB(type);if(gm)return gm;
@@ -3927,7 +4027,8 @@ function killZombie(z){
   const hl=Math.hypot(z.hx,z.hz);
   z.dvx=z.hx*1.4*heavy;z.dvz=z.hz*1.4*heavy;z.dvy=(z.lift?z.lift:rand(1,2.5)+hl*.25)*heavy;z.dspin=rand(-6,6)*heavy*(z.lift?1.5:.4);
   if(hl>.5)z.yaw=Math.atan2(-z.hx,-z.hz);
-  if(z.acts&&z.acts.death){if(z.acts.walk)z.acts.walk.fadeOut(.12);if(z.acts.attack)z.acts.attack.stop();const a=z.acts.death;a.reset();a.fadeIn(.08);a.play();z.animDeath=true;}
+  if(z.acts&&z.acts.death){if(z.acts.walk)z.acts.walk.fadeOut(.12);if(z.acts.loco)z.acts.loco.fadeOut(.12);if(z.acts.attack)z.acts.attack.stop();if(z.acts.swipe)z.acts.swipe.stop();
+    const a=z.acts.fall&&!z.def.crawl&&Math.random()<.5?z.acts.fall:z.acts.death;a.reset();a.fadeIn(.08);a.play();z.animDeath=true;}
   spawnPickup('scrap',z.x+rand(-.4,.4),z.z+rand(-.4,.4),randi(d.drop[0],d.drop[1]));
   if(d.parts)spawnPickup('parts',z.x+rand(-.6,.6),z.z+rand(-.6,.6),d.parts);
   if(Math.random()<.16&&ownedAmmo().length)spawnPickup('ammo',z.x+rand(-.6,.6),z.z+rand(-.6,.6),1);
@@ -4074,7 +4175,9 @@ function updateZombies(dt){
     // the legs follow the ground actually covered: shoved backwards, they step backwards rather than walking on the spot
     {const ax=(z.x-(z.lx??z.x))/dt,az=(z.z-(z.lz??z.z))/dt;z.lx=z.x;z.lz=z.z;z.fv=lerp(z.fv||0,ax*Math.sin(z.yaw)+az*Math.cos(z.yaw),Math.min(1,dt*8));}
     if(z.mixer){
-      if(z.acts.walk){const f=clamp(z.fv,-d.speed,d.speed*3)/(d.speed*.8);z.acts.walk.timeScale=(z.fv<-.25?-clamp(-f,.3,1.2):clamp(Math.max(f,sp/(d.speed*.8)*.3),.2,2.4))*(z.type==='runner'?1.5:1);}
+      // a crawler's clip is scrubbed to its crawl cycle, so the hauls and the surges in speed line up
+      if(z.acts.crawl&&z.acts.loco===z.acts.crawl&&z.ab){z.acts.crawl.timeScale=0;z.acts.crawl.time=((z.ab.cph||0)%1)*z.acts.crawl.getClip().duration;}
+      else if(z.acts.loco||z.acts.walk){const f=clamp(z.fv,-d.speed,d.speed*3)/(d.speed*.8);(z.acts.loco||z.acts.walk).timeScale=(z.fv<-.25?-clamp(-f,.3,1.2):clamp(Math.max(f,sp/(d.speed*.8)*.3),.2,2.4))*(z.type==='runner'?1.5:1);}
       zUndo(z);z.mixer.update(dt);z.g.position.set(z.x,(z.lvlY||0)+zLift(z),z.z);
     }else{
       z.legs[0].rotation.x=sw*.6;z.legs[1].rotation.x=-sw*.6;
@@ -4266,7 +4369,7 @@ function zPose(z,dt,pd,pdx,pdz){
   if(s==='rip')z.g.position.y-=.15*e;
   z.g.updateMatrixWorld(true);
   if(look){let r=Math.atan2(pdx,pdz)-z.yaw;while(r>Math.PI)r-=Math.PI*2;while(r<-Math.PI)r+=Math.PI*2;R(B.neck,'y',clamp(r,-.9,.9)*.6);}
-  if(z.def.crawl)zCrawlPose(z,B,s==='lunge'||s==='coil'?.35:1);
+  if(z.def.crawl&&!(z.acts&&z.acts.crawl))zCrawlPose(z,B,s==='lunge'||s==='coil'?.35:1); // the Blender crawl clip, when loaded, does this
   if(a.guard>.02){const g=a.guard;R(B.chest,'x',.15*g);R(B.lArm,'x',-1.3*g);R(B.rArm,'x',-1.3*g);R(B.lArm,'y',-.55*g);R(B.rArm,'y',.55*g);R(B.lFore,'x',-1*g);R(B.rFore,'x',-1*g);}
   if(a.chg>.02){const g=a.chg;R(B.chest,'x',.55*g);R(B.neck,'x',-.3*g);R(B.lArm,'x',.55*g);R(B.rArm,'x',.55*g);R(B.lArm,'z',.3*g);R(B.rArm,'z',-.3*g);}
   if(z.slamT>0){const q=1-z.slamT/.7,up=q<.78?q/.78:1-(q-.78)/.22;const arm=q<.78?-2.7*up:-2.7+3.2*((q-.78)/.22),ch=q<.78?-.4*up:-.4+1.1*((q-.78)/.22);
@@ -5895,7 +5998,9 @@ function makeAnimalGLB(type){
   const o=new V3(T.offX,T.offY,T.offZ);inst.position.copy(o);g.add(piv);
   if(type==='deer'){inst.scale.set(T.s*.82,T.s,T.s*.95);let head=null;inst.traverse(b=>{if(b.isBone&&b.name==='Head')head=b;});if(head&&Math.random()<.5)antlers(head,T.s);}
   const mats=[];inst.traverse(m=>{if(m.isSkinnedMesh){m.material=m.material.clone();m.material.emissive=new THREE.Color(0);mats.push(m.material);}});
-  if(GFX==='high')inst.traverse(m=>{if(!m.isSkinnedMesh||m.userData.ol)return;const ol=new THREE.SkinnedMesh(m.geometry,zOutlineMat(true,(.012/T.s).toFixed(4)));ol.userData.ol=1;ol.bind(m.skeleton,m.bindMatrix);ol.bindMode=m.bindMode;ol.frustumCulled=false;m.parent.add(ol);});
+  // outline thickness in the mesh's own units: some models carry a scale on the mesh node (the deer's is 100), and
+  // ignoring it pushed the hull a hundred times too far, leaving black shards floating round the animal
+  if(GFX==='high'){piv.updateMatrixWorld(true);const ws=new V3();inst.traverse(m=>{if(!m.isSkinnedMesh||m.userData.ol)return;m.getWorldScale(ws);const ol=new THREE.SkinnedMesh(m.geometry,zOutlineMat(true,(.012/(ws.x||T.s)).toFixed(5)));ol.userData.ol=1;ol.bind(m.skeleton,m.bindMatrix);ol.bindMode=m.bindMode;ol.frustumCulled=false;m.parent.add(ol);});}
   const mixer=new THREE.AnimationMixer(inst),acts={};
   for(const n of ['idle','walk','run','fly','death'])if(T.clips[n]){const a=mixer.clipAction(T.clips[n]);acts[n]=a;if(n==='death'){a.setLoop(THREE.LoopOnce,1);a.clampWhenFinished=true;}}
   const start=acts.idle||acts.walk||acts.run||acts.fly;if(start){start.play();start.time=Math.random()*start.getClip().duration;}
