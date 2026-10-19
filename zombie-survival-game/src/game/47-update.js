@@ -131,7 +131,6 @@ function updateWorld(dt){
     if(c.opened){c.t+=dt;if(c.lid)c.lid.rotation.x=Math.max(-2,c.lid.rotation.x-dt*8);if(c.door)c.door.rotation.y=Math.max(-1.9,c.door.rotation.y-dt*6);if(c.t>(c.loot&&c.loot.length?150:18)){if(LOOT&&LOOT.src===c)closeLoot();dropCrate(c);crates.splice(i,1);}}
     else if(!c.chunk&&c.rar==='drop'&&S.running&&Math.hypot(c.x-player.x,c.z-player.z)>260){dropCrate(c);crates.splice(i,1);}
     else if(c.rar==='drop'&&Math.random()<dt*6)burst(c.x,1.5,c.z,1,'smoke',1);}
-  S.groanT-=dt;if(S.groanT<=0){S.groanT=rand(1.2,3);let near=null,nd=30;for(const z of zombies){if(z.dying)continue;const d=Math.hypot(z.x-player.x,z.z-player.z);if(d<nd){nd=d;near=z;}}if(near)Sound.play('groan',1-nd/30,near.x,near.z);}
   S.breachMsgT-=dt;
 }
 const acidGeo=new THREE.CircleGeometry(1,16);

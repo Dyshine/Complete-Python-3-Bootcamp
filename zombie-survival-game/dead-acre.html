@@ -691,8 +691,8 @@ const Sound=(()=>{
      footsteps, formant-filtered zombie voices, positional panning with distance filtering, a shared convolution reverb that
      gets roomier indoors, a weather/time-of-day ambience bed and an adaptive score that rises with danger. A bus compressor
      and limiter glue it together. Volumes: master, music, effects (pause menu).
-     Firearms and reloads play recorded takes from sounds/ (CC0, see sounds/CREDITS.txt) through the same routing; the
-     synthesised reports stand in until the recordings have decoded, or if they can't load. */
+     Firearms, reloads and the infected's voices play recorded takes from sounds/ (CC0, see sounds/CREDITS.txt) through the
+     same routing; the synthesised reports and throats stand in until the recordings have decoded, or if they can't load. */
   let ctx=null,master=null,sfx=null,amb=null,mus=null,rvb=null,rvbIn=null,comp=null,muted=false,voices=0;
   const NB={},last={},vol=store.get('deadacre.vol',{master:.9,music:.55,sfx:.9});
   const GAP={smg:.03,saw:.09,siren:.8,arc:.04,hit:.03,turret:.05,groan:.05,hurt:.18,pick:.04,empty:.12,rifle:.025,thud:.05,clink:.025,door:.15,step:.05,ui:.03};
@@ -734,7 +734,7 @@ const Sound=(()=>{
   const T=()=>ctx.currentTime;
   // ---------- recorded samples: sounds/<name>_<n>.mp3, decoded once ----------
   const SMP={pistol:4,pistol_far:1,revolver:2,revolver_far:1,smg:4,smg_far:1,rifle:4,rifle_far:1,shotgun:3,shotgun_far:1,sniper:4,sniper_far:1,
-    reload_mag:1,reload_rifle:1,pump:1,shell:1,cheer:2,horn:1,boing:1,honk:1,ooo:1};
+    reload_mag:1,reload_rifle:1,pump:1,shell:1,cheer:2,horn:1,boing:1,honk:1,ooo:1,zmoan:16,zrage:16,zatk:10,zdie:5};
   const SB={},SLAST={};
   function loadSamples(){if(!window.fetch)return;
     for(const [k,n] of Object.entries(SMP))for(let i=1;i<=n;i++)
@@ -745,6 +745,23 @@ const Sound=(()=>{
     let i=Math.random()*L.length|0;if(L.length>1&&i===SLAST[k])i=(i+1)%L.length;SLAST[k]=i;
     const s=ctx.createBufferSource();s.buffer=L[i];s.playbackRate.value=rate||rand(.95,1.05);
     const g=ctx.createGain();g.gain.value=v;s.connect(g);g.connect(out);s.start(T()+(delay||0));return true;}
+  /* ---------- the infected's voices ----------
+     zmoan: the calm ones, wandering and moaning. zrage: the ones that have your scent, snarling as they come.
+     zatk: the yell as one lunges or swipes. zdie: the last breath. Each body speaks at a pitch of its own (deep for the
+     big ones, thin for runners). Only a few talk at once, so a crowd reads as a crowd and not a wall of noise: when all
+     the mouths are taken, a nearer (louder) one cuts off the quietest. `cap` lowers the ceiling for the horde's chorus,
+     which never cuts anyone off. Returns how long the line lasts (0: not spoken). */
+  const ZV={zmoan:[.75,.26],zrage:[.9,.2],zatk:[.85,.12],zdie:[.8,.18]};let zvOn=[];
+  function zvox(k,v,x,z,pitch,cap){if(!ctx||muted||voices>60||v<.03)return 0;const now=T();zvOn=zvOn.filter(e=>e.end>now);
+    const lim=cap||(k==='zatk'||k==='zdie'?8:5);
+    if(zvOn.length>=lim){let q=null;for(const e of zvOn)if(!q||e.v<q.v)q=e;
+      if(cap||!q||!q.s||q.v>=v*.8)return 0;q.g.gain.setTargetAtTime(0,now,.04);q.s.stop(now+.2);zvOn.splice(zvOn.indexOf(q),1);}
+    else if(zvOn.length>=lim-2&&v<.25)return 0;
+    const L=SB[k];if(!L||!L.length){play(k==='zmoan'?'groan':k==='zdie'?'groan':'roar',v*(k==='zmoan'||k==='zdie'?1:.35),x,z);zvOn.push({end:now+1,v});return 1;}
+    let i=Math.random()*L.length|0;if(L.length>1&&i===SLAST[k])i=(i+1)%L.length;SLAST[k]=i;
+    const r=(pitch||1)*rand(.96,1.04),len=L[i].duration/r,o=route({len:len+.3,wet:ZV[k][1],x,z});
+    const s=ctx.createBufferSource();s.buffer=L[i];s.playbackRate.value=r;const g=ctx.createGain();g.gain.value=v*ZV[k][0];s.connect(g);g.connect(o);s.start(now);
+    zvOn.push({end:now+len,v,g,s});return len;}
   // per firearm: voice length, reverb send, level, low punch frequency
   const GS={pistol:[1.3,.2,.62,130],revolver:[1.6,.24,.7,110],smg:[.8,.14,.5,140],rifle:[1.5,.2,.62,120],shotgun:[2,.26,.75,85],sniper:[2.6,.3,.8,80]};
   function gunSample(n,v,pos,opt){const G=GS[n];if(!G||!SB[n])return false;const sup=opt&&opt.sup;
@@ -904,8 +921,10 @@ const Sound=(()=>{
     crickT-=dt;if(crickT<=0){crickT=rand(.25,.6);if(st.night>.5&&(st.season===1||st.season===2||st.season===0&&st.temp>10)&&st.rain<.3&&!st.indoor){const o=route({len:.5,wet:.1,x:LX+rand(-15,15),z:LZ+rand(-15,15),bus:amb});for(let i=0;i<3;i++)tone(o,4600,4500,.025,.012*st.night,'sine',i*.04);}}
     owlT-=dt;if(owlT<=0){owlT=rand(14,30);if(st.night>.6&&!st.indoor){const o=route({len:2,wet:.4,x:LX+rand(-40,40),z:LZ+rand(-40,40),bus:amb});tone(o,390,370,.35,.05,'sine',0,.08);tone(o,370,340,.5,.05,'sine',.45,.08);}}
     fireT-=dt;if(fireT<=0){fireT=rand(.05,.25);if(st.fireD<12){const o=route({len:.3,wet:.1,x:st.fireX,z:st.fireZ,bus:amb});noise(o,.02,'bandpass',rand(1500,4500),3,.12*clamp(1-st.fireD/12,0,1));}}
-    // a distant horde moaning on the wind at night
-    hordeT-=dt;if(hordeT<=0){hordeT=rand(6,14);if(st.night>.5&&st.hordeD<160){const a=st.hordeA,o=route({len:2,wet:.7,x:LX+Math.sin(a)*40,z:LZ+Math.cos(a)*40,bus:amb});voice(o,rand(60,80),rand(50,60),rand(1.4,2.2),.05*clamp(1-st.hordeD/160,.2,1),[[480,4,1],[1000,6,.5]],3);}}
+    // a distant horde moaning on the wind at night: a few recorded moans laid over each other, muffled by the distance
+    hordeT-=dt;if(hordeT<=0){hordeT=rand(6,14);if(st.night>.5&&st.hordeD<160){const a=st.hordeA,lv=clamp(1-st.hordeD/160,.2,1),o=route({len:6.5,wet:.7,x:LX+Math.sin(a)*40,z:LZ+Math.cos(a)*40,bus:amb});
+      if(SB.zmoan){const lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=700;lp.connect(o);for(let i=0;i<3;i++)sample(lp,'zmoan',.16*lv,i*rand(.3,.7),rand(.72,.92));}
+      else voice(o,rand(60,80),rand(50,60),rand(1.4,2.2),.05*lv,[[480,4,1],[1000,6,.5]],3);}}
     music(dt,st);
   }
   // ---------- adaptive score ----------
@@ -953,7 +972,7 @@ const Sound=(()=>{
   }
   function quiet(dt,m){if(!ctx)return;for(const L of Object.values(loops)){L.cur+=(0-L.cur)*Math.min(1,dt*3);L.g.gain.value=L.cur;}if(m)soundtrack(dt,m);}
   function setVol(k,v){vol[k]=v;store.set('deadacre.vol',vol);applyVol();}
-  return{init,play,ambient,step,update,setVol,quiet,get samples(){return Object.keys(SB).length;},get soundtrack(){return trackOK?mode:null;},get vol(){return vol;},toggle(){muted=!muted;applyVol();return muted;},get muted(){return muted;}};
+  return{init,play,zvox,ambient,step,update,setVol,quiet,get samples(){return Object.keys(SB).length;},get soundtrack(){return trackOK?mode:null;},get vol(){return vol;},toggle(){muted=!muted;applyVol();return muted;},get muted(){return muted;}};
 })();
 
 
@@ -3302,7 +3321,7 @@ const ZT={
 const SPIKE_DPS=[0,8,16,28],INF_REGEN=[0,1.5,3,5],INF_HP=[0,20,40,60];
 
 /* ================= STATE ================= */
-const S={running:false,paused:false,menu:false,over:false,phase:'day',dayT:75,wave:0,queue:[],spawnT:0,daySpawnT:8,kills:0,looted:0,shake:0,menuTab:'def',env:0,envT:0,groanT:2,breachMsgT:0};
+const S={running:false,paused:false,menu:false,over:false,phase:'day',dayT:75,wave:0,queue:[],spawnT:0,daySpawnT:8,kills:0,looted:0,shake:0,menuTab:'def',env:0,envT:0,breachMsgT:0};
 const player={x:0,z:1,vx:0,vz:0,kx:0,kz:0,yaw:0,hp:100,maxHp:100,st:100,alive:true,scrap:40,parts:0,med:1,gren:0,weapon:'pistol',fireCd:0,reloadT:0,walk:0,hurtT:0,acidT:0,recoil:0};
 let inv={};
 const base={wallLv:0,turrets:0,turretLv:1,spikeLv:0,infLv:0,floods:0,radar:0};
@@ -3797,7 +3816,7 @@ function eatFood(){
    Unaware infected can be taken down silently from behind; melee on them hits three times as hard. */
 let SNEAKF=false;
 function zAlert(z,quiet){if(z.aware||z.dying)return;z.aware=true;z.sus=1;z.alertT=1.3;z.lostT=0;
-  if(!quiet){Sound.play('groan',.9);for(const o of zombies)if(o!==z&&!o.aware&&!o.dying&&Math.hypot(o.x-z.x,o.z-z.z)<9)o.sus=Math.max(o.sus,.75);}}
+  if(!quiet){for(const o of zombies)if(o!==z&&!o.aware&&!o.dying&&Math.hypot(o.x-z.x,o.z-z.z)<9)o.sus=Math.max(o.sus,.75);}}
 function unaware(o,k){return k==='z'?!o.aware:o.h.state!=='hunt'&&!o.h.lured;}
 function takedownTarget(){
   if(!player.alive||player.swim||player.lvl)return null;
@@ -4021,6 +4040,21 @@ function collideSeg(o,r,s){
   else{const d=Math.sqrt(d2);o.x=px+dx/d*r;o.z=pz+dz/d*r;}
   return true;
 }
+/* ---------- voices ----------
+   Every infected speaks at a pitch of its own, set by its build (deep for brutes and the Abomination, thin for runners and
+   crawlers). The calm ones moan now and then as they wander; once one has your scent it snarls, louder and more often.
+   Each also yells as it swipes or lunges, grunts when a round hurts it, and lets out a last breath as it drops (not after
+   a head shot). The audio engine lets only a few talk at once, nearest first. */
+const ZPITCH={walker:[.9,1.08],runner:[1,1.16],crawler:[1.04,1.2],trooper:[.84,.96],spitter:[.96,1.1],boomer:[.72,.84],brute:[.6,.72],boss:[.5,.58]};
+const ZFAR={zmoan:32,zrage:48,zatk:42,zdie:45};
+function zSay(z,k,v,d,far,pm){if(z.vp==null)zVoiceInit(z);const f=far||ZFAR[k],len=Sound.zvox(k,v*Math.pow(clamp(1-d/f,0,1),1.3),z.x,z.z,z.vp*(pm||1));if(len)z.talk=len;return len;}
+function zVoiceInit(z){const p=ZPITCH[z.type]||[.9,1.1];z.vp=rand(p[0],p[1]);if(z.vT==null)z.vT=rand(.5,6);z.talk=0;}
+function zVoice(z,dt,pd){
+  if(z.vp==null)zVoiceInit(z);
+  z.talk-=dt;z.vT-=dt;if(z.vT>0||z.talk>0)return;
+  const ag=z.aware&&player.alive;z.vT=ag?rand(2,4.5):rand(5,12);
+  if(!zBusy(z))zSay(z,ag?'zrage':'zmoan',ag?1:.85,pd);
+}
 function damageZombie(z,dmg,kx,kz,silent,lift){
   if(z.dying)return;dmg=zArmor(z,dmg,kx,kz);z.hp-=dmg;
   if(!silent)dmgNum(z,dmg,z.hp<=0?'kill':SNEAKF?'sneak':CRITF?'crit':'',(z.barY||2.35*z.def.scale)+.25);
@@ -4033,7 +4067,7 @@ function damageZombie(z,dmg,kx,kz,silent,lift){
   if(z.hp<=0)killZombie(z);
 }
 function killZombie(z){
-  if(z.dying)return;z.dying=true;z.dieT=0;zOnDeath(z);z.y=z.jy||0;S.kills++;z.bg.visible=z.fg.visible=false;gainXP(z.def.score*.8);jobProg('kill',1);
+  if(z.dying)return;z.dying=true;z.dieT=0;zOnDeath(z);if(!z.headless&&z.type!=='boomer'&&Math.random()<.85)zSay(z,'zdie',SNEAKF?.35:1,dist2p(z)); /* a takedown smothers it */z.y=z.jy||0;S.kills++;z.bg.visible=z.fg.visible=false;gainXP(z.def.score*.8);jobProg('kill',1);
   const d=z.def;burst(z.x,1,z.z,10,z.type==='spitter'?'acid':'gore',5);
   if(z.type!=='boomer')decal(z.x+z.hx*.12,z.z+z.hz*.12,rand(1.3,2.1)*Math.sqrt(d.scale),z.type==='spitter'?0x3f6a14:0x4a0a08,.85);
   // ragdoll fling
@@ -4090,7 +4124,7 @@ function zClimb(z,dt,pd){
   if(c&&t.h<=c[0]){const n=od||1;z.climbD=z.climbT=c[1]*clamp(t.h/1.2,.7,1.4);z.cy0=z.jy||0;z.cyH=t.h;z.cx=t.x+(z.x-t.x)/n*t.r*.45;z.cz=t.z+(z.z-t.z)/n*t.r*.45;z.lunge=.3;zAttackAnim(z);Sound.play('thud',.45,z.x,z.z);
     if(!S.climbMsg){S.climbMsg=1;toast('They\'re climbing up after you!','bad');}return true;}
   // too heavy to climb: brutes and the Abomination shake you off instead
-  if((z.type==='brute'||z.type==='boss')&&z.atkCd<=0){z.atkCd=1.7;z.lunge=.3;zAttackAnim(z);S.shake=Math.max(S.shake,.45);Sound.play('crash',.8,z.x,z.z);rumble(.6,.5,250);burst(o.x,o.h,o.z,6,'debris',4);
+  if((z.type==='brute'||z.type==='boss')&&z.atkCd<=0){z.atkCd=1.7;z.lunge=.3;zAttackAnim(z);zSay(z,'zatk',1.1,dist2p(z));S.shake=Math.max(S.shake,.45);Sound.play('crash',.8,z.x,z.z);rumble(.6,.5,250);burst(o.x,o.h,o.z,6,'debris',4);
     if(!S.rockMsg){S.rockMsg=1;toast('It\'s rocking your perch. Hold on, or jump clear!','bad');}
     if(Math.random()<.5){const n=pd||1;knockPlayer((player.x-z.x)/n,(player.z-z.z)/n,12);player.air=true;player.jvy=5;player.fall0=player.jy;}}
   return false;
@@ -4181,7 +4215,7 @@ function updateZombies(dt){
       if(base.spikeLv&&!z.blocked.door&&!z.blocked.home){damageZombie(z,SPIKE_DPS[base.spikeLv]*dt,0,0,true);z.spikeT-=dt;if(z.spikeT<=0){z.spikeT=.5;burst(z.x,.8,z.z,2,'blood',3);}}
       if(z.dying)continue;
     }
-    if(player.alive&&z.aware&&pd<d.r+.85&&z.atkCd<=0&&Math.abs((z.lvlY||0)-(player.lvlY||0))<1.3&&Math.abs((player.jy||0)-(z.jy||0))<1.25&&!(z.climbT>0)&&!zBusy(z)&&(zH===pH||homeLOS(z.x,z.z,px,pz))){z.atkCd=(z.type==='runner'?.75:1.1)*(S.phase==='night'?.78:1);z.lunge=.25;zAttackAnim(z);
+    if(player.alive&&z.aware&&pd<d.r+.85&&z.atkCd<=0&&Math.abs((z.lvlY||0)-(player.lvlY||0))<1.3&&Math.abs((player.jy||0)-(z.jy||0))<1.25&&!(z.climbT>0)&&!zBusy(z)&&(zH===pH||homeLOS(z.x,z.z,px,pz))){z.atkCd=(z.type==='runner'?.75:1.1)*(S.phase==='night'?.78:1);z.lunge=.25;zAttackAnim(z);if(!(z.talk>0)&&Math.random()<.7&&zSay(z,'zatk',1,pd))z.talk+=rand(.6,1.4); // a breath between yells
       if(!zOnAttack(z)){hurtPlayer(d.dmg*(1+.04*(S.wave-1)));
       if(d.crawl){player.grabT=1.2;if(!S.grabMsg){S.grabMsg=1;toast('A crawler has your ankle! Shake it off.','bad');}}
       const kf=z.type==='brute'?(z.chargeT>0?20:9):z.type==='boss'?12:2.5;knockPlayer(pdx/(pd||1),pdz/(pd||1),kf);if(z.type==='brute')z.chargeT=0;}}
@@ -4206,7 +4240,7 @@ function updateZombies(dt){
     z.g.rotation.y=z.yaw;
     z.g.rotation.x=z.type==='boss'&&z.slamT>0?-.35:d.crawl?(z.bones?1.42:1.32):z.climbT>0?.55*Math.sin(Math.PI*(1-z.climbT/z.climbD)):0;
     if(d.crawl){z.g.position.x-=Math.sin(z.yaw)*.8;z.g.position.z-=Math.cos(z.yaw)*.8;if(z.ab)z.g.position.y+=.05*(z.ab.pull||0);}
-    zPose(z,dt,pd,pdx,pdz);
+    zPose(z,dt,pd,pdx,pdz);zVoice(z,dt,pd);
     const fl=z.flash>0?.7:0,gl=z.glow||0;for(const m of z.mats)if(m.emissive)m.emissive.setRGB(fl+gl,fl*.2+gl*.5,fl*.1+gl*.08);
     const dmgd=z.hp<z.maxHp;z.bg.visible=z.fg.visible=dmgd;
     if(dmgd){const y=(d.crawl?.95:(z.barY||(z.type==='boss'?2.6:2.35)*d.scale))+gH(z.x,z.z)+(z.lvlY||0)+(z.jy||0);z.bg.position.set(z.x-z.bw/2,y,z.z);z.fg.position.set(z.x-z.bw/2,y,z.z+.01);z.fg.scale.x=z.bw*Math.max(0,z.hp/z.maxHp);}
@@ -4276,7 +4310,7 @@ function zSteer(z,dt,tx,tz,lu){
 function zAbility(z,dt,pd,pdx,pdz,sp,reach){
   const a=zAb(z),d=z.def,live=player.alive&&z.aware,n=pd||1,ux=pdx/n,uz=pdz/n,wm=1+.04*Math.max(0,S.wave-1);
   a.cd-=dt;a.cd2-=dt;
-  if(z.aware&&!a.was){a.srch=0;if(a.s==='look'||a.s==='sniff')zSet(z,'',0);if(z.type==='walker'&&!z.always&&!a.s&&!(z.hr&&z.hr.length)&&Math.random()<.45)zSet(z,'howl',1.05);} // a walker woken by a bullet reels instead
+  if(z.aware&&!a.was){a.srch=0;if(a.s==='look'||a.s==='sniff')zSet(z,'',0);if(z.type==='walker'&&!z.always&&!a.s&&!(z.hr&&z.hr.length)&&Math.random()<.45)zSet(z,'howl',1.05);else if(!(z.talk>0))z.vT=rand(0,.5);} // a walker woken by a bullet reels instead; the rest snarl as they come (a crowd, not in unison)
   if(!z.aware&&a.was&&player.alive)a.srch=14;
   a.was=z.aware;if(z.aware&&pd<38){a.lkx=player.x;a.lkz=player.z;}
   // what sets each trick off
@@ -4284,9 +4318,9 @@ function zAbility(z,dt,pd,pdx,pdz,sp,reach){
     if(z.type==='runner'&&live&&reach&&a.cd<=0&&pd>3.5&&pd<8.5&&!(z.jy>0)){zSet(z,'coil',.38);a.cd=rand(4,7);}
     else if(z.type==='crawler'&&live&&reach&&a.cd<=0&&pd>1.8&&pd<4.2){zSet(z,'coil',.45);a.cd=rand(4,6);}
     else if(z.type==='spitter'&&live&&pd<16&&z.spitCd<=0){zSet(z,'rear',.8);z.spitCd=rand(2.8,3.6);}
-    else if(z.type==='boomer'&&player.alive&&(z.blocked||live&&pd<4.2||z.aware&&z.hp<z.maxHp*.35)){zSet(z,'swell',z.blocked||pd<2.2?.65:1.25);Sound.play('groan',1,z.x,z.z);}
+    else if(z.type==='boomer'&&player.alive&&(z.blocked||live&&pd<4.2||z.aware&&z.hp<z.maxHp*.35)){zSet(z,'swell',z.blocked||pd<2.2?.65:1.25);zSay(z,'zrage',1.1,pd);}
     else if(z.type==='brute'&&live&&reach&&!(z.chargeT>0)){
-      if(z.chargeCd<=0&&pd<15&&pd>4){zSet(z,'beat',.95);z.chargeCd=rand(5,8);Sound.play('roar',.6,z.x,z.z);}
+      if(z.chargeCd<=0&&pd<15&&pd>4){zSet(z,'beat',.95);z.chargeCd=rand(5,8);Sound.play('roar',.6,z.x,z.z);zSay(z,'zrage',1.2,pd,60);}
       else if(a.cd2<=0&&pd>9&&pd<24){zSet(z,'rip',.55);a.cd2=rand(7,11);}}
   }
   if(z.type==='trooper'){const face=Math.sin(z.yaw)*ux+Math.cos(z.yaw)*uz;
@@ -4297,7 +4331,7 @@ function zAbility(z,dt,pd,pdx,pdz,sp,reach){
   a.t+=dt;const done=a.t>=a.T;
   switch(a.s){
     case 'howl':sp=0;
-      if(!a.f&&a.t>.3){a.f=1;Sound.play('groan',1.2,z.x,z.z);for(const o of zombies)if(o!==z&&!o.dying&&!o.aware&&Math.hypot(o.x-z.x,o.z-z.z)<18)zAlert(o,true);}
+      if(!a.f&&a.t>.3){a.f=1;zSay(z,'zmoan',1.4,pd,60,.9);for(const o of zombies)if(o!==z&&!o.dying&&!o.aware&&Math.hypot(o.x-z.x,o.z-z.z)<18)zAlert(o,true);}
       if(done)zSet(z,'',0);break;
     case 'grab':
       if(!live||pd>2.3||done){zSet(z,'',0);a.cd=rand(6,9);z.atkCd=Math.max(z.atkCd,.6);break;}
@@ -4306,8 +4340,8 @@ function zAbility(z,dt,pd,pdx,pdz,sp,reach){
       break;
     case 'coil':sp=0;
       if(done){const T=z.type==='crawler'?.4:.46;
-        if(z.type==='crawler'){zSet(z,'lunge',T);a.vx=ux*8.5;a.vz=uz*8.5;Sound.play('groan',.6,z.x,z.z);}
-        else{zSet(z,'leap',.9);const v=clamp(pd/T,7,15);a.vx=ux*v;a.vz=uz*v;z.jy=Math.max(z.jy||0,.02);z.jvy=GRAV*T/2;Sound.play('groan',.8,z.x,z.z);}
+        if(z.type==='crawler'){zSet(z,'lunge',T);a.vx=ux*8.5;a.vz=uz*8.5;zSay(z,'zatk',.9,pd);}
+        else{zSet(z,'leap',.9);const v=clamp(pd/T,7,15);a.vx=ux*v;a.vz=uz*v;z.jy=Math.max(z.jy||0,.02);z.jvy=GRAV*T/2;zSay(z,'zatk',1,pd);}
         z.atkCd=Math.max(z.atkCd,.6);}
       break;
     case 'leap':case 'lunge':{sp=0;z.x+=a.vx*dt;z.z+=a.vz*dt;
@@ -4494,6 +4528,7 @@ function zImpact(z,dmg,kx,kz,lift){
   const part=H?H.sub:lift?'blast':'torso';
   (z.hr||(z.hr=[])).push({part,s,fw,lf,t:0,tw:Math.random()<.5?-1:1});if(z.hr.length>4)z.hr.shift();
   z.stagT=Math.max(z.stagT||0,lift?.6:s*(part==='rLeg'||part==='lLeg'?.55:.35));
+  if(z.hp>0&&!(z.talk>0)&&Math.random()<.55)zSay(z,'zatk',.8,dist2p(z),0,1.06); // a grunt of pain, unless it's already making a sound
   // a killing head shot takes the head off
   if(H&&H.part==='head'&&z.hp<=0&&dmg>=40&&z.bones&&z.bones.head){const hb=z.bones.head;hb.getWorldPosition(_zhp);_zhp.y+=gH(z.g.position.x,z.g.position.z)-gH(_zhp.x,_zhp.z);
     burst(_zhp.x,_zhp.y,_zhp.z,14,'gore',6);burst(_zhp.x,_zhp.y,_zhp.z,8,fx,5);hb.scale.setScalar(.01);z.headless=true;Sound.play('thud',.6,z.x,z.z);}
@@ -4730,16 +4765,16 @@ const _hm=new THREE.Matrix4(),_hq=new THREE.Quaternion(),_hpos=new V3(),_hs=new 
 function updateHordes(dt){
   if(!agents.length&&!hordes.length)return;
   rebuildAH();
-  const night=S.phase==='night',px=player.x,pz=player.z;let chorus=1e9;
+  const night=S.phase==='night',px=player.x,pz=player.z;let chorus=1e9,chX=0,chZ=0;
   for(const h of hordes){
     if(h.n){h.cx=h.sx/h.n;h.cz=h.sz/h.n;}h.sx=h.sz=0;h.n=0;
     const lu=lureFor(h.cx,h.cz,120);h.lured=!!lu;if(lu){h.tx=lu.x;h.tz=lu.z;continue;}
     const dP=Math.hypot(px-h.cx,pz-h.cz);
     if(h.state!=='hunt'&&player.alive&&S.running&&(dP<(night?34:28)*(1-.4*W.fog)*(player.crouch?.5:1)*(1-.12*PERK('ghost'))+h.radius||(player.sprinting&&dP<10+h.radius)))alertHorde(h,'spotted');
-    if(h.state==='hunt'){h.alertT-=dt;if(player.alive&&dP<45)h.alertT=Math.max(h.alertT,3);chorus=Math.min(chorus,dP);
+    if(h.state==='hunt'){h.alertT-=dt;if(player.alive&&dP<45)h.alertT=Math.max(h.alertT,3);if(dP<chorus){chorus=dP;chX=h.cx;chZ=h.cz;}
       if(h.alertT<=0||!player.alive){h.state=h.siege?'siege':'roam';h.wpT=0;if(player.alive)toast('The horde lost your trail','good');}
       else{h.tx=px;h.tz=pz;}}
-    else if(h.state==='siege'){h.tx=0;h.tz=0;chorus=Math.min(chorus,dP);if(!night){h.state='roam';h.siege=false;h.wpT=0;}}
+    else if(h.state==='siege'){h.tx=0;h.tz=0;if(dP<chorus){chorus=dP;chX=h.cx;chZ=h.cz;}if(!night){h.state='roam';h.siege=false;h.wpT=0;}}
     else{h.wpT-=dt;if(h.wpT<=0||Math.hypot(h.tx-h.cx,h.tz-h.cz)<5){
       for(let i=0;i<12;i++){const a=rand(0,6.28),r=rand(25,60),x=h.cx+Math.cos(a)*r,z=h.cz+Math.sin(a)*r;if(Math.hypot(x,z)<70||depthAt(x,z)>-.3)continue;h.tx=x;h.tz=z;break;}
       h.wpT=rand(25,50);}}
@@ -4778,7 +4813,7 @@ function updateHordes(dt){
   }
   agents.length=j;hMesh.count=hInk.count=j;
   hMesh.instanceMatrix.needsUpdate=true;hAnim.needsUpdate=true;hVar.needsUpdate=true;if(hMesh.instanceColor)hMesh.instanceColor.needsUpdate=true;
-  if(chorus<60){hordeGroanT-=dt;if(hordeGroanT<=0){hordeGroanT=rand(.25,.6);Sound.play('groan',clamp(1-chorus/60,.25,1));}}
+  if(chorus<60){hordeGroanT-=dt;if(hordeGroanT<=0){hordeGroanT=rand(.45,1.1);Sound.zvox(Math.random()<.65?'zrage':'zmoan',clamp(1-chorus/60,.25,1)*.8,chX+rand(-5,5),chZ+rand(-5,5),rand(.82,1.12),3);}}
 }
 
 /* ================= WALLS & GATES ================= */
@@ -7661,7 +7696,6 @@ function updateWorld(dt){
     if(c.opened){c.t+=dt;if(c.lid)c.lid.rotation.x=Math.max(-2,c.lid.rotation.x-dt*8);if(c.door)c.door.rotation.y=Math.max(-1.9,c.door.rotation.y-dt*6);if(c.t>(c.loot&&c.loot.length?150:18)){if(LOOT&&LOOT.src===c)closeLoot();dropCrate(c);crates.splice(i,1);}}
     else if(!c.chunk&&c.rar==='drop'&&S.running&&Math.hypot(c.x-player.x,c.z-player.z)>260){dropCrate(c);crates.splice(i,1);}
     else if(c.rar==='drop'&&Math.random()<dt*6)burst(c.x,1.5,c.z,1,'smoke',1);}
-  S.groanT-=dt;if(S.groanT<=0){S.groanT=rand(1.2,3);let near=null,nd=30;for(const z of zombies){if(z.dying)continue;const d=Math.hypot(z.x-player.x,z.z-player.z);if(d<nd){nd=d;near=z;}}if(near)Sound.play('groan',1-nd/30,near.x,near.z);}
   S.breachMsgT-=dt;
 }
 const acidGeo=new THREE.CircleGeometry(1,16);

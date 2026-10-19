@@ -53,7 +53,7 @@ function zSteer(z,dt,tx,tz,lu){
 function zAbility(z,dt,pd,pdx,pdz,sp,reach){
   const a=zAb(z),d=z.def,live=player.alive&&z.aware,n=pd||1,ux=pdx/n,uz=pdz/n,wm=1+.04*Math.max(0,S.wave-1);
   a.cd-=dt;a.cd2-=dt;
-  if(z.aware&&!a.was){a.srch=0;if(a.s==='look'||a.s==='sniff')zSet(z,'',0);if(z.type==='walker'&&!z.always&&!a.s&&!(z.hr&&z.hr.length)&&Math.random()<.45)zSet(z,'howl',1.05);} // a walker woken by a bullet reels instead
+  if(z.aware&&!a.was){a.srch=0;if(a.s==='look'||a.s==='sniff')zSet(z,'',0);if(z.type==='walker'&&!z.always&&!a.s&&!(z.hr&&z.hr.length)&&Math.random()<.45)zSet(z,'howl',1.05);else if(!(z.talk>0))z.vT=rand(0,.5);} // a walker woken by a bullet reels instead; the rest snarl as they come (a crowd, not in unison)
   if(!z.aware&&a.was&&player.alive)a.srch=14;
   a.was=z.aware;if(z.aware&&pd<38){a.lkx=player.x;a.lkz=player.z;}
   // what sets each trick off
@@ -61,9 +61,9 @@ function zAbility(z,dt,pd,pdx,pdz,sp,reach){
     if(z.type==='runner'&&live&&reach&&a.cd<=0&&pd>3.5&&pd<8.5&&!(z.jy>0)){zSet(z,'coil',.38);a.cd=rand(4,7);}
     else if(z.type==='crawler'&&live&&reach&&a.cd<=0&&pd>1.8&&pd<4.2){zSet(z,'coil',.45);a.cd=rand(4,6);}
     else if(z.type==='spitter'&&live&&pd<16&&z.spitCd<=0){zSet(z,'rear',.8);z.spitCd=rand(2.8,3.6);}
-    else if(z.type==='boomer'&&player.alive&&(z.blocked||live&&pd<4.2||z.aware&&z.hp<z.maxHp*.35)){zSet(z,'swell',z.blocked||pd<2.2?.65:1.25);Sound.play('groan',1,z.x,z.z);}
+    else if(z.type==='boomer'&&player.alive&&(z.blocked||live&&pd<4.2||z.aware&&z.hp<z.maxHp*.35)){zSet(z,'swell',z.blocked||pd<2.2?.65:1.25);zSay(z,'zrage',1.1,pd);}
     else if(z.type==='brute'&&live&&reach&&!(z.chargeT>0)){
-      if(z.chargeCd<=0&&pd<15&&pd>4){zSet(z,'beat',.95);z.chargeCd=rand(5,8);Sound.play('roar',.6,z.x,z.z);}
+      if(z.chargeCd<=0&&pd<15&&pd>4){zSet(z,'beat',.95);z.chargeCd=rand(5,8);Sound.play('roar',.6,z.x,z.z);zSay(z,'zrage',1.2,pd,60);}
       else if(a.cd2<=0&&pd>9&&pd<24){zSet(z,'rip',.55);a.cd2=rand(7,11);}}
   }
   if(z.type==='trooper'){const face=Math.sin(z.yaw)*ux+Math.cos(z.yaw)*uz;
@@ -74,7 +74,7 @@ function zAbility(z,dt,pd,pdx,pdz,sp,reach){
   a.t+=dt;const done=a.t>=a.T;
   switch(a.s){
     case 'howl':sp=0;
-      if(!a.f&&a.t>.3){a.f=1;Sound.play('groan',1.2,z.x,z.z);for(const o of zombies)if(o!==z&&!o.dying&&!o.aware&&Math.hypot(o.x-z.x,o.z-z.z)<18)zAlert(o,true);}
+      if(!a.f&&a.t>.3){a.f=1;zSay(z,'zmoan',1.4,pd,60,.9);for(const o of zombies)if(o!==z&&!o.dying&&!o.aware&&Math.hypot(o.x-z.x,o.z-z.z)<18)zAlert(o,true);}
       if(done)zSet(z,'',0);break;
     case 'grab':
       if(!live||pd>2.3||done){zSet(z,'',0);a.cd=rand(6,9);z.atkCd=Math.max(z.atkCd,.6);break;}
@@ -83,8 +83,8 @@ function zAbility(z,dt,pd,pdx,pdz,sp,reach){
       break;
     case 'coil':sp=0;
       if(done){const T=z.type==='crawler'?.4:.46;
-        if(z.type==='crawler'){zSet(z,'lunge',T);a.vx=ux*8.5;a.vz=uz*8.5;Sound.play('groan',.6,z.x,z.z);}
-        else{zSet(z,'leap',.9);const v=clamp(pd/T,7,15);a.vx=ux*v;a.vz=uz*v;z.jy=Math.max(z.jy||0,.02);z.jvy=GRAV*T/2;Sound.play('groan',.8,z.x,z.z);}
+        if(z.type==='crawler'){zSet(z,'lunge',T);a.vx=ux*8.5;a.vz=uz*8.5;zSay(z,'zatk',.9,pd);}
+        else{zSet(z,'leap',.9);const v=clamp(pd/T,7,15);a.vx=ux*v;a.vz=uz*v;z.jy=Math.max(z.jy||0,.02);z.jvy=GRAV*T/2;zSay(z,'zatk',1,pd);}
         z.atkCd=Math.max(z.atkCd,.6);}
       break;
     case 'leap':case 'lunge':{sp=0;z.x+=a.vx*dt;z.z+=a.vz*dt;
@@ -271,6 +271,7 @@ function zImpact(z,dmg,kx,kz,lift){
   const part=H?H.sub:lift?'blast':'torso';
   (z.hr||(z.hr=[])).push({part,s,fw,lf,t:0,tw:Math.random()<.5?-1:1});if(z.hr.length>4)z.hr.shift();
   z.stagT=Math.max(z.stagT||0,lift?.6:s*(part==='rLeg'||part==='lLeg'?.55:.35));
+  if(z.hp>0&&!(z.talk>0)&&Math.random()<.55)zSay(z,'zatk',.8,dist2p(z),0,1.06); // a grunt of pain, unless it's already making a sound
   // a killing head shot takes the head off
   if(H&&H.part==='head'&&z.hp<=0&&dmg>=40&&z.bones&&z.bones.head){const hb=z.bones.head;hb.getWorldPosition(_zhp);_zhp.y+=gH(z.g.position.x,z.g.position.z)-gH(_zhp.x,_zhp.z);
     burst(_zhp.x,_zhp.y,_zhp.z,14,'gore',6);burst(_zhp.x,_zhp.y,_zhp.z,8,fx,5);hb.scale.setScalar(.01);z.headless=true;Sound.play('thud',.6,z.x,z.z);}

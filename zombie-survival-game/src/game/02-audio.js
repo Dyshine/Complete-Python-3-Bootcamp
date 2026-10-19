@@ -5,8 +5,8 @@ const Sound=(()=>{
      footsteps, formant-filtered zombie voices, positional panning with distance filtering, a shared convolution reverb that
      gets roomier indoors, a weather/time-of-day ambience bed and an adaptive score that rises with danger. A bus compressor
      and limiter glue it together. Volumes: master, music, effects (pause menu).
-     Firearms and reloads play recorded takes from sounds/ (CC0, see sounds/CREDITS.txt) through the same routing; the
-     synthesised reports stand in until the recordings have decoded, or if they can't load. */
+     Firearms, reloads and the infected's voices play recorded takes from sounds/ (CC0, see sounds/CREDITS.txt) through the
+     same routing; the synthesised reports and throats stand in until the recordings have decoded, or if they can't load. */
   let ctx=null,master=null,sfx=null,amb=null,mus=null,rvb=null,rvbIn=null,comp=null,muted=false,voices=0;
   const NB={},last={},vol=store.get('deadacre.vol',{master:.9,music:.55,sfx:.9});
   const GAP={smg:.03,saw:.09,siren:.8,arc:.04,hit:.03,turret:.05,groan:.05,hurt:.18,pick:.04,empty:.12,rifle:.025,thud:.05,clink:.025,door:.15,step:.05,ui:.03};
@@ -48,7 +48,7 @@ const Sound=(()=>{
   const T=()=>ctx.currentTime;
   // ---------- recorded samples: sounds/<name>_<n>.mp3, decoded once ----------
   const SMP={pistol:4,pistol_far:1,revolver:2,revolver_far:1,smg:4,smg_far:1,rifle:4,rifle_far:1,shotgun:3,shotgun_far:1,sniper:4,sniper_far:1,
-    reload_mag:1,reload_rifle:1,pump:1,shell:1,cheer:2,horn:1,boing:1,honk:1,ooo:1};
+    reload_mag:1,reload_rifle:1,pump:1,shell:1,cheer:2,horn:1,boing:1,honk:1,ooo:1,zmoan:16,zrage:16,zatk:10,zdie:5};
   const SB={},SLAST={};
   function loadSamples(){if(!window.fetch)return;
     for(const [k,n] of Object.entries(SMP))for(let i=1;i<=n;i++)
@@ -59,6 +59,23 @@ const Sound=(()=>{
     let i=Math.random()*L.length|0;if(L.length>1&&i===SLAST[k])i=(i+1)%L.length;SLAST[k]=i;
     const s=ctx.createBufferSource();s.buffer=L[i];s.playbackRate.value=rate||rand(.95,1.05);
     const g=ctx.createGain();g.gain.value=v;s.connect(g);g.connect(out);s.start(T()+(delay||0));return true;}
+  /* ---------- the infected's voices ----------
+     zmoan: the calm ones, wandering and moaning. zrage: the ones that have your scent, snarling as they come.
+     zatk: the yell as one lunges or swipes. zdie: the last breath. Each body speaks at a pitch of its own (deep for the
+     big ones, thin for runners). Only a few talk at once, so a crowd reads as a crowd and not a wall of noise: when all
+     the mouths are taken, a nearer (louder) one cuts off the quietest. `cap` lowers the ceiling for the horde's chorus,
+     which never cuts anyone off. Returns how long the line lasts (0: not spoken). */
+  const ZV={zmoan:[.75,.26],zrage:[.9,.2],zatk:[.85,.12],zdie:[.8,.18]};let zvOn=[];
+  function zvox(k,v,x,z,pitch,cap){if(!ctx||muted||voices>60||v<.03)return 0;const now=T();zvOn=zvOn.filter(e=>e.end>now);
+    const lim=cap||(k==='zatk'||k==='zdie'?8:5);
+    if(zvOn.length>=lim){let q=null;for(const e of zvOn)if(!q||e.v<q.v)q=e;
+      if(cap||!q||!q.s||q.v>=v*.8)return 0;q.g.gain.setTargetAtTime(0,now,.04);q.s.stop(now+.2);zvOn.splice(zvOn.indexOf(q),1);}
+    else if(zvOn.length>=lim-2&&v<.25)return 0;
+    const L=SB[k];if(!L||!L.length){play(k==='zmoan'?'groan':k==='zdie'?'groan':'roar',v*(k==='zmoan'||k==='zdie'?1:.35),x,z);zvOn.push({end:now+1,v});return 1;}
+    let i=Math.random()*L.length|0;if(L.length>1&&i===SLAST[k])i=(i+1)%L.length;SLAST[k]=i;
+    const r=(pitch||1)*rand(.96,1.04),len=L[i].duration/r,o=route({len:len+.3,wet:ZV[k][1],x,z});
+    const s=ctx.createBufferSource();s.buffer=L[i];s.playbackRate.value=r;const g=ctx.createGain();g.gain.value=v*ZV[k][0];s.connect(g);g.connect(o);s.start(now);
+    zvOn.push({end:now+len,v,g,s});return len;}
   // per firearm: voice length, reverb send, level, low punch frequency
   const GS={pistol:[1.3,.2,.62,130],revolver:[1.6,.24,.7,110],smg:[.8,.14,.5,140],rifle:[1.5,.2,.62,120],shotgun:[2,.26,.75,85],sniper:[2.6,.3,.8,80]};
   function gunSample(n,v,pos,opt){const G=GS[n];if(!G||!SB[n])return false;const sup=opt&&opt.sup;
@@ -218,8 +235,10 @@ const Sound=(()=>{
     crickT-=dt;if(crickT<=0){crickT=rand(.25,.6);if(st.night>.5&&(st.season===1||st.season===2||st.season===0&&st.temp>10)&&st.rain<.3&&!st.indoor){const o=route({len:.5,wet:.1,x:LX+rand(-15,15),z:LZ+rand(-15,15),bus:amb});for(let i=0;i<3;i++)tone(o,4600,4500,.025,.012*st.night,'sine',i*.04);}}
     owlT-=dt;if(owlT<=0){owlT=rand(14,30);if(st.night>.6&&!st.indoor){const o=route({len:2,wet:.4,x:LX+rand(-40,40),z:LZ+rand(-40,40),bus:amb});tone(o,390,370,.35,.05,'sine',0,.08);tone(o,370,340,.5,.05,'sine',.45,.08);}}
     fireT-=dt;if(fireT<=0){fireT=rand(.05,.25);if(st.fireD<12){const o=route({len:.3,wet:.1,x:st.fireX,z:st.fireZ,bus:amb});noise(o,.02,'bandpass',rand(1500,4500),3,.12*clamp(1-st.fireD/12,0,1));}}
-    // a distant horde moaning on the wind at night
-    hordeT-=dt;if(hordeT<=0){hordeT=rand(6,14);if(st.night>.5&&st.hordeD<160){const a=st.hordeA,o=route({len:2,wet:.7,x:LX+Math.sin(a)*40,z:LZ+Math.cos(a)*40,bus:amb});voice(o,rand(60,80),rand(50,60),rand(1.4,2.2),.05*clamp(1-st.hordeD/160,.2,1),[[480,4,1],[1000,6,.5]],3);}}
+    // a distant horde moaning on the wind at night: a few recorded moans laid over each other, muffled by the distance
+    hordeT-=dt;if(hordeT<=0){hordeT=rand(6,14);if(st.night>.5&&st.hordeD<160){const a=st.hordeA,lv=clamp(1-st.hordeD/160,.2,1),o=route({len:6.5,wet:.7,x:LX+Math.sin(a)*40,z:LZ+Math.cos(a)*40,bus:amb});
+      if(SB.zmoan){const lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=700;lp.connect(o);for(let i=0;i<3;i++)sample(lp,'zmoan',.16*lv,i*rand(.3,.7),rand(.72,.92));}
+      else voice(o,rand(60,80),rand(50,60),rand(1.4,2.2),.05*lv,[[480,4,1],[1000,6,.5]],3);}}
     music(dt,st);
   }
   // ---------- adaptive score ----------
@@ -267,7 +286,7 @@ const Sound=(()=>{
   }
   function quiet(dt,m){if(!ctx)return;for(const L of Object.values(loops)){L.cur+=(0-L.cur)*Math.min(1,dt*3);L.g.gain.value=L.cur;}if(m)soundtrack(dt,m);}
   function setVol(k,v){vol[k]=v;store.set('deadacre.vol',vol);applyVol();}
-  return{init,play,ambient,step,update,setVol,quiet,get samples(){return Object.keys(SB).length;},get soundtrack(){return trackOK?mode:null;},get vol(){return vol;},toggle(){muted=!muted;applyVol();return muted;},get muted(){return muted;}};
+  return{init,play,zvox,ambient,step,update,setVol,quiet,get samples(){return Object.keys(SB).length;},get soundtrack(){return trackOK?mode:null;},get vol(){return vol;},toggle(){muted=!muted;applyVol();return muted;},get muted(){return muted;}};
 })();
 
 

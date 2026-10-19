@@ -4,7 +4,7 @@
    Unaware infected can be taken down silently from behind; melee on them hits three times as hard. */
 let SNEAKF=false;
 function zAlert(z,quiet){if(z.aware||z.dying)return;z.aware=true;z.sus=1;z.alertT=1.3;z.lostT=0;
-  if(!quiet){Sound.play('groan',.9);for(const o of zombies)if(o!==z&&!o.aware&&!o.dying&&Math.hypot(o.x-z.x,o.z-z.z)<9)o.sus=Math.max(o.sus,.75);}}
+  if(!quiet){for(const o of zombies)if(o!==z&&!o.aware&&!o.dying&&Math.hypot(o.x-z.x,o.z-z.z)<9)o.sus=Math.max(o.sus,.75);}}
 function unaware(o,k){return k==='z'?!o.aware:o.h.state!=='hunt'&&!o.h.lured;}
 function takedownTarget(){
   if(!player.alive||player.swim||player.lvl)return null;

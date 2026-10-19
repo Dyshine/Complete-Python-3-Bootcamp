@@ -14,6 +14,19 @@ shell
   "Shotgun Reload Sound Effects" by zer0_sol
   https://opengameart.org/content/shotgun-reload-sound-effects
 
+Infected voices (zmoan: calm moans, zrage: aggressive snarls, zatk: attack yells and pain grunts, zdie: death cries),
+trimmed, lightly de-hissed and levelled; the game pitches each take per infected:
+  zmoan_1-4:   "Undead Moans" by AntumDeluge                         https://opengameart.org/content/undead-moans
+  zmoan_5-6:   "Zombie Moans 01" by EmoPreben                        https://opengameart.org/content/zombie-moans-01-by-emopreben
+  zmoan_7-8:   "Zombie moans" by Darsycho                            https://opengameart.org/content/zombie-moans
+  zmoan_9-12:  "Hungry ghoul" by Darsycho                            https://opengameart.org/content/hungry-ghoul
+  zmoan_13-14, zrage_15-16, zatk_10, zdie_5:
+               "Zombies Sound Pack" by artisticdude (made for Summoning Wars)   https://opengameart.org/content/zombies-sound-pack
+  zmoan_15-16: "Zomby sfx pack" by saturn91                          https://opengameart.org/content/zomby-sfx-pack
+  zrage_1-14:  "Monster snarls" by Darsycho                          https://opengameart.org/content/monster-snarls
+  zatk_1-9, zdie_1-4:
+               "Zombie / Skeleton / Monster Voice Effects" by ArcadeParty      https://opengameart.org/content/zombie-skeleton-monster-voice-effects
+
 Level-up stingers (cheer, horn, boing, honk, ooo):
   cheer_1/2: "Applause in a large hall or church" by eXpl0it3r, mixed with "Crowd shouting/speaking ambience" by StarNinjas
     https://opengameart.org/content/applause-in-a-large-hall-or-church

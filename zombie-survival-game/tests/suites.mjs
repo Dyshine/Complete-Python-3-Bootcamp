@@ -9,7 +9,7 @@ export const suites = [
       expect(/DAY 1/.test(r.day), 'HUD should read DAY 1, got ' + r.day);
       expect(r.inHome, 'player should start inside the cabin');
       expect(r.chunks > 4, 'world chunks should stream in');
-      expect(r.samples === 21, 'all 21 recorded sound sets decode, got ' + r.samples);
+      expect(r.samples === 25, 'all 25 recorded sound sets decode (guns, reloads, stingers, infected voices), got ' + r.samples);
       expect(r.music === 'day' || r.music === 'night', 'the soundtrack streams a mood track, got ' + r.music);
       return `${r.chunks} chunks, ${r.samples} sound sets, music: ${r.music}, ${r.live} watching`;
     },

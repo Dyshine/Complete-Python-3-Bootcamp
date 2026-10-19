@@ -96,16 +96,16 @@ const _hm=new THREE.Matrix4(),_hq=new THREE.Quaternion(),_hpos=new V3(),_hs=new 
 function updateHordes(dt){
   if(!agents.length&&!hordes.length)return;
   rebuildAH();
-  const night=S.phase==='night',px=player.x,pz=player.z;let chorus=1e9;
+  const night=S.phase==='night',px=player.x,pz=player.z;let chorus=1e9,chX=0,chZ=0;
   for(const h of hordes){
     if(h.n){h.cx=h.sx/h.n;h.cz=h.sz/h.n;}h.sx=h.sz=0;h.n=0;
     const lu=lureFor(h.cx,h.cz,120);h.lured=!!lu;if(lu){h.tx=lu.x;h.tz=lu.z;continue;}
     const dP=Math.hypot(px-h.cx,pz-h.cz);
     if(h.state!=='hunt'&&player.alive&&S.running&&(dP<(night?34:28)*(1-.4*W.fog)*(player.crouch?.5:1)*(1-.12*PERK('ghost'))+h.radius||(player.sprinting&&dP<10+h.radius)))alertHorde(h,'spotted');
-    if(h.state==='hunt'){h.alertT-=dt;if(player.alive&&dP<45)h.alertT=Math.max(h.alertT,3);chorus=Math.min(chorus,dP);
+    if(h.state==='hunt'){h.alertT-=dt;if(player.alive&&dP<45)h.alertT=Math.max(h.alertT,3);if(dP<chorus){chorus=dP;chX=h.cx;chZ=h.cz;}
       if(h.alertT<=0||!player.alive){h.state=h.siege?'siege':'roam';h.wpT=0;if(player.alive)toast('The horde lost your trail','good');}
       else{h.tx=px;h.tz=pz;}}
-    else if(h.state==='siege'){h.tx=0;h.tz=0;chorus=Math.min(chorus,dP);if(!night){h.state='roam';h.siege=false;h.wpT=0;}}
+    else if(h.state==='siege'){h.tx=0;h.tz=0;if(dP<chorus){chorus=dP;chX=h.cx;chZ=h.cz;}if(!night){h.state='roam';h.siege=false;h.wpT=0;}}
     else{h.wpT-=dt;if(h.wpT<=0||Math.hypot(h.tx-h.cx,h.tz-h.cz)<5){
       for(let i=0;i<12;i++){const a=rand(0,6.28),r=rand(25,60),x=h.cx+Math.cos(a)*r,z=h.cz+Math.sin(a)*r;if(Math.hypot(x,z)<70||depthAt(x,z)>-.3)continue;h.tx=x;h.tz=z;break;}
       h.wpT=rand(25,50);}}
@@ -144,6 +144,6 @@ function updateHordes(dt){
   }
   agents.length=j;hMesh.count=hInk.count=j;
   hMesh.instanceMatrix.needsUpdate=true;hAnim.needsUpdate=true;hVar.needsUpdate=true;if(hMesh.instanceColor)hMesh.instanceColor.needsUpdate=true;
-  if(chorus<60){hordeGroanT-=dt;if(hordeGroanT<=0){hordeGroanT=rand(.25,.6);Sound.play('groan',clamp(1-chorus/60,.25,1));}}
+  if(chorus<60){hordeGroanT-=dt;if(hordeGroanT<=0){hordeGroanT=rand(.45,1.1);Sound.zvox(Math.random()<.65?'zrage':'zmoan',clamp(1-chorus/60,.25,1)*.8,chX+rand(-5,5),chZ+rand(-5,5),rand(.82,1.12),3);}}
 }
 
