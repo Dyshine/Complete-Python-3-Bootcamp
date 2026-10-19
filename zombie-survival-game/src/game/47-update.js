@@ -35,7 +35,7 @@ function updatePlayer(dt){
     if(Math.abs(lx)>s.hw+.6||Math.abs(lz)>s.hd+.6)continue;const m=.35;lx=clamp(lx,-s.hw+m,s.hw-m);lz=clamp(lz,-s.hd+m,s.hd-m);player.x=s.x+lx*c+lz*sn;player.z=s.z-lx*sn+lz*c;}
   updateVertical(dt);updateWinded(dt);
   // aim
-  if(TP){const ad=aimDist();aim.set(player.x+Math.sin(camYaw)*ad,1.2,player.z+Math.cos(camYaw)*ad);}
+  if(TP)reticlePoint(aim); // where the reticle falls
   else if(pad.active){const rm=Math.hypot(pad.rx,pad.ry);if(rm>.25)aim.set(player.x+pad.rx/rm*12,1.2,player.z+pad.ry/rm*12);else if(moving)aim.set(player.x+mx/ml*12,1.2,player.z+mz/ml*12);else aim.set(player.x+Math.sin(player.yaw)*12,1.2,player.z+Math.cos(player.yaw)*12);}
   else if(isTouch){if(touch.am>.2){aim.set(player.x+touch.ax*12,1.2,player.z+touch.az*12);}else if(moving){aim.set(player.x+mx*12,1.2,player.z+mz*12);}}
   else{ndc.set(mouse.x/innerWidth*2-1,-(mouse.y/innerHeight)*2+1);aimPlane.constant=-(1.2+gH(player.x,player.z));ray.setFromCamera(ndc,camera);ray.ray.intersectPlane(aimPlane,aim);}
@@ -57,8 +57,8 @@ function updatePlayer(dt){
   plLegs[0].rotation.x=sw*.7;plLegs[1].rotation.x=-sw*.7;
   player.recoil=Math.max(0,player.recoil-dt);
   if(player.climb)player.yaw=player.climb.yaw;
-  {const pitch=bodyPose(dt),flat=clamp(pitch/1.32,0,1);let ox=0,oz=0;if(player.swim&&flat>.05){ox=-Math.sin(player.yaw)*.95*flat;oz=-Math.cos(player.yaw)*.95*flat;}
-    pl.position.set(player.x+ox,(player.swim?depthAt(player.x,player.z)-lerp(1.35,.42,flat):moving&&!HERO.ready?Math.abs(Math.cos(player.walk))*.07:0)-(player.crouch&&!HERO.ual?.22:0)+(player.lvlY||0)+(player.jy||0)+(ICE&&!player.swim?Math.max(0,depthAt(player.x,player.z)):0)-(player.tired>.5&&!moving&&!player.swim?.2*player.tired:0),player.z+oz);pl.rotation.x=pitch;}
+  {const pitch=bodyPose(dt),clipSwim=!!(HERO.acts&&HERO.acts.swim),flat=clipSwim?HA.sf:clamp(pitch/1.32,0,1);let ox=0,oz=0;if(player.swim&&flat>.05&&!clipSwim){ox=-Math.sin(player.yaw)*.95*flat;oz=-Math.cos(player.yaw)*.95*flat;}
+    pl.position.set(player.x+ox,(player.swim?depthAt(player.x,player.z)-lerp(1.35,clipSwim?SWIM_Y:.42,flat):moving&&!HERO.ready?Math.abs(Math.cos(player.walk))*.07:0)-(player.crouch&&!HERO.ual?.22:0)+(player.lvlY||0)+(player.jy||0)+(ICE&&!player.swim?Math.max(0,depthAt(player.x,player.z)):0)-(player.tired>.5&&!moving&&!player.swim?.2*player.tired:0),player.z+oz);pl.rotation.x=pitch;}
   gun.visible=!player.swim&&!HERO.dead&&!player.climb&&!(player.mantle>0);pl.rotation.y=player.yaw;gun.position.z=.62-player.recoil*2;
   player.swing=Math.max(0,(player.swing||0)-dt);gun.rotation.y=player.swing>0?Math.sin(player.swing/.25*Math.PI)*1.1:0;
   if(HERO.ready)updateHero(dt,moving,sprint,moving?(mx*Math.sin(player.yaw)+mz*Math.cos(player.yaw))/(ml||1):1,sp);
@@ -213,7 +213,7 @@ function lockMouse(){if(!TP||document.pointerLockElement||!stage.requestPointerL
 function unlockMouse(){if(document.pointerLockElement&&document.exitPointerLock)document.exitPointerLock();}
 // losing the pointer lock (Esc) pauses, like Esc does in top-down
 document.addEventListener('pointerlockchange',()=>{if(!document.pointerLockElement&&TP&&S.running&&!S.over&&!S.menu&&!S.paused&&!S.panel)togglePause();});
-const adsSens=()=>1-(player.ads||0)*(scoped()?.72:.5);
+const adsSens=()=>(1-(player.ads||0)*(scoped()?.72:.5))*(typeof AA!=='undefined'?AA.slow:1);
 function tpLook(dx,dy){const k=TP_SENS*adsSens();camYaw-=dx*k;camPitch=clamp(camPitch+dy*k,pitchLo(),pitchHi());if(FP){FPB.sx=clamp(FPB.sx+dx*.00012,-.03,.03);FPB.sy=clamp(FPB.sy+dy*.00012,-.03,.03);}}
 function scoped(){const I=curW();return!!I&&(I.cls==='hunt'||(I.mods&&I.mods.optic==='scope'));}
 function camBlocked(x,y,z){
@@ -230,6 +230,7 @@ function canopyFade(){const c=camera.position;_canNow.clear();
   for(const t of _canNow){t.g.visible=false;CANOPY_HID.add(t);}}
 function updateCameraTP(dt){
   if(!document.pointerLockElement&&!pad.active){const ex=mouse.x/innerWidth;if(ex<.05)camYaw+=dt*2.2;else if(ex>.95)camYaw-=dt*2.2;}
+  aimAssist(dt);
   if(pad.active){const k=adsSens();camYaw-=pad.rx*2.8*dt*k;camPitch=clamp(camPitch+pad.ry*1.8*dt*k,pitchLo(),pitchHi());}
   const fx=Math.sin(camYaw),fz=Math.cos(camYaw),rx=-Math.cos(camYaw),rz=Math.sin(camYaw);
   const gy=gH(player.x,player.z)+(player.swim?depthAt(player.x,player.z)-1.35:ICE?Math.max(0,depthAt(player.x,player.z)):0);
@@ -255,9 +256,8 @@ function updateCameraTP(dt){
   camera.position.lerp(_cp,Math.min(1,dt*14));canopyFade();
   if(S.shake>0){camera.position.x+=rand(-1,1)*S.shake*.22;camera.position.y+=rand(-1,1)*S.shake*.18;S.shake=Math.max(0,S.shake-dt*2.2);}
   camera.lookAt(camera.position.x+_cd.x,camera.position.y+_cd.y,camera.position.z+_cd.z);
-  // the crosshair marks where the gun is actually pointing
-  const adi=aimDist(),ax=player.x+fx*adi,az=player.z+fz*adi;projV.set(ax,gH(ax,az)+1.3,az).project(camera);
-  const c=$('crosshair'),cxp=((projV.x+1)/2*innerWidth),cyp=((1-projV.y)/2*innerHeight);c.style.left=cxp+'px';c.style.top=cyp+'px';
+  // the reticle sits dead centre: shots go down the camera's line through it
+  const c=$('crosshair'),cxp=innerWidth/2,cyp=innerHeight/2;c.style.left=cxp+'px';c.style.top=cyp+'px';
   if(player.ads>.3){const sf=$('scopeFx').style;sf.setProperty('--sx',cxp.toFixed(0)+'px');sf.setProperty('--sy',cyp.toFixed(0)+'px');}
 }
 function updateCamera(dt){

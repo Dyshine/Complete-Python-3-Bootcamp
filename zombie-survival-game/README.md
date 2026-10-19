@@ -37,7 +37,7 @@ music/                the soundtrack, streamed per mood (music/CREDITS.txt)
 tools/pack-guns.mjs   regenerates models/guns/guns.json from Quaternius' Ultimate Gun Pack (OBJ folder)
 tools/pack-rural.mjs  regenerates models/rural/ from the Family house collection (baked OBJs and textures)
 tools/blender/        Blender scripts (pip install bpy): clean_model.py slims models, zombie_anims.py keys the
-                      infected's crawl/shamble/swipe/fall clips, interiors.py models the furniture kit, cars.py cuts
+                      infected's crawl/shamble/swipe/fall and jog/sprint/feral/charge clips, interiors.py models the furniture kit, cars.py cuts
                       glass, cabins and wrecks into the car kit; glb2json.cjs turns their GLB output into *.gltf.json
 ```
 
@@ -70,7 +70,7 @@ list of per-tick updates. Add a new system's `update…(dt)` there; the tests us
 - Suburban houses: City Kit Suburban by Kenney (www.kenney.nl), CC0.
 - Farm homes: Family house collection by Miloslav "drummyfish" Číž, CC0. Hay shed: Old wood barn by carlosjorgereis, CC0.
 - Firearms: Ultimate Gun Pack by Quaternius, CC0.
-- Hero animations (walk, jog, sprint, crouch, chop, kneel, pick-up): Universal Animation Library by Quaternius, CC0.
+- Hero animations (walk, jog, sprint, crouch, chop, kneel, pick-up, swim, tread water): Universal Animation Library by Quaternius, CC0.
 - Animals: wolf, bird, red fox and horse (as the deer) by Quaternius; rabbit by Čestmír Dammer. CC0.
 - Level-up crowd, horn, boing, honk and "ooo": see sounds/CREDITS.txt, all CC0.
 - Vehicles: Car Kit by Kenney, CC0 (glass, cabins and wrecks added in Blender).

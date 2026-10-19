@@ -91,7 +91,7 @@ function setupHero(gltf){
    and add crouch movement plus full-body actions: the chop and melee swing, kneeling to strip a car or butcher, picking
    loot out of a box. Until the file loads the packed clips play. ---- */
 const UAL_MAP={idle:'Idle_Loop',walk:'Walk_Loop',jog:'Jog_Fwd_Loop',run:'Sprint_Loop',crouchIdle:'Crouch_Idle_Loop',crouch:'Crouch_Fwd_Loop',
-  hit:'Hit_Chest',death:'Death01',chop:'Sword_Attack',jab:'Punch_Jab',cross:'Punch_Cross',fix:'Fixing_Kneeling',pickup:'PickUp_Table'};
+  hit:'Hit_Chest',death:'Death01',chop:'Sword_Attack',jab:'Punch_Jab',cross:'Punch_Cross',fix:'Fixing_Kneeling',pickup:'PickUp_Table',swim:'Swim_Fwd_Loop',swimIdle:'Swim_Idle_Loop'};
 let UAL=null;
 fetch('models/hero_anims.json').then(r=>r.ok?r.json():Promise.reject(r.status)).then(d=>{UAL=d;if(HERO.ready)applyUAL();}).catch(()=>{});
 function applyUAL(){if(!UAL||!HERO.mixer||HERO.ual)return;HERO.ual=true;const fps=UAL.fps;
@@ -114,7 +114,9 @@ function updateHero(dt,moving,sprint,fwd,sp){
     const A=HERO.acts;
     // one-handed carries walk with a natural arm swing; rifles use the shouldered walk
     const cas=A.casual&&CARRY.cur&&CARRY.cur.cas&&WA.aim<.5;
-    if(player.swim||player.climb)heroPlay(A.idle?'idle':'walk',.3);
+    // in the water: a front crawl on the move, treading water when still (both from the animation library)
+    if(player.swim&&A.swim)heroPlay(moving?'swim':'swimIdle',.35);
+    else if(player.swim||player.climb)heroPlay(A.idle?'idle':'walk',.3);
     else if(!moving)heroPlay(player.crouch&&A.crouchIdle?'crouchIdle':A.idle?'idle':'walk',.25);
     else if(player.crouch&&A.crouch)heroPlay('crouch',.2);
     else if(sprint&&A.run)heroPlay('run',.18);
@@ -123,6 +125,7 @@ function updateHero(dt,moving,sprint,fwd,sp){
     else heroPlay(cas&&!HERO.ual?'casual':'walk',.2);
     // feet keep pace with the ground: each clip's stride is matched to the speed it covers
     const c=HERO.cur;
+    if(c&&c===A.swim)c.timeScale=clamp(sp/2.4,.75,1.4); // strokes keep pace with the swim speed
     if(c===A.jog)c.timeScale=clamp(sp/6.2,.7,1.35);
     else if(c===A.crouch)c.timeScale=clamp(sp/2.4,.6,1.5);
     else if(c===A.walk||c===A.back||c===A.casual)c.timeScale=HERO.ual&&c===A.walk?clamp(sp/2.2,.6,1.6):A.idle?clamp(sp/6.5,.6,1.6):(moving?(sp/6.5)*1.15*(fwd<-.3?-1:1):0);

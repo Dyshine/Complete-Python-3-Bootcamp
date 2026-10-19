@@ -294,8 +294,11 @@ function tryFire(){
   const spr=w.spread*(1-player.ads*(w.pellets>1?.35:.7)*(1+.15*PERK('steady')))*(player.crouch?.85:1)*(player.sprinting?1.5:1)*(1+.35*coldAmt());
   if(w.projectile){const dist=clamp(Math.hypot(aim.x-player.x,aim.z-player.z),3,w.range);const a=player.yaw;
     lob('gren',mp.x,1.4,mp.z,player.x+Math.sin(a)*dist,player.z+Math.cos(a)*dist,26,{dmg,radius:w.radius,impact:true,siren:w.siren});}
-  else{for(let i=0;i<w.pellets;i++){const a=player.yaw+(TP?0:WA.yawOff)+rand(-spr,spr);
-      CRITF=Math.random()<(w.crit||0)+.05*PERK('deadeye')+.015*ATTR('per')+TK('crit');const r=hitscan(mp.x,mp.z,Math.sin(a),Math.cos(a),w.range,w.sticky?20:dmg*(CRITF?2:1),w.pierce||1,w.knock||2,w.chain?0x7ad8ff:w.burn?0xffa040:0xffe7a0);
+  else{const cone=TP?shotCone(w):0;
+    for(let i=0;i<w.pellets;i++){const a=player.yaw+(TP?0:WA.yawOff)+rand(-spr,spr);
+      CRITF=Math.random()<(w.crit||0)+.05*PERK('deadeye')+.015*ATTR('per')+TK('crit');
+      // third and first person: a 3D ray through the reticle (29c-aim3d.js); the top-down view keeps the flat shot
+      const r=TP?hitscan3(w,w.sticky?20:dmg*(CRITF?2:1),w.pierce||1,w.knock||2,w.chain?0x7ad8ff:w.burn?0xffa040:0xffe7a0,cone):hitscan(mp.x,mp.z,Math.sin(a),Math.cos(a),w.range,w.sticky?20:dmg*(CRITF?2:1),w.pierce||1,w.knock||2,w.chain?0x7ad8ff:w.burn?0xffa040:0xffe7a0);
       CRITF=false;
       if(w.sticky)STICKY.push({x:r.x,z:r.z,t:2,tgt:r.first,dmg,r:w.radius,m:stickyMesh(r.x,r.z)});}
     if(!w.sticky&&w.cls!=='bow'&&!w.chain)ejectCasing(w.shell);}

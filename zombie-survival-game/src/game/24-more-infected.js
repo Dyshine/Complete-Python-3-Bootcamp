@@ -56,7 +56,7 @@ function applyVariant(type,inst,gu,T){
 const ZMODEL_FOR={walker:['office','grandma','office','grandma','soldier'],trooper:['soldier'],crawler:['office','grandma'],runner:['office','grandma'],boomer:['trucker'],brute:['hulk'],spitter:['office','grandma'],boss:['hulk']};
 const ZSHARED={attack:'models/zombies/anim/attack.gltf.json',death:'models/zombies/anim/death.gltf.json',
   extra:'models/zombies/anim/extra.gltf.json'}; // extra: crawl, shamble, swipe, fall (keyed in Blender, tools/blender/zombie_anims.py)
-const ZEXTRA=['crawl','shamble','swipe','fall'];
+const ZEXTRA=['crawl','shamble','swipe','fall','jog','sprint','feral','charge'];
 const ZM={},ZCLIP={},zOlMats={};
 function prepZModel(k,gltf,h){retargetMixamo(gltf);
   const root=gltf.scene;const fit=rigFit(root,h);const s=fit.s;
@@ -103,7 +103,7 @@ function makeZombieGLB(type){
   for(const n of ['attack','death']){if(!T[n]&&ZCLIP[n])T[n]=stripRootMotion(ZCLIP[n].clone(),T.rootBone);
     if(T[n]){const a=mixer.clipAction(T[n]);a.setLoop(THREE.LoopOnce,1);a.clampWhenFinished=true;acts[n]=a;}}
   const v=type==='runner'?rand(.84,.94):type==='walker'?rand(.9,1.1):type==='boss'?1.45:1;g.scale.setScalar(v);
-  return{g,mats,mixer,acts,glb:true,barY:T.h*v+.35,bones:zBones(inst)};
+  return{g,mats,mixer,acts,glb:true,barY:T.h*v+.35,bones:zBones(inst),hbx:zHitboxes(inst)};
 }
 function zAttackAnim(z){
   // now and then the wound-up two-handed swipe instead of the quick claw
@@ -190,7 +190,7 @@ function killZombie(z){
   const hl=Math.hypot(z.hx,z.hz);
   z.dvx=z.hx*1.4*heavy;z.dvz=z.hz*1.4*heavy;z.dvy=(z.lift?z.lift:rand(1,2.5)+hl*.25)*heavy;z.dspin=rand(-6,6)*heavy*(z.lift?1.5:.4);
   if(hl>.5)z.yaw=Math.atan2(-z.hx,-z.hz);
-  if(z.acts&&z.acts.death){if(z.acts.walk)z.acts.walk.fadeOut(.12);if(z.acts.loco)z.acts.loco.fadeOut(.12);if(z.acts.attack)z.acts.attack.stop();if(z.acts.swipe)z.acts.swipe.stop();
+  if(z.acts&&z.acts.death){if(z.acts.walk)z.acts.walk.fadeOut(.12);if(z.acts.loco)z.acts.loco.fadeOut(.12);if(z.gait&&z.gait!==z.acts.loco&&z.gait!==z.acts.walk)z.gait.fadeOut(.12);if(z.acts.attack)z.acts.attack.stop();if(z.acts.swipe)z.acts.swipe.stop();
     const a=z.acts.fall&&!z.def.crawl&&Math.random()<.5?z.acts.fall:z.acts.death;a.reset();a.fadeIn(.08);a.play();z.animDeath=true;}
   spawnPickup('scrap',z.x+rand(-.4,.4),z.z+rand(-.4,.4),randi(d.drop[0],d.drop[1]));
   if(d.parts)spawnPickup('parts',z.x+rand(-.6,.6),z.z+rand(-.6,.6),d.parts);
@@ -336,10 +336,12 @@ function updateZombies(dt){
     let dy=fy-z.yaw;while(dy>Math.PI)dy-=Math.PI*2;while(dy<-Math.PI)dy+=Math.PI*2;z.yaw+=dy*Math.min(1,dt*8);
     z.walk+=dt*(sp+.5)*2.2;const sw=Math.sin(z.walk);
     // the legs follow the ground actually covered: shoved backwards, they step backwards rather than walking on the spot
-    {const ax=(z.x-(z.lx??z.x))/dt,az=(z.z-(z.lz??z.z))/dt;z.lx=z.x;z.lz=z.z;z.fv=lerp(z.fv||0,ax*Math.sin(z.yaw)+az*Math.cos(z.yaw),Math.min(1,dt*8));}
+    {const ax=(z.x-(z.lx??z.x))/dt,az=(z.z-(z.lz??z.z))/dt,jump=Math.hypot(ax,az)*dt>.6;z.lx=z.x;z.lz=z.z; // a teleport (spawn, unstick) is not a sprint
+      if(!jump)z.fv=lerp(z.fv||0,clamp(ax*Math.sin(z.yaw)+az*Math.cos(z.yaw),-12,12),Math.min(1,dt*8));}
     if(z.mixer){
       // a crawler's clip is scrubbed to its crawl cycle, so the hauls and the surges in speed line up
       if(z.acts.crawl&&z.acts.loco===z.acts.crawl&&z.ab){z.acts.crawl.timeScale=0;z.acts.crawl.time=((z.ab.cph||0)%1)*z.acts.crawl.getClip().duration;}
+      else if(zGait(z)){}
       else if(z.acts.loco||z.acts.walk){const f=clamp(z.fv,-d.speed,d.speed*3)/(d.speed*.8);(z.acts.loco||z.acts.walk).timeScale=(z.fv<-.25?-clamp(-f,.3,1.2):clamp(Math.max(f,sp/(d.speed*.8)*.3),.2,2.4))*(z.type==='runner'?1.5:1);}
       zUndo(z);z.mixer.update(dt);z.g.position.set(z.x,(z.lvlY||0)+zLift(z),z.z);
     }else{

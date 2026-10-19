@@ -89,7 +89,8 @@ function bRot(b,axis,ang){
 }
 function heroUndo(){for(const [b,q] of HTOUCH)b.quaternion.copy(q);HTOUCH.clear();}
 function heroSave(){for(const b of Object.values(HB))if(b)HTOUCH.set(b,b.quaternion.clone());}
-const HA={swim:0,climb:0,air:0,tired:0,land:0};
+const HA={swim:0,climb:0,air:0,tired:0,land:0,sf:0};
+let SWIM_Y=1.2; // how far below the surface the hero's feet ride while doing the crawl (the clip's body lies at hip height)
 function heroProcedural(dt,moving){
   if(!HB.hips||HERO.dead)return;
   const t=performance.now()/1000,ease=(k,v,r)=>{HA[k]+=(v-HA[k])*Math.min(1,dt*(r||8));return HA[k];};
@@ -116,7 +117,7 @@ function heroProcedural(dt,moving){
   {const c=coldAmt();if(c>.05&&!player.swim){bRot(HB.spine2,AZ,Math.sin(t*38)*.035*c);bRot(HB.lSh,AZ,Math.sin(t*41)*.05*c);bRot(HB.rSh,AZ,-Math.sin(t*37)*.05*c);}}
   weaponPose(dt);
   // swimming: front crawl when moving, treading water when still
-  if(swim>.02){const sp=player.moving?1:0,ph=t*(sp?5.2:3);
+  if(swim>.02&&!(HERO.acts&&HERO.acts.swim)){const sp=player.moving?1:0,ph=t*(sp?5.2:3); // the hand-made strokes, until the swim clips load
     if(sp){bRot(HB.lArm,AX,(-Math.PI*.5+Math.sin(ph)*2.2)*swim);bRot(HB.rArm,AX,(-Math.PI*.5+Math.sin(ph+Math.PI)*2.2)*swim);
       bRot(HB.lUp,AX,Math.sin(ph*2)*.35*swim);bRot(HB.rUp,AX,-Math.sin(ph*2)*.35*swim);bRot(HB.head,AX,(-.9+Math.sin(ph)*.15)*swim);bRot(HB.head,AY,Math.sin(ph)*.35*swim);}
     else{bRot(HB.lArm,AZ,(.9+Math.sin(ph)*.35)*swim);bRot(HB.rArm,AZ,(-.9-Math.sin(ph)*.35)*swim);bRot(HB.lFore,AX,-.4*swim);bRot(HB.rFore,AX,-.4*swim);
@@ -124,7 +125,9 @@ function heroProcedural(dt,moving){
 }
 // whole-body pose: lie flat to swim, lean into the ladder, sink a little when exhausted
 function bodyPose(dt){
-  const swimMove=player.swim&&player.moving?1:0;HA.pitch=(HA.pitch||0)+((swimMove?1.32:player.swim?.18:player.crouch&&!HERO.ual?.22:0)-(HA.pitch||0))*Math.min(1,dt*6);
+  // the swim clips lie the body flat themselves; HA.sf eases between treading water (0) and swimming (1)
+  const swimMove=player.swim&&player.moving?1:0,clip=!!(HERO.acts&&HERO.acts.swim);HA.sf=(HA.sf||0)+(swimMove-(HA.sf||0))*Math.min(1,dt*5);
+  HA.pitch=(HA.pitch||0)+((swimMove&&!clip?1.32:player.swim&&!clip?.18:player.crouch&&!HERO.ual?.22:0)-(HA.pitch||0))*Math.min(1,dt*6);
   return HA.pitch;
 }
 

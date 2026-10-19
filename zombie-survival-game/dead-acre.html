@@ -287,6 +287,14 @@ kbd.pl{border-radius:3px;width:auto;padding:0 6px;background:var(--bone)}
   #prompt{bottom:calc(296px + env(safe-area-inset-bottom,0px));font-size:15px}
 }
 @media (prefers-reduced-motion:reduce){.toast{animation:none}#banner{transition:none}}
+
+/* hitmarker: a white cross round the reticle on a hit, bigger on a headshot, red on a kill */
+#hitmark{position:fixed;left:50%;top:50%;width:30px;height:30px;margin:-15px 0 0 -15px;pointer-events:none;z-index:6;opacity:0;transition:opacity .08s}
+#hitmark.on{opacity:1}
+#hitmark::before,#hitmark::after{content:"";position:absolute;left:14px;top:0;width:2px;height:30px;background:#fff;box-shadow:0 0 3px rgba(0,0,0,.9);
+  clip-path:polygon(0 0,100% 0,100% 30%,0 30%,0 70%,100% 70%,100% 100%,0 100%)}
+#hitmark::before{transform:rotate(45deg)}#hitmark::after{transform:rotate(-45deg)}
+#hitmark.head{transform:scale(1.35)}#hitmark.kill::before,#hitmark.kill::after{background:#e8402a}#hitmark.kill{transform:scale(1.5)}
 /* ===== broadcast look for the title, intro, pause and game-over screens ===== */
 :root{--tv-red:#e8262e;--tv-yel:#ffcc1a;--tv-ink:#07080c;--tv-panel:rgba(10,11,16,.93)}
 .overlay.tv{background:radial-gradient(ellipse at 50% 35%,rgba(70,10,14,.55),rgba(5,5,8,.96) 70%);isolation:isolate;padding-top:64px;padding-bottom:64px;align-items:start}
@@ -361,7 +369,7 @@ kbd.pl{border-radius:3px;width:auto;padding:0 6px;background:var(--bone)}
 <div id="vignette"></div>
 <div id="scopeFx"></div>
 <div id="fadeOut"></div>
-<div id="crosshair" hidden></div>
+<div id="crosshair" hidden></div><div id="hitmark"></div>
 <div id="dmgLayer"></div>
 
 <div class="hud" id="hud" hidden>
@@ -3232,7 +3240,7 @@ function setupHero(gltf){
    and add crouch movement plus full-body actions: the chop and melee swing, kneeling to strip a car or butcher, picking
    loot out of a box. Until the file loads the packed clips play. ---- */
 const UAL_MAP={idle:'Idle_Loop',walk:'Walk_Loop',jog:'Jog_Fwd_Loop',run:'Sprint_Loop',crouchIdle:'Crouch_Idle_Loop',crouch:'Crouch_Fwd_Loop',
-  hit:'Hit_Chest',death:'Death01',chop:'Sword_Attack',jab:'Punch_Jab',cross:'Punch_Cross',fix:'Fixing_Kneeling',pickup:'PickUp_Table'};
+  hit:'Hit_Chest',death:'Death01',chop:'Sword_Attack',jab:'Punch_Jab',cross:'Punch_Cross',fix:'Fixing_Kneeling',pickup:'PickUp_Table',swim:'Swim_Fwd_Loop',swimIdle:'Swim_Idle_Loop'};
 let UAL=null;
 fetch('models/hero_anims.json').then(r=>r.ok?r.json():Promise.reject(r.status)).then(d=>{UAL=d;if(HERO.ready)applyUAL();}).catch(()=>{});
 function applyUAL(){if(!UAL||!HERO.mixer||HERO.ual)return;HERO.ual=true;const fps=UAL.fps;
@@ -3255,7 +3263,9 @@ function updateHero(dt,moving,sprint,fwd,sp){
     const A=HERO.acts;
     // one-handed carries walk with a natural arm swing; rifles use the shouldered walk
     const cas=A.casual&&CARRY.cur&&CARRY.cur.cas&&WA.aim<.5;
-    if(player.swim||player.climb)heroPlay(A.idle?'idle':'walk',.3);
+    // in the water: a front crawl on the move, treading water when still (both from the animation library)
+    if(player.swim&&A.swim)heroPlay(moving?'swim':'swimIdle',.35);
+    else if(player.swim||player.climb)heroPlay(A.idle?'idle':'walk',.3);
     else if(!moving)heroPlay(player.crouch&&A.crouchIdle?'crouchIdle':A.idle?'idle':'walk',.25);
     else if(player.crouch&&A.crouch)heroPlay('crouch',.2);
     else if(sprint&&A.run)heroPlay('run',.18);
@@ -3264,6 +3274,7 @@ function updateHero(dt,moving,sprint,fwd,sp){
     else heroPlay(cas&&!HERO.ual?'casual':'walk',.2);
     // feet keep pace with the ground: each clip's stride is matched to the speed it covers
     const c=HERO.cur;
+    if(c&&c===A.swim)c.timeScale=clamp(sp/2.4,.75,1.4); // strokes keep pace with the swim speed
     if(c===A.jog)c.timeScale=clamp(sp/6.2,.7,1.35);
     else if(c===A.crouch)c.timeScale=clamp(sp/2.4,.6,1.5);
     else if(c===A.walk||c===A.back||c===A.casual)c.timeScale=HERO.ual&&c===A.walk?clamp(sp/2.2,.6,1.6):A.idle?clamp(sp/6.5,.6,1.6):(moving?(sp/6.5)*1.15*(fwd<-.3?-1:1):0);
@@ -3893,7 +3904,7 @@ function applyVariant(type,inst,gu,T){
 const ZMODEL_FOR={walker:['office','grandma','office','grandma','soldier'],trooper:['soldier'],crawler:['office','grandma'],runner:['office','grandma'],boomer:['trucker'],brute:['hulk'],spitter:['office','grandma'],boss:['hulk']};
 const ZSHARED={attack:'models/zombies/anim/attack.gltf.json',death:'models/zombies/anim/death.gltf.json',
   extra:'models/zombies/anim/extra.gltf.json'}; // extra: crawl, shamble, swipe, fall (keyed in Blender, tools/blender/zombie_anims.py)
-const ZEXTRA=['crawl','shamble','swipe','fall'];
+const ZEXTRA=['crawl','shamble','swipe','fall','jog','sprint','feral','charge'];
 const ZM={},ZCLIP={},zOlMats={};
 function prepZModel(k,gltf,h){retargetMixamo(gltf);
   const root=gltf.scene;const fit=rigFit(root,h);const s=fit.s;
@@ -3940,7 +3951,7 @@ function makeZombieGLB(type){
   for(const n of ['attack','death']){if(!T[n]&&ZCLIP[n])T[n]=stripRootMotion(ZCLIP[n].clone(),T.rootBone);
     if(T[n]){const a=mixer.clipAction(T[n]);a.setLoop(THREE.LoopOnce,1);a.clampWhenFinished=true;acts[n]=a;}}
   const v=type==='runner'?rand(.84,.94):type==='walker'?rand(.9,1.1):type==='boss'?1.45:1;g.scale.setScalar(v);
-  return{g,mats,mixer,acts,glb:true,barY:T.h*v+.35,bones:zBones(inst)};
+  return{g,mats,mixer,acts,glb:true,barY:T.h*v+.35,bones:zBones(inst),hbx:zHitboxes(inst)};
 }
 function zAttackAnim(z){
   // now and then the wound-up two-handed swipe instead of the quick claw
@@ -4027,7 +4038,7 @@ function killZombie(z){
   const hl=Math.hypot(z.hx,z.hz);
   z.dvx=z.hx*1.4*heavy;z.dvz=z.hz*1.4*heavy;z.dvy=(z.lift?z.lift:rand(1,2.5)+hl*.25)*heavy;z.dspin=rand(-6,6)*heavy*(z.lift?1.5:.4);
   if(hl>.5)z.yaw=Math.atan2(-z.hx,-z.hz);
-  if(z.acts&&z.acts.death){if(z.acts.walk)z.acts.walk.fadeOut(.12);if(z.acts.loco)z.acts.loco.fadeOut(.12);if(z.acts.attack)z.acts.attack.stop();if(z.acts.swipe)z.acts.swipe.stop();
+  if(z.acts&&z.acts.death){if(z.acts.walk)z.acts.walk.fadeOut(.12);if(z.acts.loco)z.acts.loco.fadeOut(.12);if(z.gait&&z.gait!==z.acts.loco&&z.gait!==z.acts.walk)z.gait.fadeOut(.12);if(z.acts.attack)z.acts.attack.stop();if(z.acts.swipe)z.acts.swipe.stop();
     const a=z.acts.fall&&!z.def.crawl&&Math.random()<.5?z.acts.fall:z.acts.death;a.reset();a.fadeIn(.08);a.play();z.animDeath=true;}
   spawnPickup('scrap',z.x+rand(-.4,.4),z.z+rand(-.4,.4),randi(d.drop[0],d.drop[1]));
   if(d.parts)spawnPickup('parts',z.x+rand(-.6,.6),z.z+rand(-.6,.6),d.parts);
@@ -4173,10 +4184,12 @@ function updateZombies(dt){
     let dy=fy-z.yaw;while(dy>Math.PI)dy-=Math.PI*2;while(dy<-Math.PI)dy+=Math.PI*2;z.yaw+=dy*Math.min(1,dt*8);
     z.walk+=dt*(sp+.5)*2.2;const sw=Math.sin(z.walk);
     // the legs follow the ground actually covered: shoved backwards, they step backwards rather than walking on the spot
-    {const ax=(z.x-(z.lx??z.x))/dt,az=(z.z-(z.lz??z.z))/dt;z.lx=z.x;z.lz=z.z;z.fv=lerp(z.fv||0,ax*Math.sin(z.yaw)+az*Math.cos(z.yaw),Math.min(1,dt*8));}
+    {const ax=(z.x-(z.lx??z.x))/dt,az=(z.z-(z.lz??z.z))/dt,jump=Math.hypot(ax,az)*dt>.6;z.lx=z.x;z.lz=z.z; // a teleport (spawn, unstick) is not a sprint
+      if(!jump)z.fv=lerp(z.fv||0,clamp(ax*Math.sin(z.yaw)+az*Math.cos(z.yaw),-12,12),Math.min(1,dt*8));}
     if(z.mixer){
       // a crawler's clip is scrubbed to its crawl cycle, so the hauls and the surges in speed line up
       if(z.acts.crawl&&z.acts.loco===z.acts.crawl&&z.ab){z.acts.crawl.timeScale=0;z.acts.crawl.time=((z.ab.cph||0)%1)*z.acts.crawl.getClip().duration;}
+      else if(zGait(z)){}
       else if(z.acts.loco||z.acts.walk){const f=clamp(z.fv,-d.speed,d.speed*3)/(d.speed*.8);(z.acts.loco||z.acts.walk).timeScale=(z.fv<-.25?-clamp(-f,.3,1.2):clamp(Math.max(f,sp/(d.speed*.8)*.3),.2,2.4))*(z.type==='runner'?1.5:1);}
       zUndo(z);z.mixer.update(dt);z.g.position.set(z.x,(z.lvlY||0)+zLift(z),z.z);
     }else{
@@ -4432,6 +4445,26 @@ function zCrawlPose(z,B,w){
   zAim(z,B.lLeg,up.set(.1,-.9,-.35*kl),1);zAim(z,B.rLeg,up.set(-.1,-.9,-.35*kr),1);
   // head up, watching where it's going
   R(B.neck,'x',-.7);R(B.head,'x',-.25+.08*Math.sin(Math.PI*2*p));
+}
+
+/* ----- gaits: the infected break into a run by speed -----
+   Keyed in Blender (tools/blender/zombie_anims.py): a lurching jog, an all-out sprint with the arms clawing ahead, a feral
+   bound low to the ground with the hands slapping down (some runners run like that), and a brute's shoulder-down charge.
+   The clip follows the ground the body is really covering, cross-fades as the speed crosses a band, and plays faster or
+   slower to keep the feet planted. Returns true when a run is playing (the walk or shamble otherwise keeps its own pace). */
+const GAIT={jog:3.0,sprint:6.2,feral:6.6,charge:6.0}; // metres a second each run clip was keyed to cover
+function zGait(z){
+  const A=z.acts;if(!A||!A.jog||z.def.crawl)return false;const base=A.loco||A.walk,fv=z.fv||0,cur=z.gait&&z.gait!==base?z.gait:null;
+  if(z.gs===undefined)z.gs=z.type==='runner'&&Math.random()<.4?'feral':'sprint';
+  // into a run above a speed, out of it a little below (so it doesn't flicker at the edge)
+  const runAt=z.type==='runner'?2.6:2.5,fastAt=3.9,hold=cur?.4:0;let want=null;
+  if(z.type==='brute'&&z.chargeT>0&&A.charge)want=A.charge;
+  else if(fv>runAt-hold)want=fv>fastAt-(cur&&cur!==A.jog?.5:0)?A[z.gs]||A.sprint:A.jog;
+  const next=want||base;
+  if(next!==(z.gait||base)){const prev=z.gait||base;next.enabled=true;next.setEffectiveWeight(1);next.play();if(next!==base)next.time=Math.random()*next.getClip().duration;next.fadeIn(.22);prev.fadeOut(.22);z.gait=next;}
+  if(!want)return false;
+  const name=want===A.charge?'charge':want===A.jog?'jog':want===A.feral?'feral':'sprint';
+  want.timeScale=clamp(Math.max(fv,1)/GAIT[name],.55,1.75);return true;
 }
 /* ================= ZOMBIE SKINS (hand-inked outfit atlas + grime/blood shader) ================= */
 // shared GLSL: value noise for grime, rot and blood, driven per zombie by seed/blood/hue
@@ -5035,8 +5068,11 @@ function tryFire(){
   const spr=w.spread*(1-player.ads*(w.pellets>1?.35:.7)*(1+.15*PERK('steady')))*(player.crouch?.85:1)*(player.sprinting?1.5:1)*(1+.35*coldAmt());
   if(w.projectile){const dist=clamp(Math.hypot(aim.x-player.x,aim.z-player.z),3,w.range);const a=player.yaw;
     lob('gren',mp.x,1.4,mp.z,player.x+Math.sin(a)*dist,player.z+Math.cos(a)*dist,26,{dmg,radius:w.radius,impact:true,siren:w.siren});}
-  else{for(let i=0;i<w.pellets;i++){const a=player.yaw+(TP?0:WA.yawOff)+rand(-spr,spr);
-      CRITF=Math.random()<(w.crit||0)+.05*PERK('deadeye')+.015*ATTR('per')+TK('crit');const r=hitscan(mp.x,mp.z,Math.sin(a),Math.cos(a),w.range,w.sticky?20:dmg*(CRITF?2:1),w.pierce||1,w.knock||2,w.chain?0x7ad8ff:w.burn?0xffa040:0xffe7a0);
+  else{const cone=TP?shotCone(w):0;
+    for(let i=0;i<w.pellets;i++){const a=player.yaw+(TP?0:WA.yawOff)+rand(-spr,spr);
+      CRITF=Math.random()<(w.crit||0)+.05*PERK('deadeye')+.015*ATTR('per')+TK('crit');
+      // third and first person: a 3D ray through the reticle (29c-aim3d.js); the top-down view keeps the flat shot
+      const r=TP?hitscan3(w,w.sticky?20:dmg*(CRITF?2:1),w.pierce||1,w.knock||2,w.chain?0x7ad8ff:w.burn?0xffa040:0xffe7a0,cone):hitscan(mp.x,mp.z,Math.sin(a),Math.cos(a),w.range,w.sticky?20:dmg*(CRITF?2:1),w.pierce||1,w.knock||2,w.chain?0x7ad8ff:w.burn?0xffa040:0xffe7a0);
       CRITF=false;
       if(w.sticky)STICKY.push({x:r.x,z:r.z,t:2,tgt:r.first,dmg,r:w.radius,m:stickyMesh(r.x,r.z)});}
     if(!w.sticky&&w.cls!=='bow'&&!w.chain)ejectCasing(w.shell);}
@@ -5218,6 +5254,146 @@ function kitGun(k){
       const m=new THREE.Mesh(geo,FLAT(hex,true));m.castShadow=true;g.add(m);}
     GUNKIT.built[k]=g;}
   return GUNKIT.built[k];
+}
+/* ================= SHOOTING: WHAT THE RETICLE COVERS IS WHAT YOU HIT =================
+   In third and first person every shot is a ray from the camera through the reticle, in three dimensions. Bullets used to
+   fly flat along the player's facing and hit anything within about 0.7 m of that line, at any height, so shots well off
+   the reticle (over a head, past a shoulder) still landed. Now:
+   - each infected carries hitboxes on its skeleton: a head, a torso, upper and lower arms and legs, following the
+     animation. Headshots do 2.5x, limbs 0.75x;
+   - the spread is a cone round the reticle, like a modern shooter: tight when aiming down the sights, wider from the
+     hip, wider still on the move, in the air or sprinting, and it blooms with sustained fire. The reticle opens and
+     closes to show it;
+   - walls, trees, cars and the ground stop the round; low cover only if the round passes below its top;
+   - damage falls off past half the weapon's range;
+   - hitmarkers: a white cross on a hit, larger on a headshot, red on a kill, with a tick.
+   Bullets leave the muzzle and converge on the point under the reticle. The top-down view keeps its flat shooting. */
+const _ra=new V3(),_rb=new V3(),_rc=new V3(),_rd=new V3(),_re=new V3(),_rw=new V3(),_rf=new V3(),_ru=new V3(),_rr=new V3();
+// [bone A, bone B (null: a sphere at A), radius as a fraction of the body's scale, part]
+const HB_DEF=[['Head','head_end',.13,'head'],['Hips','neck',.2,'torso'],['LeftArm','LeftForeArm',.065,'limb'],['RightArm','RightForeArm',.065,'limb'],
+  ['LeftForeArm','LeftHand',.055,'limb'],['RightForeArm','RightHand',.055,'limb'],['LeftUpLeg','LeftLeg',.085,'limb'],['RightUpLeg','RightLeg',.085,'limb'],
+  ['LeftLeg','LeftFoot',.065,'limb'],['RightLeg','RightFoot',.065,'limb']];
+const PART_MUL={head:2.5,torso:1,limb:.75};
+function zHitboxes(inst){
+  const out=[];for(const [a,b,r,part] of HB_DEF){const A=inst.getObjectByName(a),B=b&&inst.getObjectByName(b);if(A)out.push({A,B,r,part});}
+  return out.length>3?out:null;
+}
+// closest approach between the ray o+d*t (t>=t0) and the segment AB; returns the entry distance along the ray or -1
+function rayCapsule(o,d,A,B,r,t0){
+  _ra.subVectors(B,A);_rb.subVectors(o,A);const aa=_ra.dot(_ra),ad=_ra.dot(d),ab=_ra.dot(_rb),db=d.dot(_rb),den=aa-ad*ad;
+  let s=aa>1e-8&&den>1e-8?clamp((ab-ad*db)/den,0,1):0,t=s*ad-db;
+  if(t<t0){t=t0;s=aa>1e-8?clamp((t*ad+ab)/aa,0,1):0;}
+  _rc.copy(A).addScaledVector(_ra,s);_rd.copy(o).addScaledVector(d,t);const dist=_rc.distanceTo(_rd);
+  if(dist>r)return-1;return Math.max(t0,t-Math.sqrt(r*r-dist*dist));
+}
+// the world-space offset the shader adds under an object (terrain height under its origin)
+const tOff=(x,z)=>gH(x,z);
+// first hit of the ray on one infected: {t, part}
+function zRayHit(z,o,d,t0){
+  if(z.hbx&&z.mixer){const k=(z.def.scale||1)*(z.g.scale.x||1)*(z.type==='brute'||z.type==='boss'?1.25:1),gy=tOff(z.g.position.x,z.g.position.z);let best=null;
+    for(const h of z.hbx){h.A.getWorldPosition(_re);_re.y+=gy;
+      if(h.B){h.B.getWorldPosition(_rw);_rw.y+=gy;if(h.part==='head'){_re.lerp(_rw,.45);_rw.copy(_re);}else if(h.part==='torso')_rw.lerp(_re,.15);}else _rw.copy(_re); // the torso stops short of the chin
+      const r=h.r*k*(h.part==='torso'&&z.type==='boomer'?1.6:1),t=rayCapsule(o,d,_re,_rw,r,t0);
+      if(t>=0&&(!best||(h.part==='head'?t<best.t+.12:t<best.t-.02&&!(best.part==='head'&&t>best.t-.12))))best={t,part:h.part};}
+    return best;}
+  // the drawn infected: a body capsule and a head
+  const s=z.def.scale||1,gy=tOff(z.x,z.z)+(z.lvlY||0)+(z.jy||0),cr=z.def.crawl;
+  _re.set(z.x,gy+(cr?.25:.3*s),z.z);_rw.set(z.x,gy+(cr?.3:1.55*s),z.z);if(cr){_rw.x+=Math.sin(z.yaw)*1.2;_rw.z+=Math.cos(z.yaw)*1.2;}
+  let t=rayCapsule(o,d,_re,_rw,z.def.r*.75,t0),best=t>=0?{t,part:'torso'}:null;
+  _re.set(z.x,gy+(cr?.35:1.85*s),z.z);if(cr){_re.x+=Math.sin(z.yaw)*1.4;_re.z+=Math.cos(z.yaw)*1.4;}
+  t=rayCapsule(o,d,_re,_re,.2*s,t0);if(t>=0&&(!best||t<=best.t+.05))best={t,part:'head'};
+  return best;
+}
+// the shot's ray: from the camera through the reticle, scattered inside the spread cone (radians)
+function shotRay(cone,o,d){
+  camera.getWorldPosition(o);camera.getWorldDirection(d);
+  if(cone>0){_rr.setFromMatrixColumn(camera.matrixWorld,0);_ru.setFromMatrixColumn(camera.matrixWorld,1);
+    const a=Math.random()*Math.PI*2,r=Math.tan(cone*Math.sqrt(Math.random()));d.addScaledVector(_rr,Math.cos(a)*r).addScaledVector(_ru,Math.sin(a)*r).normalize();}
+}
+// the spread cone right now: tight down the sights, wider from the hip, on the move, in the air, sprinting; blooms with fire
+function shotCone(w){
+  const base=w.spread||0,ads=player.ads||0,pel=w.pellets>1;
+  // pellets: a choke-sized pattern (hip .75 of the gun's spread, sights .45); single rounds: sights almost true
+  const hip=pel?base*.75:base*.8+.008,aimed=pel?base*.45:base*.12;
+  let c=lerp(hip,aimed,ads);
+  const mv=player.air||player.jy>.05?2.4:player.sprinting?2:player.moving?1.35:player.crouch?.8:1;
+  c*=lerp(mv,1+(mv-1)*.35,ads)*(1-.15*PERK('steady'))*(1+.35*coldAmt());
+  c+=WA.bloom*(base*1.2+.025)*(1-ads*.7);
+  return c;
+}
+const HMK={t:0,kind:''};
+function hitMarker(kind){const pri={'':0,head:1,kill:2};if(HMK.t>0&&pri[kind]<pri[HMK.kind])return;HMK.t=kind==='kill'?.32:.2;HMK.kind=kind;Sound.play('ui',kind==='kill'?.7:.45);}
+function updateHitMarker(dt){const el=$('hitmark');if(!el)return;HMK.t-=dt;const on=HMK.t>0;el.classList.toggle('on',on);el.classList.toggle('head',on&&HMK.kind==='head');el.classList.toggle('kill',on&&HMK.kind==='kill');}
+// 3D tracer between two world points (the tracer mesh rides the terrain under its middle, so take that back off)
+function tracer3(a,b,color){const t=tracers[tIdx=(tIdx+1)%tracers.length],len=a.distanceTo(b);if(len<.1)return;
+  const mx=(a.x+b.x)/2,mz=(a.z+b.z)/2;t.m.rotation.order='YXZ';t.m.position.set(mx,(a.y+b.y)/2-gH(mx,mz),mz);t.m.scale.set(1,1,len);
+  t.m.rotation.set(-Math.asin(clamp((b.y-a.y)/len,-1,1)),Math.atan2(b.x-a.x,b.z-a.z),0);t.m.material.color.setHex(color||0xffe7a0);t.m.material.opacity=1;t.m.visible=true;t.life=.07;}
+const _ro=new V3(),_rdir=new V3(),_rend=new V3(),_rmz=new V3();
+// one round along the reticle ray; returns {first, end}
+function hitscan3(w,dmg,pierce,knock,color,cone){
+  shotRay(cone,_ro,_rdir);const o=_ro,d=_rdir,shLvl=player.lvl||0;
+  // nothing between the camera and the shooter can be hit
+  const t0=Math.max(.2,(player.x-o.x)*d.x+(gH(player.x,player.z)+1.4+(player.lvlY||0)+(player.jy||0)-o.y)*d.y+(player.z-o.z)*d.z-.4);
+  const range=w.range,tMax=t0+range,hl=Math.hypot(d.x,d.z)||1e-6,hx=d.x/hl,hz=d.z/hl;
+  let block=tMax;const seenOb=new Set(),wwins=[];
+  // walls, trees, cars, low cover and the ground, walked out horizontally from the shooter's end of the ray
+  for(let ts=t0;ts<=block;ts+=OGC*.6/hl){const px=o.x+d.x*ts,pz=o.z+d.z*ts,py=o.y+d.y*ts;
+    if(py<gH(px,pz)-.05){block=ts;break;}
+    nearObs(px,pz,0,ob=>{if(seenOb.has(ob))return;if(ob.lvl!==undefined&&ob.lvl!==shLvl)return;seenOb.add(ob);
+      const vx=ob.x-o.x,vz=ob.z-o.z,t=(vx*d.x+vz*d.z)/(hl*hl);if(t<t0||t>block)return;const cx=vx-d.x*t,cz=vz-d.z*t,r=ob.r;
+      if(ob.win&&!ob.win.broken){if(cx*cx+cz*cz<r*r*1.2)wwins.push([t,ob.win]);return;}
+      if(cx*cx+cz*cz>r*r*.6)return;
+      if(ob.h!=null&&o.y+d.y*t>gH(ob.x,ob.z)+ob.h+(ob.lvl!==undefined?0:0))return; // the round clears its top
+      block=t;});}
+  {const sx=o.x+d.x*t0,sz=o.z+d.z*t0,hb=homeRay(sx,sz,hx,hz,(block-t0)*hl,true);block=Math.min(block,t0+hb/hl);}
+  const hits=[];
+  for(const z of zombies){if(z.dying||(z.lvl||0)!==shLvl)continue;const vx=z.x-o.x,vz=z.z-o.z,t=(vx*d.x+vz*d.z)/(hl*hl);
+    if(t<t0-2||t>block+2)continue;const cx=vx-d.x*t,cz=vz-d.z*t;if(cx*cx+cz*cz>(z.def.r*2.4+1.4)**2)continue;
+    const h=zRayHit(z,o,d,t0);if(h&&h.t<=block)hits.push({z,t:h.t,part:h.part});}
+  for(const b of barrels){if(!b.alive)continue;const gy=gH(b.x,b.z);_re.set(b.x,gy+.05,b.z);_rw.set(b.x,gy+1.05,b.z);const t=rayCapsule(o,d,_re,_rw,.45,t0);if(t>=0&&t<=block)hits.push({b,t});}
+  for(const p of props){const gy=gH(p.x,p.z);_re.set(p.x,gy+(p.y||0)+.25,p.z);const t=rayCapsule(o,d,_re,_re,p.r*.8,t0);if(t>=0&&t<=block)hits.push({p,t});}
+  if(!shLvl){const seenA=new Set();for(let ts=t0;ts<=block;ts+=AHC*.7/hl)nearAgents(o.x+d.x*ts,o.z+d.z*ts,.8,a=>{if(seenA.has(a))return;seenA.add(a);const gy=gH(a.x,a.z),s=a.s||1;
+      _re.set(a.x,gy+.15,a.z);_rw.set(a.x,gy+1.45*s,a.z);let t=rayCapsule(o,d,_re,_rw,.28*s,t0),part='torso';_re.set(a.x,gy+1.66*s,a.z);const th=rayCapsule(o,d,_re,_re,.14*s,t0);
+      if(th>=0&&(t<0||th<=t+.05)){t=th;part='head';}if(t>=0&&t<=block)hits.push({a,t,part});});
+    for(const an of animals){if(an.dead||an.state==='fly')continue;const gy=gH(an.x,an.z),h=an.d.h||1;_re.set(an.x,gy+h*.55,an.z);const t=rayCapsule(o,d,_re,_re,Math.max(an.d.r,h*.4),t0);if(t>=0&&t<=block)hits.push({an,t});}}
+  hits.sort((a,b)=>a.t-b.t);
+  let end=block,n=0,first=null;const kx=hx*knock,kz=hz*knock;
+  for(const h of hits){
+    if(h.b){h.b.hp-=dmg;if(h.b.hp<=0&&h.b.fuse<0)h.b.fuse=.05;end=h.t;n=pierce;break;}
+    if(h.an){hitAnimal(h.an,dmg,kx,kz);n++;end=h.t;hitMarker('');if(n>=pierce)break;continue;}
+    if(h.p){const f=(knock*.9+dmg*.04);impulseProp(h.p,hx*f,hz*f,f*.35);_re.copy(o).addScaledVector(d,h.t);burst(_re.x,_re.y-gH(_re.x,_re.z),_re.z,2,'debris',3);Sound.play('thud',.4);end=h.t;n=pierce;break;}
+    const tg=h.z||h.a,k=h.z?'z':'a',fall=h.t-t0>range*.5?lerp(1,.65,clamp((h.t-t0-range*.5)/(range*.5),0,1)):1,head=h.part==='head';
+    const dd=dmg*(PART_MUL[h.part]||1)*fall;if(head&&!CRITF)CRITF=true;
+    dmgTarget(tg,k,dd,kx,kz);onHit(tg,k,dd);CRITF=false;if(!first)first={t:tg,k};
+    hitMarker(tg.dying||tg.hp<=0?'kill':head?'head':'');n++;end=h.t;if(n>=pierce)break;}
+  for(const [t,s] of HRAY)if(t0+t/hl<=end+.01)shatter(s);HRAY.length=0;for(const [t,Wn] of wwins)if(t<=end+.01)breakWin(Wn);
+  _rend.copy(o).addScaledVector(d,end);
+  if(n<pierce&&end<tMax-.01)burst(_rend.x,_rend.y-gH(_rend.x,_rend.z),_rend.z,2,'spark',3);
+  // the round leaves the muzzle and meets the reticle's point
+  const mp=muzzlePos();_rmz.set(mp.x,gH(mp.x,mp.z)+1.38+(player.lvlY||0)+(player.jy||0),mp.z);tracer3(_rmz,_rend,color);
+  if(SHOT&&SHOT.w.chain&&first)chainFrom(first.t,first.k,dmg);
+  return{x:_rend.x,z:_rend.z,first};
+}
+// where the reticle is pointing on the ground (for the hero's aim and anything that wants a target point)
+function reticlePoint(out){shotRay(0,_ro,_rdir);const hl=Math.hypot(_rdir.x,_rdir.z)||1e-6;let t=40;
+  for(let ts=.5;ts<40;ts+=1.5/hl){if(_ro.y+_rdir.y*ts<gH(_ro.x+_rdir.x*ts,_ro.z+_rdir.z*ts)){t=ts;break;}}
+  out.set(_ro.x+_rdir.x*t,1.2,_ro.z+_rdir.z*t);return out;}
+// the reticle opens to show the spread cone (in pixels at the screen centre)
+function reticleSize(){const I=curW();if(!I)return;const w=wstat(I);if(w.melee)return;
+  const px=Math.tan(shotCone(w))/Math.tan(camera.fov*Math.PI/360)*innerHeight/2;
+  return clamp((px*2+10)/26,.45,6);}
+// controller aim assist, the way console shooters do it: the stick slows down while the reticle is on or just off one
+// of the infected, and down the sights it drifts gently toward the chest. Mouse aim is left alone.
+const AA={slow:1,tgt:null};
+function aimAssist(dt){
+  AA.slow=1;AA.tgt=null;if(!pad.active||!TP||!player.alive)return;
+  camera.getWorldPosition(_ro);camera.getWorldDirection(_rdir);let best=null,ba=1e9;
+  for(const z of zombies){if(z.dying||(z.lvl||0)!==(player.lvl||0))continue;const gy=gH(z.x,z.z)+(z.lvlY||0)+(z.jy||0);
+    _re.set(z.x,gy+(z.def.crawl?.35:1.25*(z.def.scale||1)),z.z).sub(_ro);const dist=_re.length();if(dist>45||dist<1)continue;
+    const ang=Math.acos(clamp(_re.dot(_rdir)/dist,-1,1)),win=Math.atan(.75/dist)+.015;if(ang<win&&ang<ba){ba=ang;best={z,dir:_re.clone().divideScalar(dist)};}}
+  if(!best)return;AA.slow=.5;AA.tgt=best.z;
+  if((player.ads||0)>.5){const yaw=Math.atan2(best.dir.x,best.dir.z),pit=Math.asin(-best.dir.y);let dy=yaw-camYaw;while(dy>Math.PI)dy-=Math.PI*2;while(dy<-Math.PI)dy+=Math.PI*2;
+    const k=Math.min(1,dt*2.2);camYaw+=dy*k;camPitch=clamp(camPitch+(pit-camPitch)*k*.6,pitchLo(),pitchHi());}
 }
 /* ================= LOOT ================= */
 const RARITY={relic:{col:0x5a3a14,strap:0xf2a516,label:'Relic'},common:{col:0x6b5134,strap:0xd8cfb8,label:'Common'},rare:{col:0x3e5a6e,strap:0x5fa8d3,label:'Rare'},epic:{col:0x8a6a2a,strap:0xe9c46a,label:'Epic'},drop:{col:0x5a2f2a,strap:0xd6432f,label:'Airdrop'}};
@@ -6299,7 +6475,8 @@ function bRot(b,axis,ang){
 }
 function heroUndo(){for(const [b,q] of HTOUCH)b.quaternion.copy(q);HTOUCH.clear();}
 function heroSave(){for(const b of Object.values(HB))if(b)HTOUCH.set(b,b.quaternion.clone());}
-const HA={swim:0,climb:0,air:0,tired:0,land:0};
+const HA={swim:0,climb:0,air:0,tired:0,land:0,sf:0};
+let SWIM_Y=1.2; // how far below the surface the hero's feet ride while doing the crawl (the clip's body lies at hip height)
 function heroProcedural(dt,moving){
   if(!HB.hips||HERO.dead)return;
   const t=performance.now()/1000,ease=(k,v,r)=>{HA[k]+=(v-HA[k])*Math.min(1,dt*(r||8));return HA[k];};
@@ -6326,7 +6503,7 @@ function heroProcedural(dt,moving){
   {const c=coldAmt();if(c>.05&&!player.swim){bRot(HB.spine2,AZ,Math.sin(t*38)*.035*c);bRot(HB.lSh,AZ,Math.sin(t*41)*.05*c);bRot(HB.rSh,AZ,-Math.sin(t*37)*.05*c);}}
   weaponPose(dt);
   // swimming: front crawl when moving, treading water when still
-  if(swim>.02){const sp=player.moving?1:0,ph=t*(sp?5.2:3);
+  if(swim>.02&&!(HERO.acts&&HERO.acts.swim)){const sp=player.moving?1:0,ph=t*(sp?5.2:3); // the hand-made strokes, until the swim clips load
     if(sp){bRot(HB.lArm,AX,(-Math.PI*.5+Math.sin(ph)*2.2)*swim);bRot(HB.rArm,AX,(-Math.PI*.5+Math.sin(ph+Math.PI)*2.2)*swim);
       bRot(HB.lUp,AX,Math.sin(ph*2)*.35*swim);bRot(HB.rUp,AX,-Math.sin(ph*2)*.35*swim);bRot(HB.head,AX,(-.9+Math.sin(ph)*.15)*swim);bRot(HB.head,AY,Math.sin(ph)*.35*swim);}
     else{bRot(HB.lArm,AZ,(.9+Math.sin(ph)*.35)*swim);bRot(HB.rArm,AZ,(-.9-Math.sin(ph)*.35)*swim);bRot(HB.lFore,AX,-.4*swim);bRot(HB.rFore,AX,-.4*swim);
@@ -6334,7 +6511,9 @@ function heroProcedural(dt,moving){
 }
 // whole-body pose: lie flat to swim, lean into the ladder, sink a little when exhausted
 function bodyPose(dt){
-  const swimMove=player.swim&&player.moving?1:0;HA.pitch=(HA.pitch||0)+((swimMove?1.32:player.swim?.18:player.crouch&&!HERO.ual?.22:0)-(HA.pitch||0))*Math.min(1,dt*6);
+  // the swim clips lie the body flat themselves; HA.sf eases between treading water (0) and swimming (1)
+  const swimMove=player.swim&&player.moving?1:0,clip=!!(HERO.acts&&HERO.acts.swim);HA.sf=(HA.sf||0)+(swimMove-(HA.sf||0))*Math.min(1,dt*5);
+  HA.pitch=(HA.pitch||0)+((swimMove&&!clip?1.32:player.swim&&!clip?.18:player.crouch&&!HERO.ual?.22:0)-(HA.pitch||0))*Math.min(1,dt*6);
   return HA.pitch;
 }
 
@@ -6493,7 +6672,8 @@ function updateWeaponFx(dt){
   if(Math.abs(WA.yawRec)>1e-5){const r=WA.yawRec*settle;camYaw+=r;WA.yawRec-=r;}
   WA.heat=Math.max(0,WA.heat-dt*(S.time-(S.lastShot||-9)>.25?6:1.5));WA.yawOff*=Math.exp(-dt*7);
   if(player.swing<=0)WA.chop=0;
-  const ch=$('crosshair');const sc=((player.ads||0)>.5?.62:1)*(1+WA.bloom*.9);ch.style.transform=`scale(${sc.toFixed(3)})`;
+  // the reticle shows the spread cone: it closes down the sights, opens on the move and as fire blooms
+  const ch=$('crosshair'),rs=TP?reticleSize():null,sc=rs||((player.ads||0)>.5?.62:1)*(1+WA.bloom*.9);ch.style.transform=`scale(${sc.toFixed(3)})`;
 }
 // rumble for pads (including the Xbox impulse triggers) and phones; off switch in the pause menu
 let VIB=store.get('deadacre.vib',true),lastVib=0;
@@ -7333,7 +7513,7 @@ function updatePlayer(dt){
     if(Math.abs(lx)>s.hw+.6||Math.abs(lz)>s.hd+.6)continue;const m=.35;lx=clamp(lx,-s.hw+m,s.hw-m);lz=clamp(lz,-s.hd+m,s.hd-m);player.x=s.x+lx*c+lz*sn;player.z=s.z-lx*sn+lz*c;}
   updateVertical(dt);updateWinded(dt);
   // aim
-  if(TP){const ad=aimDist();aim.set(player.x+Math.sin(camYaw)*ad,1.2,player.z+Math.cos(camYaw)*ad);}
+  if(TP)reticlePoint(aim); // where the reticle falls
   else if(pad.active){const rm=Math.hypot(pad.rx,pad.ry);if(rm>.25)aim.set(player.x+pad.rx/rm*12,1.2,player.z+pad.ry/rm*12);else if(moving)aim.set(player.x+mx/ml*12,1.2,player.z+mz/ml*12);else aim.set(player.x+Math.sin(player.yaw)*12,1.2,player.z+Math.cos(player.yaw)*12);}
   else if(isTouch){if(touch.am>.2){aim.set(player.x+touch.ax*12,1.2,player.z+touch.az*12);}else if(moving){aim.set(player.x+mx*12,1.2,player.z+mz*12);}}
   else{ndc.set(mouse.x/innerWidth*2-1,-(mouse.y/innerHeight)*2+1);aimPlane.constant=-(1.2+gH(player.x,player.z));ray.setFromCamera(ndc,camera);ray.ray.intersectPlane(aimPlane,aim);}
@@ -7355,8 +7535,8 @@ function updatePlayer(dt){
   plLegs[0].rotation.x=sw*.7;plLegs[1].rotation.x=-sw*.7;
   player.recoil=Math.max(0,player.recoil-dt);
   if(player.climb)player.yaw=player.climb.yaw;
-  {const pitch=bodyPose(dt),flat=clamp(pitch/1.32,0,1);let ox=0,oz=0;if(player.swim&&flat>.05){ox=-Math.sin(player.yaw)*.95*flat;oz=-Math.cos(player.yaw)*.95*flat;}
-    pl.position.set(player.x+ox,(player.swim?depthAt(player.x,player.z)-lerp(1.35,.42,flat):moving&&!HERO.ready?Math.abs(Math.cos(player.walk))*.07:0)-(player.crouch&&!HERO.ual?.22:0)+(player.lvlY||0)+(player.jy||0)+(ICE&&!player.swim?Math.max(0,depthAt(player.x,player.z)):0)-(player.tired>.5&&!moving&&!player.swim?.2*player.tired:0),player.z+oz);pl.rotation.x=pitch;}
+  {const pitch=bodyPose(dt),clipSwim=!!(HERO.acts&&HERO.acts.swim),flat=clipSwim?HA.sf:clamp(pitch/1.32,0,1);let ox=0,oz=0;if(player.swim&&flat>.05&&!clipSwim){ox=-Math.sin(player.yaw)*.95*flat;oz=-Math.cos(player.yaw)*.95*flat;}
+    pl.position.set(player.x+ox,(player.swim?depthAt(player.x,player.z)-lerp(1.35,clipSwim?SWIM_Y:.42,flat):moving&&!HERO.ready?Math.abs(Math.cos(player.walk))*.07:0)-(player.crouch&&!HERO.ual?.22:0)+(player.lvlY||0)+(player.jy||0)+(ICE&&!player.swim?Math.max(0,depthAt(player.x,player.z)):0)-(player.tired>.5&&!moving&&!player.swim?.2*player.tired:0),player.z+oz);pl.rotation.x=pitch;}
   gun.visible=!player.swim&&!HERO.dead&&!player.climb&&!(player.mantle>0);pl.rotation.y=player.yaw;gun.position.z=.62-player.recoil*2;
   player.swing=Math.max(0,(player.swing||0)-dt);gun.rotation.y=player.swing>0?Math.sin(player.swing/.25*Math.PI)*1.1:0;
   if(HERO.ready)updateHero(dt,moving,sprint,moving?(mx*Math.sin(player.yaw)+mz*Math.cos(player.yaw))/(ml||1):1,sp);
@@ -7511,7 +7691,7 @@ function lockMouse(){if(!TP||document.pointerLockElement||!stage.requestPointerL
 function unlockMouse(){if(document.pointerLockElement&&document.exitPointerLock)document.exitPointerLock();}
 // losing the pointer lock (Esc) pauses, like Esc does in top-down
 document.addEventListener('pointerlockchange',()=>{if(!document.pointerLockElement&&TP&&S.running&&!S.over&&!S.menu&&!S.paused&&!S.panel)togglePause();});
-const adsSens=()=>1-(player.ads||0)*(scoped()?.72:.5);
+const adsSens=()=>(1-(player.ads||0)*(scoped()?.72:.5))*(typeof AA!=='undefined'?AA.slow:1);
 function tpLook(dx,dy){const k=TP_SENS*adsSens();camYaw-=dx*k;camPitch=clamp(camPitch+dy*k,pitchLo(),pitchHi());if(FP){FPB.sx=clamp(FPB.sx+dx*.00012,-.03,.03);FPB.sy=clamp(FPB.sy+dy*.00012,-.03,.03);}}
 function scoped(){const I=curW();return!!I&&(I.cls==='hunt'||(I.mods&&I.mods.optic==='scope'));}
 function camBlocked(x,y,z){
@@ -7528,6 +7708,7 @@ function canopyFade(){const c=camera.position;_canNow.clear();
   for(const t of _canNow){t.g.visible=false;CANOPY_HID.add(t);}}
 function updateCameraTP(dt){
   if(!document.pointerLockElement&&!pad.active){const ex=mouse.x/innerWidth;if(ex<.05)camYaw+=dt*2.2;else if(ex>.95)camYaw-=dt*2.2;}
+  aimAssist(dt);
   if(pad.active){const k=adsSens();camYaw-=pad.rx*2.8*dt*k;camPitch=clamp(camPitch+pad.ry*1.8*dt*k,pitchLo(),pitchHi());}
   const fx=Math.sin(camYaw),fz=Math.cos(camYaw),rx=-Math.cos(camYaw),rz=Math.sin(camYaw);
   const gy=gH(player.x,player.z)+(player.swim?depthAt(player.x,player.z)-1.35:ICE?Math.max(0,depthAt(player.x,player.z)):0);
@@ -7553,9 +7734,8 @@ function updateCameraTP(dt){
   camera.position.lerp(_cp,Math.min(1,dt*14));canopyFade();
   if(S.shake>0){camera.position.x+=rand(-1,1)*S.shake*.22;camera.position.y+=rand(-1,1)*S.shake*.18;S.shake=Math.max(0,S.shake-dt*2.2);}
   camera.lookAt(camera.position.x+_cd.x,camera.position.y+_cd.y,camera.position.z+_cd.z);
-  // the crosshair marks where the gun is actually pointing
-  const adi=aimDist(),ax=player.x+fx*adi,az=player.z+fz*adi;projV.set(ax,gH(ax,az)+1.3,az).project(camera);
-  const c=$('crosshair'),cxp=((projV.x+1)/2*innerWidth),cyp=((1-projV.y)/2*innerHeight);c.style.left=cxp+'px';c.style.top=cyp+'px';
+  // the reticle sits dead centre: shots go down the camera's line through it
+  const c=$('crosshair'),cxp=innerWidth/2,cyp=innerHeight/2;c.style.left=cxp+'px';c.style.top=cyp+'px';
   if(player.ads>.3){const sf=$('scopeFx').style;sf.setProperty('--sx',cxp.toFixed(0)+'px');sf.setProperty('--sy',cyp.toFixed(0)+'px');}
 }
 function updateCamera(dt){
@@ -7764,7 +7944,7 @@ function frame(now){
     hudT-=dt;if(hudT<=0){hudT=.08;updateHUD();}
     mapT-=dt;if(mapT<=0){mapT=.12;drawMinimap();}
     $('vignette').style.opacity=player.hurtT>0?Math.min(1,player.hurtT*2.5):0;
-    crossT-=dt;$('crosshair').classList.toggle('hit',crossT>0);updateDmgNums(dt);updateStealthHUD();
+    crossT-=dt;$('crosshair').classList.toggle('hit',crossT>0);updateHitMarker(dt);updateDmgNums(dt);updateStealthHUD();
   }else if(S.over){Sound.quiet(dt,'over');if(HERO.ready)HERO.mixer.update(dt);updateZombies(dt);updateHordes(dt);updateProps(dt);updateDoors(dt);updateWorld(dt);updateWeather(dt,player.x,player.z-2);updateEnv(dt);}
   else if(!S.running){VM.visible=false;Sound.quiet(dt,'menu');idleA+=dt*.05;camera.position.set(Math.sin(idleA)*34,22,Math.cos(idleA)*34);camera.lookAt(0,0,0);updateWorld(dt);updateDoors(dt);updateWeather(dt,0,0);updateEnv(dt);
     sun.position.set(22,40,12);sun.target.position.set(0,0,0);}

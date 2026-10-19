@@ -229,3 +229,23 @@ function zCrawlPose(z,B,w){
   // head up, watching where it's going
   R(B.neck,'x',-.7);R(B.head,'x',-.25+.08*Math.sin(Math.PI*2*p));
 }
+
+/* ----- gaits: the infected break into a run by speed -----
+   Keyed in Blender (tools/blender/zombie_anims.py): a lurching jog, an all-out sprint with the arms clawing ahead, a feral
+   bound low to the ground with the hands slapping down (some runners run like that), and a brute's shoulder-down charge.
+   The clip follows the ground the body is really covering, cross-fades as the speed crosses a band, and plays faster or
+   slower to keep the feet planted. Returns true when a run is playing (the walk or shamble otherwise keeps its own pace). */
+const GAIT={jog:3.0,sprint:6.2,feral:6.6,charge:6.0}; // metres a second each run clip was keyed to cover
+function zGait(z){
+  const A=z.acts;if(!A||!A.jog||z.def.crawl)return false;const base=A.loco||A.walk,fv=z.fv||0,cur=z.gait&&z.gait!==base?z.gait:null;
+  if(z.gs===undefined)z.gs=z.type==='runner'&&Math.random()<.4?'feral':'sprint';
+  // into a run above a speed, out of it a little below (so it doesn't flicker at the edge)
+  const runAt=z.type==='runner'?2.6:2.5,fastAt=3.9,hold=cur?.4:0;let want=null;
+  if(z.type==='brute'&&z.chargeT>0&&A.charge)want=A.charge;
+  else if(fv>runAt-hold)want=fv>fastAt-(cur&&cur!==A.jog?.5:0)?A[z.gs]||A.sprint:A.jog;
+  const next=want||base;
+  if(next!==(z.gait||base)){const prev=z.gait||base;next.enabled=true;next.setEffectiveWeight(1);next.play();if(next!==base)next.time=Math.random()*next.getClip().duration;next.fadeIn(.22);prev.fadeOut(.22);z.gait=next;}
+  if(!want)return false;
+  const name=want===A.charge?'charge':want===A.jog?'jog':want===A.feral?'feral':'sprint';
+  want.timeScale=clamp(Math.max(fv,1)/GAIT[name],.55,1.75);return true;
+}

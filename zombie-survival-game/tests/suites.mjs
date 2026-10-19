@@ -78,6 +78,33 @@ export const suites = [
     },
   },
   {
+    name: 'aim',
+    async run(page, { expect }) {
+      // shots land where the reticle is: chest and head hit (aimed down the sights), over the head and beside the body miss
+      const r = await page.evaluate(async () => {
+        const w = __w(); for (let i = 0; i < 80 && !w.ZM.office; i++) await new Promise(res => setTimeout(res, 100));
+        w.setView('tp'); __P.x = 30; __P.z = 30; __sim(10, .05);
+        for (const q of [...__Z]) w.removeZombie(q); __Z.length = 0;
+        const I = w.mkW('side', 2); w.fillMag(I); I.mag = 999; w.LO.side = I; __P.weapon = ''; w.setWeapon('side'); __sim(5, .05);
+        const sv = w.ZMODEL_FOR.walker; w.ZMODEL_FOR.walker = ['office']; const z = __spawn('walker', __P.x, __P.z + 10); w.ZMODEL_FOR.walker = sv;
+        z.aware = false; z.pinT = 1e9; z.hp = z.maxHp = 1e6; z.yaw = Math.PI; __sim(6, .05);
+        const bp = n => { const v = new THREE.Vector3(); z.g.getObjectByName(n).getWorldPosition(v); v.y += w.gH(z.g.position.x, z.g.position.z); return v; };
+        const chest = bp('Hips').lerp(bp('neck'), .6), head = bp('Head').lerp(bp('head_end'), .5);
+        const T = { chest, head, over: head.clone().add(new THREE.Vector3(0, 1, 0)), side: chest.clone().add(new THREE.Vector3(.8, 0, 0)) }, out = {};
+        for (const [k, t] of Object.entries(T)) {
+          __P.ads = 1; for (let i = 0; i < 8; i++) { w.updateCamera(1); const c = w.camera.position, dx = t.x - c.x, dy = t.y - c.y, dz = t.z - c.z; w.camYaw = Math.atan2(dx, dz); w.camPitch = Math.asin(-dy / Math.hypot(dx, dy, dz)); }
+          w.updateCamera(1); w.camera.updateMatrixWorld(); let hits = 0;
+          for (let s = 0; s < 4; s++) { const cy = w.camYaw, cp = w.camPitch; __P.ads = 1; w.WA.bloom = 0; __P.fireCd = 0; __P.reloadT = 0; const hp = z.hp; w.tryFire(); if (z.hp < hp) hits++;
+            w.camYaw = cy; w.camPitch = cp; w.WA.camRec = 0; w.WA.yawRec = 0; w.updateCamera(1); w.camera.updateMatrixWorld(); }
+          out[k] = hits; }
+        return out;
+      });
+      expect(r.chest === 4 && r.head === 4, 'aimed shots hit: ' + JSON.stringify(r));
+      expect(r.over === 0 && r.side === 0, 'off-reticle shots miss: ' + JSON.stringify(r));
+      return `chest ${r.chest}/4, head ${r.head}/4, over ${r.over}/4, beside ${r.side}/4`;
+    },
+  },
+  {
     name: 'doors-and-windows',
     async run(page, { expect }) {
       const r = await page.evaluate(() => {

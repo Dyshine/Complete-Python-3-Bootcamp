@@ -1,4 +1,4 @@
 hero_anims.json: animation clips from "Universal Animation Library" by Quaternius (https://quaternius.com), CC0 1.0
 (public domain). Source: https://opengameart.org/content/universal-animation-library
 Retargeted onto the hero's skeleton and baked to per-bone quaternions at 30 fps (idle, walk, jog, sprint, crouch,
-hit, death, sword swing, punches, kneeling repair, pick-up, interact, pistol shoot and reload).
+hit, death, sword swing, punches, kneeling repair, pick-up, interact, pistol shoot and reload, swim and tread water).

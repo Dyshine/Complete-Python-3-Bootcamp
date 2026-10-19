@@ -149,7 +149,8 @@ function updateWeaponFx(dt){
   if(Math.abs(WA.yawRec)>1e-5){const r=WA.yawRec*settle;camYaw+=r;WA.yawRec-=r;}
   WA.heat=Math.max(0,WA.heat-dt*(S.time-(S.lastShot||-9)>.25?6:1.5));WA.yawOff*=Math.exp(-dt*7);
   if(player.swing<=0)WA.chop=0;
-  const ch=$('crosshair');const sc=((player.ads||0)>.5?.62:1)*(1+WA.bloom*.9);ch.style.transform=`scale(${sc.toFixed(3)})`;
+  // the reticle shows the spread cone: it closes down the sights, opens on the move and as fire blooms
+  const ch=$('crosshair'),rs=TP?reticleSize():null,sc=rs||((player.ads||0)>.5?.62:1)*(1+WA.bloom*.9);ch.style.transform=`scale(${sc.toFixed(3)})`;
 }
 // rumble for pads (including the Xbox impulse triggers) and phones; off switch in the pause menu
 let VIB=store.get('deadacre.vib',true),lastVib=0;

@@ -4,7 +4,8 @@
 # then convert out.glb to models/zombies/anim/extra.gltf.json (tools/blender/glb2json.cjs).
 #
 # Clips: crawl (arm-over-arm on the belly; the game lays the body prone), shamble (a lurching walk with a dragged leg),
-# swipe (a wound-up two-handed claw) and fall (buckles at the knees and pitches face down).
+# swipe (a wound-up two-handed claw), fall (buckles at the knees and pitches face down), and the runs by speed: jog
+# (a lurching jog), sprint (all out, arms clawing ahead), feral (bounding low, hands to the ground) and charge (a brute's).
 # Poses are written in the character's own frame (x its left, y up, z forward): limbs are aimed at a direction, the
 # spine and head are turned about an axis. Every key is built from rest, parents first, so clips stay on the skeleton
 # the four office/grandma/trucker/hulk models share.
@@ -147,6 +148,61 @@ def fall(t):
             'RightArm': ('aim', lerp(lerp((-.4, -.9, 0), (-.5, .2, -.3), j), (-.4, .1, .9), f)),
             'LeftForeArm': ('aim', lerp((.3, -.9, .2), (.3, .2, .9), f)), 'RightForeArm': ('aim', lerp((-.3, -.9, .2), (-.2, 0, 1), f))}, d
 
+# ---- running, by speed: each a loop of one full stride (left and right), legs driven by a shared helper ----
+def run_legs(w, amp, kick, spread=.09, lag=math.pi):
+    """thigh swing amplitude, how high the heel kicks up on the recovery, phase between the legs"""
+    out = {}
+    for side, ph, nm in ((1, 0, 'Left'), (-1, lag, 'Right')):
+        sw = math.sin(w + ph); rec = max(0, -math.cos(w + ph))        # recovery: the leg swinging back to front
+        out[nm + 'UpLeg'] = ('aim', (spread * side, -1, amp * sw))
+        out[nm + 'Leg'] = ('aim', (spread * side * .9, -1, amp * sw - kick * rec))
+        out[nm + 'Foot'] = ('aim', (spread * side, -.6, .8 - .5 * rec))
+    return out
+
+def jog(p):  # a lurching jog: leaning in, head lolling, loose arms out of time with the legs
+    w = 2 * math.pi * p
+    s = {'Hips': ('rot', [(Z, .07 * math.sin(w)), (Y, .12 * math.sin(w))]),
+         'Spine02': ('rot', [(X, .25), (Z, -.06 * math.sin(w))]), 'Spine01': ('rot', [(X, .12 + .05 * math.sin(2 * w))]),
+         'neck': ('rot', [(X, -.12), (Z, .18 * math.sin(w + 1))]), 'Head': ('rot', [(Z, .12 * math.sin(w + 2))]),
+         'LeftArm': ('aim', (.35, -.6 + .25 * math.sin(w + math.pi + .5), .55 + .3 * math.sin(w + math.pi))),
+         'RightArm': ('aim', (-.35, -.65 + .25 * math.sin(w + .3), .5 + .3 * math.sin(w))),
+         'LeftForeArm': ('aim', (.25, -.75, .6)), 'RightForeArm': ('aim', (-.25, -.8, .55))}
+    s.update(run_legs(w, .62, .9))
+    return s, .03 + .03 * math.cos(2 * w)
+
+def sprint(p):  # all-out sprint: pitched forward, high knees, both arms clawing ahead in turn
+    w = 2 * math.pi * p
+    s = {'Hips': ('rot', [(X, .12), (Y, .16 * math.sin(w))]),
+         'Spine02': ('rot', [(X, .35)]), 'Spine01': ('rot', [(X, .2 + .06 * math.sin(2 * w)), (Y, -.12 * math.sin(w))]),
+         'neck': ('rot', [(X, -.45)]), 'Head': ('rot', [(X, -.1), (Z, .08 * math.sin(w))]),
+         'LeftArm': ('aim', (.3, -.15 + .45 * math.sin(w + math.pi), .9)), 'RightArm': ('aim', (-.3, -.15 + .45 * math.sin(w), .9)),
+         'LeftForeArm': ('aim', (.15, .1 + .3 * math.sin(w + math.pi), 1)), 'RightForeArm': ('aim', (-.15, .1 + .3 * math.sin(w), 1))}
+    s.update(run_legs(w, .95, 1.5))
+    return s, .06 + .05 * math.cos(2 * w)
+
+def feral(p):  # bounding low, nearly on all fours: hands slap the ground ahead, the legs drive together
+    w = 2 * math.pi * p
+    s = {'Hips': ('rot', [(X, .55 + .1 * math.sin(w))]),
+         'Spine02': ('rot', [(X, .3 + .08 * math.sin(w + 1))]), 'Spine01': ('rot', [(X, .25)]),
+         'neck': ('rot', [(X, -1.05)]), 'Head': ('rot', [(X, -.2)]),
+         'LeftArm': ('aim', (.25, -1, .55 + .55 * math.sin(w + 2.2))), 'RightArm': ('aim', (-.25, -1, .55 + .55 * math.sin(w + 2.6))),
+         'LeftForeArm': ('aim', (.15, -1, .35 + .45 * math.sin(w + 2.2))), 'RightForeArm': ('aim', (-.15, -1, .35 + .45 * math.sin(w + 2.6)))}
+    s.update(run_legs(w, .8, 1.2, .14, .45))   # a gallop: the legs nearly together
+    return s, .36 + .08 * math.cos(w)
+
+def charge(p):  # a brute's charge: head down, shoulders forward, arms thrown back, long heavy strides
+    w = 2 * math.pi * p
+    s = {'Hips': ('rot', [(X, .1), (Z, .05 * math.sin(w))]), 'Spine02': ('rot', [(X, .3)]), 'Spine01': ('rot', [(X, .18), (Y, .1 * math.sin(w))]),
+         'neck': ('rot', [(X, .25)]), 'Head': ('rot', [(X, -.35)]),
+         'LeftArm': ('aim', (.55, -.75, -.3 + .2 * math.sin(w + math.pi))), 'RightArm': ('aim', (-.55, -.75, -.3 + .2 * math.sin(w))),
+         'LeftForeArm': ('aim', (.4, -.8, .2)), 'RightForeArm': ('aim', (-.4, -.8, .2))}
+    s.update(run_legs(w, .75, 1.1, .12))
+    return s, .08 + .06 * math.cos(2 * w)
+
+clip('jog', .8, 16, jog)
+clip('sprint', .56, 16, sprint)
+clip('feral', .5, 16, feral)
+clip('charge', .72, 16, charge)
 clip('crawl', 1.0, 16, crawl)
 clip('shamble', 1.6, 16, shamble)
 clip('swipe', .9, 18, swipe, loop=False)

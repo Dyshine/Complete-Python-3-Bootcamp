@@ -280,3 +280,11 @@ kbd.pl{border-radius:3px;width:auto;padding:0 6px;background:var(--bone)}
   #prompt{bottom:calc(296px + env(safe-area-inset-bottom,0px));font-size:15px}
 }
 @media (prefers-reduced-motion:reduce){.toast{animation:none}#banner{transition:none}}
+
+/* hitmarker: a white cross round the reticle on a hit, bigger on a headshot, red on a kill */
+#hitmark{position:fixed;left:50%;top:50%;width:30px;height:30px;margin:-15px 0 0 -15px;pointer-events:none;z-index:6;opacity:0;transition:opacity .08s}
+#hitmark.on{opacity:1}
+#hitmark::before,#hitmark::after{content:"";position:absolute;left:14px;top:0;width:2px;height:30px;background:#fff;box-shadow:0 0 3px rgba(0,0,0,.9);
+  clip-path:polygon(0 0,100% 0,100% 30%,0 30%,0 70%,100% 70%,100% 100%,0 100%)}
+#hitmark::before{transform:rotate(45deg)}#hitmark::after{transform:rotate(-45deg)}
+#hitmark.head{transform:scale(1.35)}#hitmark.kill::before,#hitmark.kill::after{background:#e8402a}#hitmark.kill{transform:scale(1.5)}
