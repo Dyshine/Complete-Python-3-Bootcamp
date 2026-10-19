@@ -13,12 +13,14 @@
    Bullets leave the muzzle and converge on the point under the reticle. The top-down view keeps its flat shooting. */
 const _ra=new V3(),_rb=new V3(),_rc=new V3(),_rd=new V3(),_re=new V3(),_rw=new V3(),_rf=new V3(),_ru=new V3(),_rr=new V3();
 // [bone A, bone B (null: a sphere at A), radius as a fraction of the body's scale, part]
+let HITINFO=null; // the round being resolved: {part, sub, p (world point), dx/dy/dz (its direction), heavy}
 const HB_DEF=[['Head','head_end',.13,'head'],['Hips','neck',.2,'torso'],['LeftArm','LeftForeArm',.065,'limb'],['RightArm','RightForeArm',.065,'limb'],
   ['LeftForeArm','LeftHand',.055,'limb'],['RightForeArm','RightHand',.055,'limb'],['LeftUpLeg','LeftLeg',.085,'limb'],['RightUpLeg','RightLeg',.085,'limb'],
   ['LeftLeg','LeftFoot',.065,'limb'],['RightLeg','RightFoot',.065,'limb']];
 const PART_MUL={head:2.5,torso:1,limb:.75};
 function zHitboxes(inst){
-  const out=[];for(const [a,b,r,part] of HB_DEF){const A=inst.getObjectByName(a),B=b&&inst.getObjectByName(b);if(A)out.push({A,B,r,part});}
+  // sub: which limb (lArm, rArm, lLeg, rLeg), so a hit can throw that arm back or buckle that knee
+  const out=[];for(const [a,b,r,part] of HB_DEF){const A=inst.getObjectByName(a),B=b&&inst.getObjectByName(b),sub=part!=='limb'?part:(a[0]==='L'?'l':'r')+(/Leg/.test(a)?'Leg':'Arm');if(A)out.push({A,B,r,part,sub});}
   return out.length>3?out:null;
 }
 // closest approach between the ray o+d*t (t>=t0) and the segment AB; returns the entry distance along the ray or -1
@@ -37,7 +39,7 @@ function zRayHit(z,o,d,t0){
     for(const h of z.hbx){h.A.getWorldPosition(_re);_re.y+=gy;
       if(h.B){h.B.getWorldPosition(_rw);_rw.y+=gy;if(h.part==='head'){_re.lerp(_rw,.45);_rw.copy(_re);}else if(h.part==='torso')_rw.lerp(_re,.15);}else _rw.copy(_re); // the torso stops short of the chin
       const r=h.r*k*(h.part==='torso'&&z.type==='boomer'?1.6:1),t=rayCapsule(o,d,_re,_rw,r,t0);
-      if(t>=0&&(!best||(h.part==='head'?t<best.t+.12:t<best.t-.02&&!(best.part==='head'&&t>best.t-.12))))best={t,part:h.part};}
+      if(t>=0&&(!best||(h.part==='head'?t<best.t+.12:t<best.t-.02&&!(best.part==='head'&&t>best.t-.12))))best={t,part:h.part,sub:h.sub};}
     return best;}
   // the drawn infected: a body capsule and a head
   const s=z.def.scale||1,gy=tOff(z.x,z.z)+(z.lvlY||0)+(z.jy||0),cr=z.def.crawl;
@@ -92,7 +94,7 @@ function hitscan3(w,dmg,pierce,knock,color,cone){
   const hits=[];
   for(const z of zombies){if(z.dying||(z.lvl||0)!==shLvl)continue;const vx=z.x-o.x,vz=z.z-o.z,t=(vx*d.x+vz*d.z)/(hl*hl);
     if(t<t0-2||t>block+2)continue;const cx=vx-d.x*t,cz=vz-d.z*t;if(cx*cx+cz*cz>(z.def.r*2.4+1.4)**2)continue;
-    const h=zRayHit(z,o,d,t0);if(h&&h.t<=block)hits.push({z,t:h.t,part:h.part});}
+    const h=zRayHit(z,o,d,t0);if(h&&h.t<=block)hits.push({z,t:h.t,part:h.part,sub:h.sub});}
   for(const b of barrels){if(!b.alive)continue;const gy=gH(b.x,b.z);_re.set(b.x,gy+.05,b.z);_rw.set(b.x,gy+1.05,b.z);const t=rayCapsule(o,d,_re,_rw,.45,t0);if(t>=0&&t<=block)hits.push({b,t});}
   for(const p of props){const gy=gH(p.x,p.z);_re.set(p.x,gy+(p.y||0)+.25,p.z);const t=rayCapsule(o,d,_re,_re,p.r*.8,t0);if(t>=0&&t<=block)hits.push({p,t});}
   if(!shLvl){const seenA=new Set();for(let ts=t0;ts<=block;ts+=AHC*.7/hl)nearAgents(o.x+d.x*ts,o.z+d.z*ts,.8,a=>{if(seenA.has(a))return;seenA.add(a);const gy=gH(a.x,a.z),s=a.s||1;
@@ -107,7 +109,9 @@ function hitscan3(w,dmg,pierce,knock,color,cone){
     if(h.p){const f=(knock*.9+dmg*.04);impulseProp(h.p,hx*f,hz*f,f*.35);_re.copy(o).addScaledVector(d,h.t);burst(_re.x,_re.y-gH(_re.x,_re.z),_re.z,2,'debris',3);Sound.play('thud',.4);end=h.t;n=pierce;break;}
     const tg=h.z||h.a,k=h.z?'z':'a',fall=h.t-t0>range*.5?lerp(1,.65,clamp((h.t-t0-range*.5)/(range*.5),0,1)):1,head=h.part==='head';
     const dd=dmg*(PART_MUL[h.part]||1)*fall;if(head&&!CRITF)CRITF=true;
-    dmgTarget(tg,k,dd,kx,kz);onHit(tg,k,dd);CRITF=false;if(!first)first={t:tg,k};
+    // where and how hard it landed, for the hit reaction and the blood (damageZombie reads it)
+    HITINFO={part:h.part,sub:h.sub||h.part,p:_rf.copy(o).addScaledVector(d,h.t),dx:d.x,dy:d.y,dz:d.z,heavy:knock>=5||dd>=60};
+    dmgTarget(tg,k,dd,kx,kz);HITINFO=null;onHit(tg,k,dd);CRITF=false;if(!first)first={t:tg,k};
     hitMarker(tg.dying||tg.hp<=0?'kill':head?'head':'');n++;end=h.t;if(n>=pierce)break;}
   for(const [t,s] of HRAY)if(t0+t/hl<=end+.01)shatter(s);HRAY.length=0;for(const [t,Wn] of wwins)if(t<=end+.01)breakWin(Wn);
   _rend.copy(o).addScaledVector(d,end);

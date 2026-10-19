@@ -53,7 +53,7 @@ function zSteer(z,dt,tx,tz,lu){
 function zAbility(z,dt,pd,pdx,pdz,sp,reach){
   const a=zAb(z),d=z.def,live=player.alive&&z.aware,n=pd||1,ux=pdx/n,uz=pdz/n,wm=1+.04*Math.max(0,S.wave-1);
   a.cd-=dt;a.cd2-=dt;
-  if(z.aware&&!a.was){a.srch=0;if(a.s==='look'||a.s==='sniff')zSet(z,'',0);if(z.type==='walker'&&!z.always&&!a.s&&Math.random()<.45)zSet(z,'howl',1.05);}
+  if(z.aware&&!a.was){a.srch=0;if(a.s==='look'||a.s==='sniff')zSet(z,'',0);if(z.type==='walker'&&!z.always&&!a.s&&!(z.hr&&z.hr.length)&&Math.random()<.45)zSet(z,'howl',1.05);} // a walker woken by a bullet reels instead
   if(!z.aware&&a.was&&player.alive)a.srch=14;
   a.was=z.aware;if(z.aware&&pd<38){a.lkx=player.x;a.lkz=player.z;}
   // what sets each trick off
@@ -158,7 +158,7 @@ function zPose(z,dt,pd,pdx,pdz){
   if(z.type==='boomer'){const k=s==='swell'?zK(a):0,p=s==='swell'?.55+.45*Math.sin(a.t*(14+k*34)):0;z.glow=p*(.25+.6*k);if(s==='swell')z.g.scale.setScalar(a.s0*(1+(.06+.16*k)*p));}
   if(!B)return;
   const look=z.aware&&pd<20&&s!=='howl'&&s!=='summon'&&s!=='swell'&&!z.def.crawl;
-  if(!s&&!z.def.crawl&&!look&&a.guard<.02&&a.chg<.02&&!(z.slamT>0))return;
+  if(!s&&!z.def.crawl&&!look&&a.guard<.02&&a.chg<.02&&!(z.slamT>0)&&!(z.hr&&z.hr.length))return;
   const e=s?zEnv(a):0,k=s?zK(a):0,t=a.t,R=(b,ax,an)=>zRot(z,b,ax,an);
   if(s==='coil')z.g.position.y-=(z.type==='crawler'?.06:.24)*e;
   if(s==='leap')z.g.rotation.x+=.5*Math.sin(Math.PI*k);
@@ -170,6 +170,7 @@ function zPose(z,dt,pd,pdx,pdz){
   if(a.chg>.02){const g=a.chg;R(B.chest,'x',.55*g);R(B.neck,'x',-.3*g);R(B.lArm,'x',.55*g);R(B.rArm,'x',.55*g);R(B.lArm,'z',.3*g);R(B.rArm,'z',-.3*g);}
   if(z.slamT>0){const q=1-z.slamT/.7,up=q<.78?q/.78:1-(q-.78)/.22;const arm=q<.78?-2.7*up:-2.7+3.2*((q-.78)/.22),ch=q<.78?-.4*up:-.4+1.1*((q-.78)/.22);
     R(B.chest,'x',ch);R(B.lArm,'x',arm);R(B.rArm,'x',arm);R(B.lArm,'y',-.3);R(B.rArm,'y',.3);R(B.neck,'x',-.3*up);}
+  zHitPose(z,B,dt);
   switch(s){
     case 'howl':R(B.chest,'x',-.35*e);R(B.chest,'z',Math.sin(t*40)*.03*e);R(B.neck,'x',-.45*e);R(B.head,'x',-.3*e);R(B.lArm,'z',.7*e);R(B.rArm,'z',-.7*e);R(B.lArm,'x',-.4*e);R(B.rArm,'x',-.4*e);break;
     case 'grab':{const bite=Math.max(0,Math.sin(t*7));R(B.chest,'x',.25*e);R(B.lArm,'x',-.5*e);R(B.rArm,'x',-.5*e);R(B.lArm,'y',-.45*e);R(B.rArm,'y',.45*e);R(B.lFore,'x',-.6*e);R(B.rFore,'x',-.6*e);R(B.neck,'x',.4*e*bite);break;}
@@ -248,4 +249,45 @@ function zGait(z){
   if(!want)return false;
   const name=want===A.charge?'charge':want===A.jog?'jog':want===A.feral?'feral':'sprint';
   want.timeScale=clamp(Math.max(fv,1)/GAIT[name],.55,1.75);return true;
+}
+
+/* ----- rounds hitting the body -----
+   A hit used to show only as a red flash and a puff of blood at chest height, and a heavy round shoved the whole body
+   back a metre with its legs running in reverse. Now each hit plays a reaction on the skeleton over whatever it is
+   doing, by where the round landed: a head shot snaps the head back, a chest hit jolts the torso back and twists it
+   with the round, an arm hit throws that arm back, a leg hit buckles that knee and drops the hips. Harder hits react
+   harder and stall the advance for a moment (a stagger); blood sprays from the wound and, on heavy rounds, out the
+   back. A killing head shot bursts the head. Reactions stack, so a burst of fire shakes the body. */
+const _zhp=new V3();
+function zImpact(z,dmg,kx,kz,lift){
+  const H=HITINFO,s=clamp(dmg/(z.maxHp*.22),.3,1)*(z.type==='boss'?.35:z.type==='brute'?.6:1)*(H&&H.heavy?1.25:1);
+  // where: the wound, or chest height for blasts, blades and the top-down view
+  if(H){_zhp.copy(H.p);_zhp.y-=gH(_zhp.x,_zhp.z);}else _zhp.set(z.x,1.3*(z.def.scale||1)+(z.lvlY||0),z.z);
+  const fx=z.type==='spitter'?'acid':'blood';burst(_zhp.x,_zhp.y,_zhp.z,H&&H.part==='head'?5:3,fx,4);
+  if(H&&H.heavy)burst(_zhp.x+H.dx*.35,_zhp.y+H.dy*.35,_zhp.z+H.dz*.35,4,fx,6);
+  // which way the round was going, in the body's own frame (fw: toward its front, lf: toward its left)
+  let dx=H?H.dx:kx||0,dz=H?H.dz:kz||0;const l=Math.hypot(dx,dz)||1;dx/=l;dz/=l;
+  const sy=Math.sin(z.yaw),cy=Math.cos(z.yaw),fw=dx*sy+dz*cy,lf=dx*cy-dz*sy;
+  const part=H?H.sub:lift?'blast':'torso';
+  (z.hr||(z.hr=[])).push({part,s,fw,lf,t:0,tw:Math.random()<.5?-1:1});if(z.hr.length>4)z.hr.shift();
+  z.stagT=Math.max(z.stagT||0,lift?.6:s*(part==='rLeg'||part==='lLeg'?.55:.35));
+  // a killing head shot takes the head off
+  if(H&&H.part==='head'&&z.hp<=0&&dmg>=40&&z.bones&&z.bones.head){const hb=z.bones.head;hb.getWorldPosition(_zhp);_zhp.y+=gH(z.g.position.x,z.g.position.z)-gH(_zhp.x,_zhp.z);
+    burst(_zhp.x,_zhp.y,_zhp.z,14,'gore',6);burst(_zhp.x,_zhp.y,_zhp.z,8,fx,5);hb.scale.setScalar(.01);z.headless=true;Sound.play('thud',.6,z.x,z.z);}
+}
+// the reactions, laid over the animation (called from zPose); each kicks in fast and settles over about a third of a second
+function zHitPose(z,B,dt){
+  const L=z.hr;if(!L||!L.length)return;const R=(b,ax,an)=>zRot(z,b,ax,an);
+  for(let i=L.length-1;i>=0;i--){const h=L[i];h.t+=dt;if(h.t>.45){L.splice(i,1);continue;}
+    const e=h.s*(h.t<.05?h.t/.05:Math.exp(-(h.t-.05)*7)),back=-Math.max(.35,-h.fw)*e,lean=-h.lf*e;  // shot from the front: tip back
+    switch(h.part){
+      case 'head':R(B.neck,'x',back*.6);R(B.head,'x',back*.35);R(B.neck,'y',h.tw*.3*e);R(B.chest,'x',back*.15);break;
+      case 'lArm':case 'rArm':{const sd=h.part==='lArm'?1:-1,A=sd>0?B.lArm:B.rArm,F=sd>0?B.lFore:B.rFore;
+        R(A,'x',.7*e);R(A,'z',sd*.35*e);R(F,'x',.45*e);R(B.chest,'y',sd*.22*e);break;}
+      case 'lLeg':case 'rLeg':{const sd=h.part==='lLeg'?1:-1,U=sd>0?B.lUp:B.rUp,K=sd>0?B.lLeg:B.rLeg;
+        R(U,'x',-.35*e);R(K,'x',1.0*e);R(B.hips,'z',-sd*.18*e);R(B.chest,'x',.25*e);z.g.position.y-=.12*e;break;}
+      case 'blast':R(B.chest,'x',back*.8);R(B.neck,'x',back*.6);R(B.lArm,'z',.7*e);R(B.rArm,'z',-.7*e);break;
+      default:R(B.spine,'x',back*.25);R(B.chest,'x',back*.3);R(B.chest,'z',lean*.25);R(B.chest,'y',h.tw*.22*e);R(B.neck,'x',back*.2);
+        R(B.lArm,'z',.3*e);R(B.rArm,'z',-.3*e);R(B.lArm,'x',.25*e);R(B.rArm,'x',.25*e);}
+  }
 }

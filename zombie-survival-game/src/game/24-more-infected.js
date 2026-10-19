@@ -177,8 +177,11 @@ function damageZombie(z,dmg,kx,kz,silent,lift){
   if(z.dying)return;dmg=zArmor(z,dmg,kx,kz);z.hp-=dmg;
   if(!silent)dmgNum(z,dmg,z.hp<=0?'kill':SNEAKF?'sneak':CRITF?'crit':'',(z.barY||2.35*z.def.scale)+.25);
   if(!z.aware&&!silent)zAlert(z);
-  if(!silent){bloodUp(z,dmg/z.maxHp*.7);z.flash=.09;if(Math.random()<.3)decal(z.x+rand(-.5,.5),z.z+rand(-.5,.5),rand(.4,.8),z.type==='spitter'?0x3f6a14:0x4a0a08,.7);burst(z.x,1.3*z.def.scale,z.z,3,z.type==='spitter'?'acid':'blood',4);Sound.play('hit',.7,z.x,z.z);
-    const kr=z.type==='boss'?.1:z.type==='brute'?.3:1;z.kx+=(kx||0)*kr;z.kz+=(kz||0)*kr;z.hx=kx||0;z.hz=kz||0;z.lift=lift||0;}
+  if(!silent){bloodUp(z,dmg/z.maxHp*.7);z.flash=.09;if(Math.random()<.3)decal(z.x+rand(-.5,.5),z.z+rand(-.5,.5),rand(.4,.8),z.type==='spitter'?0x3f6a14:0x4a0a08,.7);Sound.play('hit',.7,z.x,z.z);
+    zImpact(z,dmg,kx,kz,lift); // blood where it landed, the body's reaction, the stagger
+    // the shove: most of a round's push goes into the reaction, so the body staggers instead of skating back (blasts still throw)
+    const kr=z.type==='boss'?.1:z.type==='brute'?.3:1,kk=lift?kr:kr*.35,cap=lift?8:2.2;z.kx+=(kx||0)*kk;z.kz+=(kz||0)*kk;
+    {const km=Math.hypot(z.kx,z.kz);if(km>cap){z.kx*=cap/km;z.kz*=cap/km;}}z.hx=kx||0;z.hz=kz||0;z.lift=lift||0;}
   if(z.hp<=0)killZombie(z);
 }
 function killZombie(z){
@@ -214,6 +217,7 @@ function updateDying(z,dt){
   if(z.x!==ox||z.z!==oz){z.dvx*=-.3;z.dvz*=-.3;}
   z.yaw+=z.dspin*dt;
   if(z.mixer)z.mixer.update(dt);
+  if(z.headless)z.bones.head.scale.setScalar(.01); // the death clip would put the head back
   if(!z.animDeath)z.g.rotation.x=lerp(z.g.rotation.x,-Math.PI/2,Math.min(1,dt*(z.y>0?5:9)));
   if(z.dieT>1.6)z.sink+=dt*.7;
   z.g.position.set(z.x,z.y*.9+(z.animDeath?0:.15*Math.min(1,z.dieT*3)*z.def.scale)-z.sink+(z.lvlY||0),z.z);z.g.rotation.y=z.yaw;
@@ -314,7 +318,8 @@ function updateZombies(dt){
     // at night they charge the last few metres
     if(S.phase==='night'&&z.aware&&pd<4.5&&pd>1.2&&zH===pH)sp*=1.28;
     if(zClimb(z,dt,pd))sp=0;
-    const ozx=z.x,ozz=z.z;z.x+=dx*sp*dt+z.kx*dt;z.z+=dz*sp*dt+z.kz*dt;
+    if(z.stagT>0){z.stagT-=dt;sp*=.2;} // staggered by a hit: the advance stalls
+    const ozx=z.x,ozz=z.z;z.kax=z.kx;z.kaz=z.kz;z.x+=dx*sp*dt+z.kx*dt;z.z+=dz*sp*dt+z.kz*dt;
     if(depthAt(z.x,z.z)>1.15){z.x=ozx;z.z=ozz;}else{z.dryX=z.x;z.dryZ=z.z;}
     const kd=Math.pow(.01,dt);z.kx*=kd;z.kz*=kd;
     updateLevel(z);
@@ -337,7 +342,8 @@ function updateZombies(dt){
     z.walk+=dt*(sp+.5)*2.2;const sw=Math.sin(z.walk);
     // the legs follow the ground actually covered: shoved backwards, they step backwards rather than walking on the spot
     {const ax=(z.x-(z.lx??z.x))/dt,az=(z.z-(z.lz??z.z))/dt,jump=Math.hypot(ax,az)*dt>.6;z.lx=z.x;z.lz=z.z; // a teleport (spawn, unstick) is not a sprint
-      if(!jump)z.fv=lerp(z.fv||0,clamp(ax*Math.sin(z.yaw)+az*Math.cos(z.yaw),-12,12),Math.min(1,dt*8));}
+      // the legs follow the body's own stride, not the shove of a round
+      if(!jump)z.fv=lerp(z.fv||0,clamp((ax-(z.kax||0))*Math.sin(z.yaw)+(az-(z.kaz||0))*Math.cos(z.yaw),-12,12),Math.min(1,dt*8));}
     if(z.mixer){
       // a crawler's clip is scrubbed to its crawl cycle, so the hauls and the surges in speed line up
       if(z.acts.crawl&&z.acts.loco===z.acts.crawl&&z.ab){z.acts.crawl.timeScale=0;z.acts.crawl.time=((z.ab.cph||0)%1)*z.acts.crawl.getClip().duration;}

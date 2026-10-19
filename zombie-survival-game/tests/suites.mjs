@@ -65,7 +65,9 @@ export const suites = [
         const o = { eye: +(__cam.position.y - w.gH(__P.x, __P.z)).toFixed(2), vm: w.gun.parent === w.VM, body: w.pl.visible };
         for (const q of [...__Z]) w.removeZombie(q); __Z.length = 0; // a roamer wandering into the line would take the shot
         const z = __spawn('walker', __P.x, __P.z + 9); z.hp = 1; z.aware = 0; w.updateCamera(.05);
-        for (let i = 0; i < 60 && !z.dying; i++) { w.tryFire(); __sim(1, .05); } o.killed = !!z.dying || z.hp <= 0;
+        // straight ahead, pitched at its chest: shots fly in 3D, and the ground between may rise or fall a metre
+        for (let i = 0; i < 60 && !z.dying; i++) { const c = w.camera.position; w.camPitch = Math.atan2(c.y - w.gH(z.x, z.z) - 1.2, Math.hypot(z.x - c.x, z.z - c.z)); w.updateCamera(.05); w.camera.updateMatrixWorld(); w.tryFire(); __sim(1, .05); }
+        o.killed = !!z.dying || z.hp <= 0;
         return o;
       });
       await shot('first-person');
