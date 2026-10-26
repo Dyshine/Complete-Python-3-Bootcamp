@@ -57,6 +57,18 @@ def search_movie(title, year=None):
     return results[0]["id"] if results else None
 
 
+def search_movies(query, page=1):
+    """Search results for the web UI: id, title, year, small poster URL."""
+    data = _get("/search/movie", {"query": query, "include_adult": "false", "page": page})
+    out = []
+    for m in data.get("results") or []:
+        release = m.get("release_date") or ""
+        out.append({"id": m["id"], "title": m.get("title") or m.get("original_title"),
+                    "year": int(release[:4]) if release[:4].isdigit() else None,
+                    "thumb": IMAGE_BASE + "w92" + m["poster_path"] if m.get("poster_path") else None})
+    return out
+
+
 def list_movies(kind, count):
     """Movie ids from a TMDB list: top_rated, popular, now_playing, upcoming."""
     ids, page = [], 1

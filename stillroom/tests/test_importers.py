@@ -94,6 +94,7 @@ def test_tmdb_import(tmp_path, monkeypatch, library):
     assert tmdb.import_movie(lib, conn, 77, log=lambda *_: None) is None
     app = create_app(lib.root)
     c = app.test_client()
+    c.environ_base["HTTP_X_STILLROOM"] = "1"
     detail = c.get(f"/api/shots/{shots[0]['id']}").get_json()
     assert detail["source"] == "tmdb"
     r = c.get("/api/search?source=tmdb&facets=1").get_json()

@@ -38,7 +38,7 @@ FACETS = ["film", "director", "cinematographer", "genre", "decade", "aspect", "s
           "angle", "lighting", "time_of_day", "int_ext", "color", "key", "tone", "source"]
 
 LIST_COLUMNS = """s.id, s.film_id, s.idx, s.frame_time, s.image, s.thumb, s.width, s.height,
-                  s.palette, s.shot_type, s.description, f.title, f.year, f.director, f.source"""
+                  s.palette, s.shot_type, s.description, s.origin, f.title, f.year, f.director, f.source"""
 
 
 # ---------------------------------------------------------------- text query

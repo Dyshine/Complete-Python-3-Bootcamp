@@ -8,7 +8,9 @@ from .config import IngestSettings, Library
 
 
 def _lib(args):
-    return Library(args.library).ensure()
+    lib = Library(args.library).ensure()
+    lib.apply_settings()
+    return lib
 
 
 def cmd_ingest(args):
@@ -97,7 +99,7 @@ def cmd_serve(args):
     from .server import create_app
 
     lib = _lib(args)
-    app = create_app(lib.root)
+    app = create_app(lib.root, local_only=args.host in ("127.0.0.1", "localhost", "::1"))
     conn = db.connect(lib.db_path)
     from .tmdb import MAX_CACHE_DAYS, expired_films
     stale = expired_films(conn)
@@ -146,7 +148,7 @@ def cmd_archive(args):
     film_ids, page, tried = [], 1, set()
     while len(film_ids) < args.count:
         docs = archive.search(count=50, query=args.query, min_year=args.min_year,
-                              max_year=args.max_year, page=page)
+                              max_year=args.max_year, page=page, collection=args.collection)
         docs = [d for d in docs if d["identifier"] not in tried]
         if not docs:
             break
@@ -154,7 +156,7 @@ def cmd_archive(args):
             if len(film_ids) >= args.count:
                 break
             tried.add(doc["identifier"])
-            url, meta = archive.pick_file(doc["identifier"])
+            url, meta = archive.pick_file(doc["identifier"], archive.min_seconds_for(args.collection))
             info = archive.film_info(doc, meta)
             slug = metadata.slugify(f"{info['title']} {info['year'] or ''}")
             if slug in known:
@@ -228,6 +230,31 @@ def cmd_tmdb(args):
     if not args.no_embed and film_ids:
         _embed(conn, lib, films=film_ids)
     print(f"\nImported stills for {len(film_ids)} films. {tmdb.ATTRIBUTION}")
+
+
+def cmd_images(args):
+    from . import images
+
+    lib = _lib(args)
+    conn = db.connect(lib.db_path)
+    groups = images.group_by_folder(args.path)
+    if not groups:
+        sys.exit(f"No images (.jpg, .png, .webp, ...) found at {args.path}")
+    if len(groups) > 1 and args.title:
+        sys.exit("--title only makes sense for one folder; name each sub-folder 'Title (Year)' instead")
+    film_ids = []
+    for folder, files in groups.items():
+        meta = metadata.parse_filename(folder.name + ".x") if not args.title else {"title": args.title, "year": args.year}
+        if args.year:
+            meta["year"] = args.year
+        meta.update({k: v for k, v in {"director": args.director, "cinematographer": args.dp,
+                                       "license": args.license}.items() if v})
+        items = [(f.name, f.read_bytes()) for f in files]
+        film_id, added, _ = images.import_images(lib, conn, items, meta)
+        if added:
+            film_ids.append(film_id)
+    if not args.no_embed and film_ids:
+        _embed(conn, lib, films=film_ids)
 
 
 def cmd_films(args):
@@ -310,8 +337,20 @@ def main(argv=None):
     s.add_argument("--no-embed", action="store_true")
     s.set_defaults(func=cmd_demo)
 
+    s = sub.add_parser("images", help="import screenshots / still images (a file, a folder, or a folder of folders)")
+    s.add_argument("path", help="image file or folder; sub-folders named 'Title (Year)' become separate films")
+    s.add_argument("--title", help="film title (default: the folder name)")
+    s.add_argument("--year", type=int)
+    s.add_argument("--director")
+    s.add_argument("--dp", help="cinematographer")
+    s.add_argument("--license", help="where the pictures came from")
+    s.add_argument("--no-embed", action="store_true")
+    s.set_defaults(func=cmd_images)
+
     s = sub.add_parser("archive", help="bulk-import public-domain feature films from the Internet Archive")
     s.add_argument("--count", type=int, default=10, help="how many new films to add (10)")
+    s.add_argument("--collection", default="feature_films",
+                   help="feature_films (default), Film_Noir, silent_films, SciFi_Horror or prelinger")
     s.add_argument("--query", help='archive.org search terms, e.g. "noir" or subject:"Film Noir"')
     s.add_argument("--min-year", type=int)
     s.add_argument("--max-year", type=int)

@@ -62,6 +62,8 @@ CREATE TABLE IF NOT EXISTS shots (
     tags         TEXT DEFAULT '',         -- comma separated keywords
     describer    TEXT,
     described_at TEXT,
+    origin       TEXT,                    -- NULL: same as the film's source; 'image' for an imported screenshot
+    content_hash TEXT,                    -- sha1 of an imported image, to skip duplicates
     UNIQUE (film_id, idx)
 );
 CREATE INDEX IF NOT EXISTS shots_film ON shots(film_id, idx);
@@ -125,7 +127,11 @@ def _migrate(conn):
     film_cols = {r["name"] for r in conn.execute("PRAGMA table_info(films)")}
     if "source" not in film_cols:
         conn.execute("ALTER TABLE films ADD COLUMN source TEXT DEFAULT 'video'")
-        conn.commit()
+    shot_cols = {r["name"] for r in conn.execute("PRAGMA table_info(shots)")}
+    for col in ("origin", "content_hash"):
+        if col not in shot_cols:
+            conn.execute(f"ALTER TABLE shots ADD COLUMN {col} TEXT")
+    conn.commit()
 
 
 # ---------------------------------------------------------------- films
@@ -272,7 +278,7 @@ def shot_to_dict(row, full=False):
         "description": row["description"] or "",
     }
     keys = row.keys()
-    for k in ("title", "year", "director", "source"):
+    for k in ("title", "year", "director", "source", "origin"):
         if k in keys:
             d[k] = row[k]
     if full:

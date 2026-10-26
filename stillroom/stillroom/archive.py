@@ -16,6 +16,20 @@ API = "https://archive.org"
 UA = {"User-Agent": "stillroom/0.1 (personal film-still library)"}
 MIN_FEATURE_SECONDS = 40 * 60
 
+# Collections with many public-domain films (counts of items marked public
+# domain, checked October 2026). Only feature_films is limited to features.
+COLLECTIONS = {
+    "feature_films": "Feature films (7,600+)",
+    "Film_Noir": "Film noir (240+)",
+    "silent_films": "Silent films (580+)",
+    "SciFi_Horror": "Sci-fi & horror (280+)",
+    "prelinger": "Prelinger Archives: industrial, educational & home movies (1,800+)",
+}
+
+
+def min_seconds_for(collection):
+    return MIN_FEATURE_SECONDS if collection == "feature_films" else 60
+
 
 def _get_json(url):
     req = urllib.request.Request(url, headers=UA)
@@ -23,9 +37,11 @@ def _get_json(url):
         return json.loads(resp.read().decode("utf-8"))
 
 
-def search(count=20, query=None, min_year=None, max_year=None, page=1):
-    """Public-domain feature films, most downloaded first."""
-    q = "collection:feature_films AND mediatype:movies AND licenseurl:*publicdomain*"
+def search(count=20, query=None, min_year=None, max_year=None, page=1, collection="feature_films"):
+    """Public-domain films in a collection, most downloaded first."""
+    if not re.fullmatch(r"[\w-]+", collection or ""):
+        raise ValueError(f"Bad collection name: {collection!r}")
+    q = f"collection:{collection} AND mediatype:movies AND licenseurl:*publicdomain*"
     if query:
         q += f" AND ({query})"
     if min_year or max_year:
@@ -52,7 +68,11 @@ def _length(f):
         return 0.0
 
 
-def pick_file(identifier):
+def thumbnail(identifier):
+    return f"{API}/services/img/{urllib.parse.quote(identifier)}"
+
+
+def pick_file(identifier, min_seconds=MIN_FEATURE_SECONDS):
     """Choose the best single-file MP4 of a whole film (None if the film is
     split into parts or there is no MP4). Returns (url, metadata dict)."""
     data = _get_json(f"{API}/metadata/{urllib.parse.quote(identifier)}")
@@ -64,7 +84,7 @@ def pick_file(identifier):
         if not name.lower().endswith((".mp4", ".m4v")):
             continue
         length = _length(f)
-        if length and length < MIN_FEATURE_SECONDS:
+        if length and length < min_seconds:
             continue  # trailers, reels, one part of a split film
         width = int(f.get("width") or 0)
         rank = (

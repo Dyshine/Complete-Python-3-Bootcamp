@@ -13,7 +13,13 @@ const TITLES = {
   lighting: "Lighting", time_of_day: "Time of day", int_ext: "Interior / exterior", color: "Colour",
   key: "Exposure", tone: "Colour temperature", mood: "Mood", source: "Source",
 };
-const SOURCE_LABELS = { video: "Film frames", tmdb: "TMDB stills" };
+const SOURCE_LABELS = { video: "Film frames", tmdb: "TMDB stills", images: "Screenshots" };
+const isScreenshot = (s) => s.origin === "image" || s.source === "images";
+function whereLabel(s) {
+  if (isScreenshot(s)) return "Screenshot";
+  if (s.source === "tmdb") return "TMDB still";
+  return tc(s.frame_time);
+}
 const KEEP_CASE = new Set(["film", "director", "cinematographer"]);
 const FAMILY_HEX = {
   red: "#c8352b", orange: "#e5822f", brown: "#7b4a2b", yellow: "#e3c33c", green: "#3f8a4f", teal: "#23898b",
@@ -51,8 +57,17 @@ function store(key, value) {
   return value;
 }
 async function api(path, opts = {}) {
-  const res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  const headers = { "X-Stillroom": "1" };
+  if (!(opts.body instanceof FormData)) headers["Content-Type"] = "application/json";
+  const res = await fetch(path, { ...opts, headers });
+  if (!res.ok) {
+    let msg = `${res.status} ${res.statusText}`;
+    try {
+      const body = await res.json();
+      if (body.error) msg = body.error;
+    } catch { /* not JSON */ }
+    throw new Error(msg);
+  }
   return res.status === 204 ? null : res.json();
 }
 let toastTimer;
@@ -110,6 +125,8 @@ function setPage(name) {
   $("#boardsPage").hidden = name !== "boards";
   $("#boardPage").hidden = name !== "board";
   $("#aboutPage").hidden = name !== "about";
+  $("#addPage").hidden = name !== "add";
+  if (name !== "search") setSelectMode(false);
   document.querySelectorAll("[data-nav]").forEach((a) =>
     a.classList.toggle("active", a.dataset.nav === name || (name === "board" && a.dataset.nav === "boards")));
 }
@@ -118,6 +135,7 @@ function route() {
   const m = path.match(/^\/boards\/(\d+)/);
   if (path === "/films") showFilms();
   else if (path === "/about") showAbout();
+  else if (path === "/add") showAdd();
   else if (path === "/boards") showBoards();
   else if (m) showBoard(Number(m[1]));
   else showSearch();
@@ -265,7 +283,7 @@ function tileEl(shot, index, list, opts) {
   const el = document.createElement("div");
   el.className = "tile";
   el.style.setProperty("--ar", (shot.width / shot.height || 1.78).toFixed(4));
-  const where = shot.source === "tmdb" ? "TMDB still" : tc(shot.frame_time);
+  const where = whereLabel(shot);
   const label = `${shot.title}${shot.year ? ` (${shot.year})` : ""}, ${where}`;
   el.innerHTML = `<i></i><img loading="lazy" decoding="async" alt="" src="${esc(shot.thumb)}">
     <span class="meta"><b>${esc(shot.title)}${shot.year ? ` (${shot.year})` : ""}</b>${where}${shot.shot_type ? " · " + esc(shot.shot_type) : ""}</span>`;
@@ -278,6 +296,11 @@ function tileEl(shot, index, list, opts) {
   open.className = "open";
   open.setAttribute("aria-label", `Open still: ${label}. ${shot.description || ""}`);
   open.addEventListener("click", (e) => {
+    if (selection.active && !opts.remove) {
+      e.preventDefault();
+      toggleSelected(shot, list, index, e.shiftKey);
+      return;
+    }
     if (e.metaKey || e.ctrlKey) return;
     e.preventDefault();
     openViewer(list, index);
@@ -295,6 +318,8 @@ function tileEl(shot, index, list, opts) {
     quick.addEventListener("click", () => quickSave(shot));
   }
   el.appendChild(quick);
+  el.dataset.id = shot.id;
+  if (selection.ids.has(shot.id)) el.classList.add("selected");
   return el;
 }
 
@@ -396,7 +421,7 @@ let retryTimer;
 const SEMANTIC_NOTES = {
   loading: "Picture search is starting up (first search after launch). Showing word matches for now; results update by themselves in a few seconds.",
   off: "Picture search is off, so only words in the descriptions are matched. Install the AI extras (see README: requirements-ai.txt) to search by what is in the frame.",
-  unindexed: "These stills aren't indexed for picture search yet. In the stillroom folder run: python -m stillroom embed",
+  unindexed: 'These stills aren\'t indexed for picture search yet. <a href="/add" data-link>Index them on the Add films page</a>.',
 };
 function showSearching() {
   $("#resultHead").innerHTML = '<span class="searching" role="status">Searching…</span>';
@@ -405,7 +430,7 @@ function renderHead() {
   const modes = { hybrid: "semantic + keyword", text: "keyword", color: "colour match", similar: "visual similarity" };
   const tag = modes[state.mode] ? `<span class="mode-tag">${modes[state.mode]}</span>` : "";
   const note = state.q && SEMANTIC_NOTES[state.semantic]
-    ? `<p class="search-note">${esc(SEMANTIC_NOTES[state.semantic])}</p>` : "";
+    ? `<p class="search-note">${SEMANTIC_NOTES[state.semantic]}</p>` : "";
   $("#resultHead").innerHTML = `<span><strong>${fmt(state.total)}</strong> still${state.total === 1 ? "" : "s"}${state.q ? ` for “${esc(state.q)}”` : ""}</span>${tag}${note}`;
 }
 function showEmpty(html) {
@@ -419,7 +444,7 @@ function renderNoResults() {
       Your results will appear here by themselves in a few seconds.</p>`);
   } else if (stats && stats.shots === 0) {
     showEmpty(`<h2>Your library is empty</h2>
-      <p>Add films you own, or start with free public-domain classics:</p>
+      <p><a href="/add" data-link>Add films</a> from free online archives, your own screenshots or movie files, or run:</p>
       <pre>python -m stillroom demo            # downloads 3 free films and indexes them
 python -m stillroom ingest "/path/to/Movie (1999).mkv"</pre>
       <p>Then refresh this page.</p>`);
@@ -566,7 +591,7 @@ function renderPanel(s) {
     <h2 class="v-film"><button data-filter="film" data-value="${esc(s.slug)}">${esc(s.title)}</button>
       ${s.year ? `<span class="muted">(${s.year})</span>` : ""}</h2>
     <p class="v-credits">${credits.join("<br>")}${credits.length ? "<br>" : ""}
-      ${s.source === "tmdb" ? `Still ${s.idx} · from TMDB` : `Shot ${s.idx} · ${s.timecode} · ${s.duration}s`}${s.aspect_ratio ? ` · ${s.aspect_ratio}:1` : ""}</p>
+      ${isScreenshot(s) ? `Screenshot ${s.idx}` : s.source === "tmdb" ? `Still ${s.idx} · from TMDB` : `Shot ${s.idx} · ${s.timecode} · ${s.duration}s`}${s.aspect_ratio ? ` · ${s.aspect_ratio}:1` : ""}</p>
     <div class="v-actions">
       <button class="btn primary" id="vSave" aria-expanded="false">Save <kbd>S</kbd></button>
       <a class="btn" href="/api/shots/${s.id}/download">Download <kbd>D</kbd></a>
@@ -592,7 +617,7 @@ function renderPanel(s) {
       ${attr("Genre", "genre", s.genres)}
     </dl>
     ${s.tags.length ? `<div class="v-section"><h4>Tags</h4>${s.tags.map((t) => `<button class="pill" data-tag="${esc(t)}">${esc(t)}</button>`).join("")}</div>` : ""}
-    ${s.sequence.length > 1 ? `<div class="v-section"><h4>${s.source === "tmdb" ? "More from this film" : "In sequence"}</h4><div class="strip" data-list="sequence">${strip(s.sequence, s.id)}</div></div>` : ""}
+    ${s.sequence.length > 1 ? `<div class="v-section"><h4>${s.source === "tmdb" || isScreenshot(s) ? "More from this film" : "In sequence"}</h4><div class="strip" data-list="sequence">${strip(s.sequence, s.id)}</div></div>` : ""}
     ${s.similar.length ? `<div class="v-section"><h4>Looks similar <button class="link-btn" id="vAllSimilar">See all</button></h4><div class="strip" data-list="similar">${strip(s.similar)}</div></div>` : ""}
     ${s.license ? `<p class="license">Source: ${esc(s.license)}</p>` : ""}
     ${s.source === "tmdb" && stats ? `<p class="license">${esc(stats.tmdb_notice)}</p>` : ""}
@@ -775,6 +800,319 @@ async function showFilms() {
     </a>`).join("") || '<p class="muted">No films yet.</p>';
 }
 
+/* ------------------------------------------------------------ select mode */
+
+const selection = { active: false, ids: new Set(), last: null };
+
+function setSelectMode(on) {
+  selection.active = on;
+  document.body.classList.toggle("selecting", on);
+  $("#selectBtn")?.setAttribute("aria-pressed", String(on));
+  if (!on) {
+    selection.ids.clear();
+    document.querySelectorAll(".tile.selected").forEach((t) => t.classList.remove("selected"));
+  }
+  updateSelectBar();
+}
+function toggleSelected(shot, list, index, range) {
+  const ids = range && selection.last !== null
+    ? list.slice(Math.min(selection.last, index), Math.max(selection.last, index) + 1).map((x) => x.id)
+    : [shot.id];
+  const add = range || !selection.ids.has(shot.id);
+  for (const id of ids) add ? selection.ids.add(id) : selection.ids.delete(id);
+  selection.last = index;
+  for (const id of ids) document.querySelectorAll(`.tile[data-id="${id}"]`).forEach((t) => t.classList.toggle("selected", add));
+  updateSelectBar();
+}
+async function updateSelectBar() {
+  const bar = $("#selectBar");
+  bar.hidden = !selection.active;
+  if (!selection.active) return;
+  const n = selection.ids.size;
+  $("#selectCount").textContent = n ? `${fmt(n)} selected` : "Click stills to select them (Shift-click for a range)";
+  for (const id of ["selectBoard", "selectDownload", "selectClear"]) $("#" + id).disabled = !n;
+}
+async function fillBoardSelect() {
+  await loadBoards();
+  $("#selectBoard").innerHTML = '<option value="">Save to board…</option>' +
+    boards.map((b) => `<option value="${b.id}">${esc(b.name)} (${b.count})</option>`).join("") +
+    '<option value="new">+ New board…</option>';
+}
+$("#selectBtn").addEventListener("click", async () => {
+  setSelectMode(!selection.active);
+  if (selection.active) await fillBoardSelect();
+});
+$("#selectDone").addEventListener("click", () => setSelectMode(false));
+$("#selectClear").addEventListener("click", () => {
+  selection.ids.clear();
+  document.querySelectorAll(".tile.selected").forEach((t) => t.classList.remove("selected"));
+  updateSelectBar();
+});
+$("#selectAll").addEventListener("click", () => {
+  state.results.forEach((r) => selection.ids.add(r.id));
+  document.querySelectorAll("#grid .tile").forEach((t) => t.classList.add("selected"));
+  updateSelectBar();
+});
+$("#selectDownload").addEventListener("click", () => {
+  if (selection.ids.size) location.href = `/api/export.zip?ids=${[...selection.ids].join(",")}`;
+});
+$("#selectBoard").addEventListener("change", async (e) => {
+  let id = e.target.value;
+  e.target.value = "";
+  if (!id || !selection.ids.size) return;
+  try {
+    if (id === "new") {
+      const name = prompt("Name the new board");
+      if (!name || !name.trim()) return;
+      id = (await api("/api/boards", { method: "POST", body: JSON.stringify({ name: name.trim() }) })).id;
+    }
+    await api(`/api/boards/${id}/shots`, { method: "POST", body: JSON.stringify({ shot_ids: [...selection.ids] }) });
+    await fillBoardSelect();
+    store("lastBoard", id);
+    toast(`Saved ${fmt(selection.ids.size)} still${selection.ids.size === 1 ? "" : "s"} to ${boards.find((b) => b.id === Number(id))?.name || "the board"}`);
+  } catch (err) {
+    toast(`Could not save: ${err.message}`);
+  }
+});
+
+/* ------------------------------------------------------------ add films */
+
+const add = { sources: null, online: "archive", page: 1, files: [], polling: null };
+
+async function showAdd() {
+  setPage("add");
+  if (!add.sources) {
+    try {
+      add.sources = await api("/api/sources");
+    } catch (err) {
+      $("#onlineResults").innerHTML = `<li class="muted">Could not load sources: ${esc(err.message)}</li>`;
+      return;
+    }
+    $("#onlineCollection").innerHTML = add.sources.archive_collections
+      .map((c) => `<option value="${c.id}">${esc(c.label)}</option>`).join("");
+  }
+  refreshTmdbForms();
+  setOnline(add.online);
+  await loadStats();
+  pollJobs();
+}
+async function refreshTmdbForms() {
+  try {
+    const st = await api("/api/settings");
+    $("#tmdbForm").hidden = !st.tmdb_ready;
+    $("#tmdbKey").placeholder = st.tmdb_key_hint ? `Key saved (${st.tmdb_key_hint}). Paste a new one to replace it` : "Paste your TMDB API key";
+    $("#tmdbKeyHelp").hidden = st.tmdb_ready;
+  } catch { /* shown when used */ }
+}
+function setOnline(source) {
+  add.online = source;
+  add.page = 1;
+  document.querySelectorAll("#onlineTabs [role=tab]").forEach((t) => t.setAttribute("aria-selected", String(t.dataset.source === source)));
+  $("#onlineCollection").hidden = source !== "archive";
+  $("#onlineForm").hidden = source === "starter";
+  $("#onlineMore").hidden = true;
+  if (source === "starter") renderStarter();
+  else searchOnline();
+}
+function resultItem(r, label, onAdd) {
+  const li = document.createElement("li");
+  li.innerHTML = `${r.thumb ? `<span class="thumb"><img src="${esc(r.thumb)}" alt="" loading="lazy"></span>` : ""}
+    <span class="what"><b>${esc(r.title)}</b>${r.year ? ` <span class="muted">(${r.year})</span>` : ""}${r.sub ? `<br><span class="muted small">${esc(r.sub)}</span>` : ""}</span>`;
+  const btn = document.createElement("button");
+  btn.className = "btn";
+  btn.textContent = r.in_library ? "In library" : label;
+  btn.disabled = Boolean(r.in_library);
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    btn.textContent = "Queued";
+    try {
+      await onAdd();
+      toast(`Adding ${r.title}. Follow it under Progress below`);
+      pollJobs();
+    } catch (err) {
+      btn.disabled = false;
+      btn.textContent = label;
+      toast(err.message);
+    }
+  });
+  li.appendChild(btn);
+  return li;
+}
+function renderStarter() {
+  const ul = $("#onlineResults");
+  ul.innerHTML = "";
+  for (const f of add.sources.demo) {
+    ul.appendChild(resultItem({ title: f.title, year: f.year, sub: `${f.director} · ~${f.size_mb} MB · ${f.license}` },
+      "Add", () => api("/api/jobs/demo", { method: "POST", body: JSON.stringify({ key: f.key }) })));
+  }
+}
+async function searchOnline(more = false) {
+  const ul = $("#onlineResults");
+  if (!more) {
+    add.page = 1;
+    ul.innerHTML = '<li class="muted searching">Searching…</li>';
+  }
+  const q = $("#onlineQuery").value.trim();
+  const source = add.online;
+  const url = source === "archive"
+    ? `/api/sources/archive?collection=${encodeURIComponent($("#onlineCollection").value)}&q=${encodeURIComponent(q)}&page=${add.page}`
+    : `/api/sources/loc?q=${encodeURIComponent(q)}&page=${add.page}`;
+  let items;
+  try {
+    items = await api(url);
+  } catch (err) {
+    ul.innerHTML = `<li class="muted">${esc(err.message)}</li>`;
+    return;
+  }
+  if (source !== add.online) return;
+  if (!more) ul.innerHTML = "";
+  if (!items.length && !more) ul.innerHTML = '<li class="muted">No films found. Try another word or collection.</li>';
+  const collection = $("#onlineCollection").value;
+  for (const r of items) {
+    ul.appendChild(resultItem(r, "Add", () => api(`/api/jobs/${source}`, {
+      method: "POST", body: JSON.stringify({ id: r.id, title: r.title, collection }),
+    })));
+  }
+  $("#onlineMore").hidden = items.length < 24;
+}
+$("#onlineTabs").addEventListener("click", (e) => {
+  const tab = e.target.closest("[role=tab]");
+  if (tab) setOnline(tab.dataset.source);
+});
+$("#onlineForm").addEventListener("submit", (e) => { e.preventDefault(); searchOnline(); });
+$("#onlineCollection").addEventListener("change", () => searchOnline());
+$("#onlineMore").addEventListener("click", () => { add.page += 1; searchOnline(true); });
+
+$("#tmdbKeyForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const key = $("#tmdbKey").value.trim();
+  if (!key) return;
+  try {
+    await api("/api/settings", { method: "POST", body: JSON.stringify({ tmdb_api_key: key }) });
+    $("#tmdbKey").value = "";
+    toast("TMDB key saved");
+    refreshTmdbForms();
+  } catch (err) {
+    toast(err.message);
+  }
+});
+$("#tmdbForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const ul = $("#tmdbResults");
+  ul.innerHTML = '<li class="muted searching">Searching…</li>';
+  try {
+    const items = await api(`/api/sources/tmdb?q=${encodeURIComponent($("#tmdbQuery").value.trim())}`);
+    ul.innerHTML = items.length ? "" : '<li class="muted">No films found.</li>';
+    for (const r of items) {
+      ul.appendChild(resultItem(r, "Add stills", () => api("/api/jobs/tmdb", {
+        method: "POST", body: JSON.stringify({ id: r.id, title: r.title }),
+      })));
+    }
+  } catch (err) {
+    ul.innerHTML = `<li class="muted">${esc(err.message)}</li>`;
+  }
+});
+$("#videoForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const path = $("#videoPath").value.trim();
+  if (!path) return;
+  try {
+    const queued = await api("/api/jobs/video", { method: "POST", body: JSON.stringify({ path }) });
+    toast(`Adding ${queued.length} video${queued.length === 1 ? "" : "s"}. This takes a while per film`);
+    $("#videoPath").value = "";
+    pollJobs();
+  } catch (err) {
+    toast(err.message);
+  }
+});
+
+// Screenshots: drag & drop or the file picker.
+function setFiles(list) {
+  add.files = [...list].filter((f) => f.type.startsWith("image/"));
+  $("#dropText").textContent = add.files.length
+    ? `${add.files.length} image${add.files.length === 1 ? "" : "s"} ready to add`
+    : "Drop images here, or click to choose files";
+}
+const drop = $("#dropZone");
+drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); setFiles(e.dataTransfer.files); });
+$("#uploadFiles").addEventListener("change", (e) => setFiles(e.target.files));
+$("#uploadForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!add.files.length) { toast("Choose or drop some images first"); return; }
+  const form = new FormData(e.target);
+  form.delete("files");
+  add.files.forEach((f) => form.append("files", f, f.name));
+  try {
+    await api("/api/jobs/images", { method: "POST", body: form });
+    toast(`Adding ${add.files.length} image${add.files.length === 1 ? "" : "s"}`);
+    setFiles([]);
+    $("#uploadFiles").value = "";
+    pollJobs();
+  } catch (err) {
+    toast(err.message);
+  }
+});
+
+$("#indexNow").addEventListener("click", async () => {
+  try {
+    await api("/api/jobs/embed", { method: "POST" });
+    $("#indexBanner").hidden = true;
+    pollJobs();
+  } catch (err) {
+    toast(err.message);
+  }
+});
+
+const JOB_LABELS = { archive: "Internet Archive", loc: "Library of Congress", demo: "Starter film", tmdb: "TMDB",
+  video: "Video file", images: "Screenshots", embed: "Picture search" };
+function renderJobs(jobs) {
+  const ul = $("#jobList");
+  if (!jobs.length) {
+    ul.innerHTML = '<li class="muted">Nothing running.</li>';
+    return;
+  }
+  ul.innerHTML = jobs.map((j) => `
+    <li class="job ${j.status}">
+      <div class="job-head"><b>${esc(j.title)}</b> <span class="muted small">${JOB_LABELS[j.kind] || j.kind}</span>
+        <span class="job-status">${{ queued: "Waiting", running: esc(j.stage || "Working"), done: "Done", failed: "Failed" }[j.status]}</span></div>
+      <div class="bar"><span style="width:${Math.round((j.status === "done" ? 1 : j.progress) * 100)}%"></span></div>
+      ${j.message ? `<p class="small muted">${esc(j.message)}</p>` : ""}
+      ${j.status === "done" && j.result && j.result.film_id ? `<a class="small" href="/?film=" data-film="${j.result.film_id}">See the stills →</a>` : ""}
+    </li>`).join("");
+}
+$("#jobList").addEventListener("click", async (e) => {
+  const a = e.target.closest("[data-film]");
+  if (!a) return;
+  e.preventDefault();
+  const films = await api("/api/films");
+  const film = films.find((f) => f.id === Number(a.dataset.film));
+  navigate(film ? `/?film=${encodeURIComponent(film.slug)}` : "/");
+});
+let seenDone = new Set();
+async function pollJobs() {
+  clearTimeout(add.polling);
+  let jobs = [];
+  try {
+    jobs = await api("/api/jobs");
+  } catch { /* server stopped */ }
+  if (!$("#addPage").hidden) renderJobs(jobs);
+  for (const j of jobs) {
+    if ((j.status === "done" || j.status === "failed") && !seenDone.has(j.id)) {
+      seenDone.add(j.id);
+      if (j.status === "done") toast(`Finished: ${j.title}`);
+      loadStats();
+    }
+  }
+  if (stats && !$("#addPage").hidden) {
+    const unindexed = stats.unindexed || 0;
+    $("#indexBanner").hidden = !(stats.semantic_installed && unindexed > 0 && !jobs.some((j) => j.kind === "embed" && j.status !== "done" && j.status !== "failed"));
+    $("#indexText").textContent = `${fmt(unindexed)} still${unindexed === 1 ? " isn't" : "s aren't"} indexed for picture search yet.`;
+  }
+  if (jobs.some((j) => j.status === "queued" || j.status === "running")) add.polling = setTimeout(pollJobs, 1500);
+}
+
 /* ------------------------------------------------------------ about */
 
 function showAbout() {
@@ -803,6 +1141,7 @@ document.addEventListener("keydown", (e) => {
     return;
   }
   if (e.key === "Escape" && !colorPop.hidden) setColorPop(false);
+  else if (e.key === "Escape" && selection.active) setSelectMode(false);
   if (typing) return;
   if (e.key === "/" && !$("#searchbar").hidden) { e.preventDefault(); $("#q").focus(); }
 });

@@ -64,7 +64,26 @@ Run `python -m stillroom demo --list` to see the whole free catalogue, then add 
 ## Filling the library
 
 ShotDeck's coverage comes from studio licensing deals. A personal library can still get broad
-coverage, legally, in three ways that you can mix freely:
+coverage, legally, in the ways below, which you can mix freely.
+
+**The easiest way is the Add films page in the site** (`http://localhost:8765/add`). It lets you:
+- drag in your own screenshots;
+- search the Internet Archive, the Library of Congress and the starter films, and add any result
+  with one click;
+- paste a TMDB key and add stills for any movie;
+- point at a movie file on your computer.
+
+Adds run in the background with progress bars, and new stills are indexed for picture search
+automatically. Everything below can also be done from the terminal.
+
+| Source | What you get | Cost / key |
+|---|---|---|
+| Your screenshots | Any picture you took, trimmed of black bars | free |
+| [Internet Archive](https://archive.org/details/feature_films) | Feature films (7,600+), Film Noir (240+), Silent Films (580+), Sci-Fi & Horror (280+), Prelinger industrial/educational films (1,800+) marked public domain, every shot | free, no key |
+| [Library of Congress](https://www.loc.gov/collections/national-screening-room/) | National Screening Room films the Library offers as downloads (it streams, but doesn't offer downloads of, copyrighted titles), every shot | free, no key |
+| Starter films | Tears of Steel, Sintel, Elephants Dream (Blender, CC BY) plus classic public-domain features | free |
+| [TMDB](https://www.themoviedb.org) | Up to 40 official stills for almost any film | free API key |
+| Movies you own | Every shot of your own copies | free |
 
 ### 1. Any film: official stills from TMDB
 
@@ -93,18 +112,36 @@ came from TMDB. If you ever share or publish your copy of the app, also add an a
 
 ```bash
 python -m stillroom archive --count 25                          # most-watched public-domain features
-python -m stillroom archive --count 10 --query noir --max-year 1960
+python -m stillroom archive --count 10 --collection Film_Noir
+python -m stillroom archive --count 20 --collection silent_films --max-year 1925
+python -m stillroom archive --count 10 --collection prelinger --query "city"
 python -m stillroom archive --count 10 --query 'subject:"science fiction"' --tmdb
 ```
 
 This bulk importer goes through the Internet Archive's
-[feature film collection](https://archive.org/details/feature_films), keeping only items marked public
-domain. Each film is downloaded, cut into shots, and then the video is deleted (`--keep-video` keeps
+[feature film collection](https://archive.org/details/feature_films) (or `--collection Film_Noir`,
+`silent_films`, `SciFi_Horror` or `prelinger`), keeping only items marked public domain. Each film is downloaded, cut into shots, and then the video is deleted (`--keep-video` keeps
 it), so each film costs about 0.5 GB of stills rather than the full video. Films already in your
 library are skipped. Public-domain status is as declared by the uploader, and the collection
 includes documentaries as well as fiction.
 
-### 3. Films you own
+### 3. The Library of Congress National Screening Room
+
+Search and add these films on the **Add films** page. The Library offers a download only for films
+it believes are in the public domain, and only those can be added.
+
+### 4. Your own screenshots
+
+```bash
+python -m stillroom images ~/Pictures/film-screenshots/"The Third Man (1949)"
+python -m stillroom images ~/Pictures/film-screenshots      # one film per sub-folder "Title (Year)"
+```
+
+Or drag them into the **Add films** page. Black letterbox and pillarbox bars are trimmed off, a
+picture you already added is skipped, and screenshots of a film that's already in the library are
+added to it.
+
+### 5. Films you own
 
 Every shot, at full quality, from your own copies. See [Adding your own films](#adding-your-own-films).
 Tools like MakeMKV or HandBrake turn discs you own into files. Ripping is only legal in some
@@ -187,6 +224,8 @@ This needs a decent GPU or Apple Silicon to be fast. Any Ollama vision model wor
 - **Viewer.** Use <kbd>←</kbd>/<kbd>→</kbd> to step through stills. <kbd>S</kbd> saves to a board,
   <kbd>D</kbd> downloads the full frame, <kbd>F</kbd> finds similar stills and <kbd>Esc</kbd> closes.
   Clicking any attribute (director, shot type, lighting, a tag, ...) searches for it.
+- **Select several stills.** Click **Select**, then click stills (Shift-click selects a range). Save
+  them all to a board, or download them as one ZIP. <kbd>Esc</kbd> leaves Select mode.
 - **Boards.** Collect stills into boards (mood boards, lookbooks, shot lists). Export a board as a ZIP
   of full-resolution frames with a `shots.csv` of credits and timecodes.
 - Press <kbd>/</kbd> to jump to the search box. Every search is a URL you can bookmark.
@@ -201,7 +240,8 @@ python -m stillroom [--library DIR] <command>
   describe         write descriptions with Claude (--with claude) or Ollama (--with ollama)
   serve            start the web UI (--port 8765, --open)
   demo             download and ingest free films (--list, --films KEYS|all)
-  archive          bulk-import public-domain films from the Internet Archive (--count N, --query)
+  archive          bulk-import public-domain films from the Internet Archive (--count N, --collection, --query)
+  images PATH      import screenshots / still images (a folder of folders = one film per folder)
   tmdb             import official stills for any film from TMDB (titles, --director, --top-rated N)
   films            list films in the library
   remove FILM      delete a film and its stills
@@ -209,6 +249,22 @@ python -m stillroom [--library DIR] <command>
 
 The library defaults to `./library`; set `STILLROOM_LIBRARY` or `--library` to keep it elsewhere,
 for example on an external drive.
+
+## Troubleshooting
+
+- **The first search after starting is slow, or says "Picture search is starting up".** The AI model
+  that understands pictures takes 10-30 seconds to load. Until then you get word matches, and the
+  results refresh by themselves once it's ready.
+- **Searching by description finds nothing.** Look at the note above the results:
+  - *"Picture search is off"*: the AI extras aren't installed. Run
+    `pip install -r requirements-ai.txt`; on Linux or Windows without an NVIDIA GPU, install
+    `torch torchvision` from the CPU index first, as in Quick start.
+  - *"Not indexed"*: click **Index now** on the Add films page.
+- **"Search failed" or nothing loads.** The terminal window running Stillroom must stay open. Start it
+  again with `./start.sh` or `start.bat`.
+- **Saving or uploading says "403 Forbidden".** The site refuses changes that don't come from its own
+  page, so other websites can't drive your local server. Open it at `http://localhost:8765` rather
+  than through another address. To use it from another device, start it with `serve --host 0.0.0.0`.
 
 ## How it works
 
@@ -231,7 +287,10 @@ search ─► FTS5 BM25 (all words, then any word) ┐
 | `stillroom/ingest.py` | The ingest pipeline (parallel frame extraction) |
 | `stillroom/describe.py` | Claude / Ollama describers, batch mode, CLIP embedding job |
 | `stillroom/tmdb.py` | TMDB stills importer (any film), cache-expiry and purge |
-| `stillroom/archive.py` | Internet Archive public-domain bulk importer |
+| `stillroom/archive.py` | Internet Archive public-domain importer (several collections) |
+| `stillroom/loc.py` | Library of Congress National Screening Room importer |
+| `stillroom/images.py` | Screenshot / still-image importer (bar trimming, duplicate skipping) |
+| `stillroom/jobs.py` | Background job queue behind the Add films page |
 | `stillroom/embeddings.py` | OpenCLIP wrapper and zero-shot shot-type labels |
 | `stillroom/search.py` | Query parsing, FTS5, semantic ranking, fusion, filters, facets |
 | `stillroom/server.py` | Flask JSON API and media serving |

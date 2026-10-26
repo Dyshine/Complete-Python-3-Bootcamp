@@ -19,6 +19,7 @@
       <a href="/" data-link data-nav="search">Search</a>
       <a href="/films" data-link data-nav="films">Films</a>
       <a href="/boards" data-link data-nav="boards">Boards</a>
+      <a href="/add" data-link data-nav="add">Add films</a>
       <a href="/about" data-link data-nav="about">About</a>
     </nav>
     <div class="top-right">
@@ -67,6 +68,10 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
         Shuffle
       </button>
+      <button class="tool" id="selectBtn" aria-pressed="false" title="Pick several stills to save or download together">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8 12 3 3 5-6"/></svg>
+        Select
+      </button>
     </div>
     <div class="chips" id="activeChips" aria-live="polite"></div>
   </section>
@@ -112,6 +117,92 @@
     </div>
     <div class="grid" id="boardGrid"></div>
     <div class="empty" id="boardEmpty" hidden>This board is empty. Open any still and press <kbd>S</kbd> to save it here.</div>
+  </section>
+
+  <div class="select-bar" id="selectBar" role="region" aria-label="Selected stills" hidden>
+    <span id="selectCount">0 selected</span>
+    <label class="sr-only" for="selectBoard">Save selected stills to a board</label>
+    <select id="selectBoard"><option value="">Save to board…</option></select>
+    <button class="btn" id="selectDownload">Download .zip</button>
+    <button class="btn" id="selectAll">Select all shown</button>
+    <button class="btn" id="selectClear">Clear</button>
+    <button class="btn primary" id="selectDone">Done</button>
+  </div>
+
+  <section class="page add" id="addPage" hidden>
+    <div class="page-head">
+      <div><h1>Add films</h1><p class="muted">Everything you add is stored on this computer only.</p></div>
+    </div>
+    <div class="index-banner" id="indexBanner" hidden>
+      <span id="indexText"></span> <button class="btn primary" id="indexNow">Index now</button>
+    </div>
+    <div class="add-grid">
+      <article class="panel">
+        <h2>Your screenshots</h2>
+        <p class="muted">Drop in screenshots or stills you have taken. They become searchable like any other frame.</p>
+        <form id="uploadForm">
+          <label class="drop" id="dropZone">
+            <input type="file" id="uploadFiles" accept="image/*" multiple>
+            <span id="dropText">Drop images here, or click to choose files</span>
+          </label>
+          <div class="fields">
+            <label>Film title <input name="title" placeholder="e.g. The Third Man" maxlength="200"></label>
+            <label>Year <input name="year" inputmode="numeric" maxlength="4" placeholder="1949"></label>
+            <label>Director <input name="director" placeholder="optional" maxlength="200"></label>
+          </div>
+          <button class="btn primary">Add screenshots</button>
+        </form>
+      </article>
+
+      <article class="panel">
+        <h2>Free films online</h2>
+        <p class="muted">Public-domain and Creative Commons films, cut into stills shot by shot. The video is deleted
+          afterwards; only the stills are kept.</p>
+        <div class="tabs" role="tablist" id="onlineTabs">
+          <button role="tab" data-source="archive" aria-selected="true">Internet Archive</button>
+          <button role="tab" data-source="loc" aria-selected="false">Library of Congress</button>
+          <button role="tab" data-source="starter" aria-selected="false">Starter films</button>
+        </div>
+        <form id="onlineForm" class="inline-form wrap">
+          <select id="onlineCollection" aria-label="Collection"></select>
+          <input id="onlineQuery" placeholder="Search, e.g. noir, Chaplin, rocket" aria-label="Search free films">
+          <button class="btn">Search</button>
+        </form>
+        <ul class="results" id="onlineResults"></ul>
+        <button class="link-btn" id="onlineMore" hidden>More results</button>
+      </article>
+
+      <article class="panel">
+        <h2>Stills for any film (TMDB)</h2>
+        <p class="muted">Official stills for almost every movie, from The Movie Database. Needs a free API key.</p>
+        <form id="tmdbKeyForm" class="inline-form wrap">
+          <input id="tmdbKey" placeholder="Paste your TMDB API key" autocomplete="off" aria-label="TMDB API key">
+          <button class="btn">Save key</button>
+        </form>
+        <p class="muted small" id="tmdbKeyHelp">Get one free: sign up at
+          <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">themoviedb.org → Settings → API</a>,
+          then copy the “API Key”.</p>
+        <form id="tmdbForm" class="inline-form wrap" hidden>
+          <input id="tmdbQuery" placeholder="Movie title, e.g. Casablanca" aria-label="Search TMDB">
+          <button class="btn">Search</button>
+        </form>
+        <ul class="results" id="tmdbResults"></ul>
+        <p class="muted small">This application uses TMDB and the TMDB APIs but is not endorsed, certified, or
+          otherwise approved by TMDB.</p>
+      </article>
+
+      <article class="panel">
+        <h2>A movie file on this computer</h2>
+        <p class="muted">Paste the full path of a video you own, or of a folder of videos. Files named
+          “Title (Year).mkv” get their title and year filled in.</p>
+        <form id="videoForm" class="inline-form wrap">
+          <input id="videoPath" placeholder="e.g. C:\Movies\Film (1999).mp4 or /Users/you/Movies" aria-label="Video file or folder path">
+          <button class="btn">Add</button>
+        </form>
+      </article>
+    </div>
+    <h2 class="jobs-title">Progress</h2>
+    <ul class="jobs" id="jobList"><li class="muted">Nothing running.</li></ul>
   </section>
 
   <section class="page about" id="aboutPage" hidden>

@@ -20,12 +20,17 @@ def find_videos(path):
 
 
 class Progress:
-    def __init__(self, label, total=1.0):
-        self.label, self.total, self.last = label, total, 0.0
+    """Progress bar on stderr; also reports (label, fraction) to `notify`
+    (the web UI's job list uses that)."""
+
+    def __init__(self, label, total=1.0, notify=None):
+        self.label, self.total, self.last, self.notify = label, total, 0.0, notify
         self.tty = sys.stderr.isatty()
 
     def __call__(self, done):
         frac = done / self.total if self.total else 1.0
+        if self.notify:
+            self.notify(self.label, frac)
         now = time.monotonic()
         if frac < 1.0 and now - self.last < (0.2 if self.tty else 10):
             return
@@ -63,8 +68,11 @@ def remove_film_files(lib, slug):
 
 
 def ingest_file(lib, conn, path, settings=None, overrides=None, detector="ffmpeg",
-                use_tmdb=False, replace=False, candidates=3, log=print):
-    """Ingest one video. Returns the film id (or None if skipped)."""
+                use_tmdb=False, replace=False, candidates=3, log=print, progress=None):
+    """Ingest one video. Returns the film id (or None if skipped).
+
+    progress, if given, is called as progress(stage_label, fraction).
+    """
     settings = settings or IngestSettings()
     path = Path(path).resolve()
     video.require_ffmpeg()
@@ -91,7 +99,8 @@ def ingest_file(lib, conn, path, settings=None, overrides=None, detector="ffmpeg
         log("  Detecting cuts with PySceneDetect...")
         cuts = video.detect_cuts_pyscenedetect(info)
     else:
-        cuts = video.detect_cuts_ffmpeg(info, crop, settings.scene_threshold, Progress("finding cuts"))
+        cuts = video.detect_cuts_ffmpeg(info, crop, settings.scene_threshold,
+                                        Progress("finding cuts", notify=progress))
     shots = video.cuts_to_shots(
         cuts, info.duration, settings.min_shot_seconds, settings.max_shot_seconds,
         settings.skip_head_seconds, settings.skip_tail_seconds,
@@ -143,7 +152,7 @@ def ingest_file(lib, conn, path, settings=None, overrides=None, detector="ffmpeg
             **stats,
         }
 
-    progress = Progress("grabbing stills", len(shots))
+    bar = Progress("grabbing stills", len(shots), notify=progress)
     done = failed = 0
     last_commit = time.monotonic()
     with ThreadPoolExecutor(max_workers=settings.workers) as pool:
@@ -155,7 +164,7 @@ def ingest_file(lib, conn, path, settings=None, overrides=None, detector="ffmpeg
                 failed += 1
                 log(f"\n  frame failed: {e}")
             done += 1
-            progress(done)
+            bar(done)
             # Commit often so the web UI (saving to boards etc.) never waits on the write lock.
             if time.monotonic() - last_commit > 1.0:
                 conn.commit()

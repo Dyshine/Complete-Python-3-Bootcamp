@@ -1,7 +1,7 @@
 """A starter library of films you are free to use: US public-domain features
 from the Internet Archive and Creative Commons films from the Blender Foundation."""
 
-import shutil
+import re
 import urllib.request
 
 CATALOG = [
@@ -9,6 +9,18 @@ CATALOG = [
         "key": "tears-of-steel", "title": "Tears of Steel", "year": 2012, "director": "Ian Hubert",
         "genres": ["Sci-Fi", "Short"], "license": "CC BY 3.0 - (c) Blender Foundation | mango.blender.org",
         "url": "https://download.blender.org/demo/movies/ToS/tears_of_steel_720p.mov", "size_mb": 372,
+    },
+    {
+        "key": "sintel", "title": "Sintel", "year": 2010, "director": "Colin Levy",
+        "genres": ["Animation", "Fantasy", "Short"],
+        "license": "CC BY 3.0 - (c) Blender Foundation | durian.blender.org",
+        "url": "https://download.blender.org/demo/movies/Sintel.2010.1080p.mkv", "size_mb": 1172,
+    },
+    {
+        "key": "elephants-dream", "title": "Elephants Dream", "year": 2006, "director": "Bassam Kurdali",
+        "genres": ["Animation", "Sci-Fi", "Short"],
+        "license": "CC BY 2.5 - (c) Blender Foundation | orange.blender.org",
+        "url": "https://download.blender.org/ED/ED_1024.avi", "size_mb": 446,
     },
     {
         "key": "royal-wedding", "title": "Royal Wedding", "year": 1951, "director": "Stanley Donen",
@@ -80,10 +92,15 @@ def find(keys):
     return [by_key[k] for k in keys]
 
 
-def download(film, dest_dir, log=print):
+def download(film, dest_dir, log=print, progress=None):
+    """Download film["url"] to "Title (Year).ext" in dest_dir (skipped if already there).
+
+    progress, if given, is called as progress("downloading", fraction).
+    """
     dest_dir.mkdir(parents=True, exist_ok=True)
-    ext = film["url"].rsplit(".", 1)[-1]
-    dest = dest_dir / f"{film['title']} ({film['year']}).{ext}"
+    ext = film["url"].rsplit(".", 1)[-1].split("?")[0][:5] or "mp4"
+    name = re.sub(r'[\\/:*?"<>|]+', "-", f"{film['title']} ({film.get('year') or 'n.d.'})")[:150]
+    dest = dest_dir / f"{name}.{ext}"
     if dest.exists() and dest.stat().st_size > 1_000_000:
         return dest
     size = f" (~{film['size_mb']} MB)" if film.get("size_mb") else ""
@@ -91,6 +108,15 @@ def download(film, dest_dir, log=print):
     tmp = dest.with_suffix(dest.suffix + ".part")
     req = urllib.request.Request(film["url"], headers={"User-Agent": "stillroom/0.1"})
     with urllib.request.urlopen(req, timeout=60) as resp, open(tmp, "wb") as out:
-        shutil.copyfileobj(resp, out, length=1 << 20)
-    tmp.rename(dest)
+        total = int(resp.headers.get("Content-Length") or 0)
+        done = 0
+        while True:
+            chunk = resp.read(1 << 20)
+            if not chunk:
+                break
+            out.write(chunk)
+            done += len(chunk)
+            if progress and total:
+                progress("downloading", done / total)
+    tmp.replace(dest)
     return dest

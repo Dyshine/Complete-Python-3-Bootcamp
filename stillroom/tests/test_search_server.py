@@ -90,7 +90,22 @@ def client_for(library):
     lib, _ = library
     app = create_app(lib.root)
     app.testing = True
-    return app.test_client()
+    c = app.test_client()
+    c.environ_base["HTTP_X_STILLROOM"] = "1"   # what the real front end sends on every change
+    return c
+
+
+def test_changes_need_the_app_header_and_a_local_host(library):
+    lib, _ = library
+    app = create_app(lib.root)
+    bare = app.test_client()
+    assert bare.post("/api/boards", json={"name": "x"}).status_code == 403
+    assert bare.get("/api/stats").status_code == 200
+    # DNS rebinding: a request arriving under some other host name is refused...
+    assert bare.get("/api/stats", headers={"Host": "evil.example:8765"}).status_code == 403
+    # ...unless the user chose to share on their network (serve --host 0.0.0.0).
+    shared = create_app(lib.root, local_only=False).test_client()
+    assert shared.get("/api/stats", headers={"Host": "192.168.1.20:8765"}).status_code == 200
 
 
 def test_api_search_and_detail(library):
