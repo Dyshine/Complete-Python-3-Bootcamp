@@ -17,13 +17,24 @@ _lock = threading.Lock()
 _cache = {}
 
 
+_available = None
+
+
 def available():
-    try:
-        import open_clip  # noqa: F401
-        import torch  # noqa: F401
-    except ImportError:
-        return False
-    return True
+    """True when PyTorch + OpenCLIP import cleanly. A broken install (for
+    example torch and torchvision from different builds) counts as missing,
+    so the site still runs with keyword and colour search."""
+    global _available
+    if _available is None:
+        try:
+            import open_clip  # noqa: F401
+            import torch  # noqa: F401
+            _available = True
+        except Exception as e:
+            if not isinstance(e, ImportError):
+                print(f"Semantic search disabled, PyTorch/OpenCLIP failed to load: {e}")
+            _available = False
+    return _available
 
 
 def model_key(name=DEFAULT_MODEL, pretrained=DEFAULT_PRETRAINED):

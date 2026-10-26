@@ -19,6 +19,7 @@
       <a href="/" data-link data-nav="search">Search</a>
       <a href="/films" data-link data-nav="films">Films</a>
       <a href="/boards" data-link data-nav="boards">Boards</a>
+      <a href="/about" data-link data-nav="about">About</a>
     </nav>
     <div class="top-right">
       <span class="stats" id="stats"></span>
@@ -111,6 +112,34 @@
     </div>
     <div class="grid" id="boardGrid"></div>
     <div class="empty" id="boardEmpty" hidden>This board is empty. Open any still and press <kbd>S</kbd> to save it here.</div>
+  </section>
+
+  <section class="page about" id="aboutPage" hidden>
+    <div class="page-head"><h1>About this library</h1></div>
+    <div class="about-body">
+      <p>Stillroom is a private, local film-still library. Everything here lives in one folder on your
+        computer; nothing is uploaded anywhere.</p>
+      <h2>Where the stills come from</h2>
+      <ul>
+        <li><strong>Film frames</strong>: one frame per shot, cut from video files you added
+          (films you own, or public-domain and Creative Commons films).</li>
+        <li><strong>TMDB stills</strong>: official stills downloaded from The Movie Database for
+          personal, non-commercial use. They are kept for at most 6 months.</li>
+      </ul>
+      <div class="credit" id="tmdbCredit" hidden>
+        <p class="tmdb-name">TMDB</p>
+        <p id="tmdbNotice"></p>
+      </div>
+      <h2>Keyboard shortcuts</h2>
+      <dl class="keys">
+        <dt><kbd>/</kbd></dt><dd>Search</dd>
+        <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>Previous / next still</dd>
+        <dt><kbd>S</kbd></dt><dd>Save to a board</dd>
+        <dt><kbd>D</kbd></dt><dd>Download the full frame</dd>
+        <dt><kbd>F</kbd></dt><dd>Find similar stills</dd>
+        <dt><kbd>Esc</kbd></dt><dd>Close</dd>
+      </dl>
+    </div>
   </section>
 
   <div class="viewer" id="viewer" role="dialog" aria-modal="true" aria-label="Still details" hidden>

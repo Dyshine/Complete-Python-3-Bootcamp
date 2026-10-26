@@ -3,9 +3,11 @@
 -r requirements.txt
 
 # Semantic search ("describe the frame") with CLIP - local, no API key.
-# On a machine without an NVIDIA GPU the CPU build of PyTorch is much smaller:
-#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+# On Linux/Windows without an NVIDIA GPU the CPU build of PyTorch is much smaller.
+# Install torch and torchvision together so they match:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 torch>=2.2
+torchvision>=0.17
 open_clip_torch>=2.24
 
 # Rich written descriptions with Claude (`python -m stillroom describe`).

@@ -3,7 +3,7 @@
 import argparse
 import sys
 
-from . import db, demo, describe, embeddings, ingest
+from . import db, demo, describe, embeddings, ingest, metadata
 from .config import IngestSettings, Library
 
 
@@ -98,6 +98,13 @@ def cmd_serve(args):
 
     lib = _lib(args)
     app = create_app(lib.root)
+    conn = db.connect(lib.db_path)
+    from .tmdb import MAX_CACHE_DAYS, expired_films
+    stale = expired_films(conn)
+    if stale:
+        print(f"Note: {len(stale)} film(s) imported from TMDB are older than {MAX_CACHE_DAYS} days. "
+              "TMDB's terms limit caching to 6 months: run `python -m stillroom tmdb --refresh-expired`.")
+    conn.close()
     url = f"http://{'localhost' if args.host in ('127.0.0.1', '0.0.0.0') else args.host}:{args.port}"
     print(f"Stillroom is running at {url}  (library: {lib.root})")
     if args.open:
@@ -128,6 +135,99 @@ def cmd_demo(args):
     if not args.no_embed and film_ids:
         _embed(conn, lib, films=film_ids)
     print(f"\nDone. Run `python -m stillroom serve --library {lib.root}` to browse.")
+
+
+def cmd_archive(args):
+    from . import archive
+
+    lib = _lib(args)
+    conn = db.connect(lib.db_path)
+    known = {r["slug"] for r in conn.execute("SELECT slug FROM films")}
+    film_ids, page, tried = [], 1, set()
+    while len(film_ids) < args.count:
+        docs = archive.search(count=50, query=args.query, min_year=args.min_year,
+                              max_year=args.max_year, page=page)
+        docs = [d for d in docs if d["identifier"] not in tried]
+        if not docs:
+            break
+        for doc in docs:
+            if len(film_ids) >= args.count:
+                break
+            tried.add(doc["identifier"])
+            url, meta = archive.pick_file(doc["identifier"])
+            info = archive.film_info(doc, meta)
+            slug = metadata.slugify(f"{info['title']} {info['year'] or ''}")
+            if slug in known:
+                continue
+            if not url:
+                print(f"Skipping {info['title']}: no single-file copy of the whole film")
+                continue
+            path = demo.download({**info, "url": url}, lib.downloads)
+            try:
+                fid = ingest.ingest_file(lib, conn, path, overrides=info, use_tmdb=args.tmdb)
+            except Exception as e:  # a broken download must not stop a long batch
+                print(f"  failed: {e}")
+                fid = None
+            finally:
+                if not args.keep_video:
+                    path.unlink(missing_ok=True)
+            known.add(slug)
+            if fid:
+                film_ids.append(fid)
+                print(f"[{len(film_ids)}/{args.count}]")
+        page += 1
+    if not args.no_embed and film_ids:
+        _embed(conn, lib, films=film_ids)
+    print(f"\nAdded {len(film_ids)} films.")
+
+
+def cmd_tmdb(args):
+    from . import tmdb
+
+    lib = _lib(args)
+    conn = db.connect(lib.db_path)
+    if args.purge:
+        tmdb.purge(lib, conn)
+        return
+    if not metadata.tmdb_available():
+        sys.exit("Set TMDB_API_KEY (free at https://www.themoviedb.org/settings/api) or TMDB_TOKEN first.")
+    ids = []
+    replace = args.replace
+    if args.refresh_expired:
+        ids += [r["tmdb_id"] for r in tmdb.expired_films(conn) if r["tmdb_id"]]
+        replace = True
+        print(f"{len(ids)} TMDB film(s) are older than {tmdb.MAX_CACHE_DAYS} days; refreshing them")
+    titles = list(args.titles)
+    if args.file:
+        with open(args.file, encoding="utf-8") as f:
+            titles += [line.strip() for line in f if line.strip() and not line.startswith("#")]
+    for t in titles:
+        parsed = metadata.parse_filename(t + ".x")
+        movie_id = tmdb.search_movie(parsed["title"], parsed["year"])
+        if movie_id:
+            ids.append(movie_id)
+        else:
+            print(f"Not found on TMDB: {t}")
+    if args.top_rated:
+        ids += tmdb.list_movies("top_rated", args.top_rated)
+    if args.popular:
+        ids += tmdb.list_movies("popular", args.popular)
+    if args.director:
+        ids += tmdb.director_movies(args.director)
+    if not ids:
+        sys.exit("Nothing to import. Give titles, --file, --top-rated N, --popular N or --director NAME.")
+    film_ids = []
+    for movie_id in dict.fromkeys(ids):
+        try:
+            fid = tmdb.import_movie(lib, conn, movie_id, limit=args.limit, replace=replace)
+        except Exception as e:
+            print(f"TMDB movie {movie_id} failed: {e}")
+            continue
+        if fid:
+            film_ids.append(fid)
+    if not args.no_embed and film_ids:
+        _embed(conn, lib, films=film_ids)
+    print(f"\nImported stills for {len(film_ids)} films. {tmdb.ATTRIBUTION}")
 
 
 def cmd_films(args):
@@ -209,6 +309,30 @@ def main(argv=None):
     s.add_argument("--replace", action="store_true")
     s.add_argument("--no-embed", action="store_true")
     s.set_defaults(func=cmd_demo)
+
+    s = sub.add_parser("archive", help="bulk-import public-domain feature films from the Internet Archive")
+    s.add_argument("--count", type=int, default=10, help="how many new films to add (10)")
+    s.add_argument("--query", help='archive.org search terms, e.g. "noir" or subject:"Film Noir"')
+    s.add_argument("--min-year", type=int)
+    s.add_argument("--max-year", type=int)
+    s.add_argument("--keep-video", action="store_true", help="keep the downloaded video (default: delete)")
+    s.add_argument("--tmdb", action="store_true", help="fill credits from TMDB (needs TMDB_API_KEY)")
+    s.add_argument("--no-embed", action="store_true")
+    s.set_defaults(func=cmd_archive)
+
+    s = sub.add_parser("tmdb", help="import official stills for any film from TMDB (needs TMDB_API_KEY)")
+    s.add_argument("titles", nargs="*", help='film titles, e.g. "Blade Runner (1982)"')
+    s.add_argument("--file", help="text file with one 'Title (Year)' per line")
+    s.add_argument("--top-rated", type=int, metavar="N", help="the N top-rated films on TMDB")
+    s.add_argument("--popular", type=int, metavar="N", help="the N currently popular films")
+    s.add_argument("--director", help="every film directed or shot by this person")
+    s.add_argument("--limit", type=int, default=40, help="stills per film (40)")
+    s.add_argument("--replace", action="store_true", help="re-download films already imported")
+    s.add_argument("--refresh-expired", action="store_true",
+                   help="re-download TMDB films older than 6 months (TMDB's cache limit)")
+    s.add_argument("--purge", action="store_true", help="delete everything imported from TMDB")
+    s.add_argument("--no-embed", action="store_true")
+    s.set_defaults(func=cmd_tmdb)
 
     s = sub.add_parser("films", help="list films in the library")
     s.set_defaults(func=cmd_films)

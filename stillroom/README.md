@@ -20,13 +20,25 @@ reference sites like ShotDeck. Point it at movie files and it:
 Everything stays on your machine: one folder of JPEGs plus one SQLite database.
 
 > **About content.** ShotDeck's stills are licensed from studios, so Stillroom does not copy or scrape
-> them. You bring the films: ones you own (your Blu-ray/DVD rips or digital purchases, for personal
-> reference) or films that are free to use. `python -m stillroom demo` downloads a starter set of
-> US public-domain features from the Internet Archive plus the Creative Commons film *Tears of Steel*.
+> them. Instead it fills your library in three legitimate ways (see [Filling the library](#filling-the-library)):
+> official stills for almost any film from TMDB, hundreds of public-domain films from the Internet
+> Archive, and films you own. Everything stays private on your computer.
 
 ---
 
 ## Quick start
+
+**One command.** Install [FFmpeg](https://ffmpeg.org/download.html) and Python 3.10+, then:
+
+```bash
+./start.sh            # macOS / Linux
+start.bat             # Windows (double-click it, or run it in a terminal)
+```
+
+The first run creates a virtual environment, installs everything, downloads 3 free films and opens
+`http://localhost:8765`. Later runs just open the site. Stop it with <kbd>Ctrl</kbd>+<kbd>C</kbd>.
+
+**Step by step**, if you prefer:
 
 ```bash
 # 1. FFmpeg (needed for reading video)
@@ -36,7 +48,7 @@ Everything stays on your machine: one folder of JPEGs plus one SQLite database.
 cd stillroom
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-pip install torch --index-url https://download.pytorch.org/whl/cpu   # skip if you have an NVIDIA GPU
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu   # Linux/Windows without an NVIDIA GPU
 pip install -r requirements-ai.txt                      # CLIP semantic search + Claude describer
 
 # 3. Get some films and index them (about 1.5 GB download, 10-20 minutes)
@@ -49,6 +61,55 @@ python -m stillroom serve --open
 Run `python -m stillroom demo --list` to see the whole free catalogue, then add more films with
 `--films detour,carnival-of-souls` or `--films all`.
 
+## Filling the library
+
+ShotDeck's coverage comes from studio licensing deals. A personal library can still get broad
+coverage, legally, in three ways that you can mix freely:
+
+### 1. Any film: official stills from TMDB
+
+[The Movie Database](https://www.themoviedb.org) hosts stills ("backdrops") for nearly every film.
+Get a free API key at <https://www.themoviedb.org/settings/api>, then:
+
+```bash
+export TMDB_API_KEY=your_key                            # Windows: set TMDB_API_KEY=your_key
+python -m stillroom tmdb "Blade Runner (1982)" "In the Mood for Love (2000)"
+python -m stillroom tmdb --director "Roger Deakins"     # every film a person directed or shot
+python -m stillroom tmdb --top-rated 250                # the 250 top-rated films
+python -m stillroom tmdb --file my_films.txt            # one "Title (Year)" per line
+```
+
+You get up to 40 stills per film (`--limit`), with director, cinematographer and genres filled in.
+They get the same colour analysis and CLIP semantic search as frames cut from video. They have no
+timecodes, and the selection is whatever TMDB users uploaded, not every shot.
+
+The importer follows TMDB's API terms. Use is personal and non-commercial; the About page shows
+TMDB's notice. Images are stored exactly as TMDB serves them, and nothing is kept longer than 6
+months: `tmdb --refresh-expired` re-downloads older films, and `tmdb --purge` removes everything that
+came from TMDB. If you ever share or publish your copy of the app, also add an approved TMDB logo
+(<https://www.themoviedb.org/about/logos-attribution>) and do not share the downloaded images.
+
+### 2. Hundreds of complete films, shot by shot: the Internet Archive
+
+```bash
+python -m stillroom archive --count 25                          # most-watched public-domain features
+python -m stillroom archive --count 10 --query noir --max-year 1960
+python -m stillroom archive --count 10 --query 'subject:"science fiction"' --tmdb
+```
+
+This bulk importer goes through the Internet Archive's
+[feature film collection](https://archive.org/details/feature_films), keeping only items marked public
+domain. Each film is downloaded, cut into shots, and then the video is deleted (`--keep-video` keeps
+it), so each film costs about 0.5 GB of stills rather than the full video. Films already in your
+library are skipped. Public-domain status is as declared by the uploader, and the collection
+includes documentaries as well as fiction.
+
+### 3. Films you own
+
+Every shot, at full quality, from your own copies. See [Adding your own films](#adding-your-own-films).
+Tools like MakeMKV or HandBrake turn discs you own into files. Ripping is only legal in some
+countries, so check yours; don't download pirated copies or strip DRM from streaming services.
+
 ## Adding your own films
 
 ```bash
@@ -60,7 +121,7 @@ python -m stillroom ingest /movies --embed        # a whole folder, then compute
 - **Sidecar metadata.** A `Title (Year).json` next to the video can set any of `title`, `year`,
   `director`, `cinematographer`, `genres`, `license` and `overview`.
 - **Automatic credits.** `--tmdb` fills director, cinematographer and genres from
-  [The Movie Database](https://www.themoviedb.org/settings/api). Set `TMDB_API_KEY` (free) first.
+  [TMDB](https://www.themoviedb.org/settings/api). Set `TMDB_API_KEY` (free) first.
 - **Skipping logos and credits.** `--skip-head 60 --skip-tail 300` leaves out the first 60 seconds
   and the last 5 minutes.
 - **Cut sensitivity.** `--threshold 0.3` is the default; lower it to find more cuts. Shots longer than
@@ -140,6 +201,8 @@ python -m stillroom [--library DIR] <command>
   describe         write descriptions with Claude (--with claude) or Ollama (--with ollama)
   serve            start the web UI (--port 8765, --open)
   demo             download and ingest free films (--list, --films KEYS|all)
+  archive          bulk-import public-domain films from the Internet Archive (--count N, --query)
+  tmdb             import official stills for any film from TMDB (titles, --director, --top-rated N)
   films            list films in the library
   remove FILM      delete a film and its stills
 ```
@@ -167,6 +230,8 @@ search ─► FTS5 BM25 (all words, then any word) ┐
 | `stillroom/analyze.py` | Palette, colour families, exposure, temperature, colour distance |
 | `stillroom/ingest.py` | The ingest pipeline (parallel frame extraction) |
 | `stillroom/describe.py` | Claude / Ollama describers, batch mode, CLIP embedding job |
+| `stillroom/tmdb.py` | TMDB stills importer (any film), cache-expiry and purge |
+| `stillroom/archive.py` | Internet Archive public-domain bulk importer |
 | `stillroom/embeddings.py` | OpenCLIP wrapper and zero-shot shot-type labels |
 | `stillroom/search.py` | Query parsing, FTS5, semantic ranking, fusion, filters, facets |
 | `stillroom/server.py` | Flask JSON API and media serving |
@@ -182,7 +247,7 @@ Run the tests with `python -m pytest`.
   model that has the most vectors stored.
 - **Claude API** for the best written descriptions; **Ollama** with `qwen2.5vl` or `llava` for
   free, offline descriptions.
-- **TMDb API key** for automatic director, DP and genre credits.
+- **TMDB API key** (free) for stills of any film plus automatic director, DP and genre credits.
 - **MakeMKV / HandBrake** to turn discs you own into files Stillroom can read.
 - **VS Code** with the Python and SQLite Viewer extensions, to explore `library/stillroom.db`.
 - **Eagle or PureRef** to arrange exported boards into mood boards.

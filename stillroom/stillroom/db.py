@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS films (
     aspect_ratio    REAL,
     crop            TEXT,                 -- ffmpeg crop=w:h:x:y applied to every frame
     tmdb_id         INTEGER,
+    source          TEXT DEFAULT 'video',  -- 'video' (frames from a file) or 'tmdb' (stills)
     added_at        TEXT
 );
 
@@ -115,7 +116,16 @@ def connect(path):
     conn.execute("PRAGMA synchronous = NORMAL")
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA)
+    _migrate(conn)
     return conn
+
+
+def _migrate(conn):
+    """Bring libraries created by older versions up to the current schema."""
+    film_cols = {r["name"] for r in conn.execute("PRAGMA table_info(films)")}
+    if "source" not in film_cols:
+        conn.execute("ALTER TABLE films ADD COLUMN source TEXT DEFAULT 'video'")
+        conn.commit()
 
 
 # ---------------------------------------------------------------- films
@@ -262,7 +272,7 @@ def shot_to_dict(row, full=False):
         "description": row["description"] or "",
     }
     keys = row.keys()
-    for k in ("title", "year", "director"):
+    for k in ("title", "year", "director", "source"):
         if k in keys:
             d[k] = row[k]
     if full:

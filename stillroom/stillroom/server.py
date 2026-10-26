@@ -12,11 +12,20 @@ from . import db, embeddings, search, taxonomy
 from .config import Library
 
 STATIC = Path(__file__).parent / "static"
+TMDB_NOTICE = ("This application uses TMDB and the TMDB APIs but is not endorsed, certified, "
+               "or otherwise approved by TMDB.")
 
 
 def timecode(seconds):
     s = int(seconds or 0)
     return f"{s // 3600:02d}:{s % 3600 // 60:02d}:{s % 60:02d}"
+
+
+def position(row):
+    """'00.12.34 shot 56' for video frames, 'still 3' for TMDB stills."""
+    if row["source"] == "tmdb":
+        return f"still {row['idx']}"
+    return f"{timecode(row['frame_time']).replace(':', '.')} shot {row['idx']}"
 
 
 def safe_name(text):
@@ -45,6 +54,7 @@ def create_app(library=None):
     @app.get("/")
     @app.get("/films")
     @app.get("/boards")
+    @app.get("/about")
     @app.get("/boards/<int:_board>")
     @app.get("/shot/<int:_shot>")
     def index(**_):
@@ -69,6 +79,8 @@ def create_app(library=None):
             "films": c.execute("SELECT COUNT(*) FROM films").fetchone()[0],
             "embedded": c.execute("SELECT COUNT(*) FROM embeddings").fetchone()[0],
             "semantic": embeddings.available(),
+            "tmdb_films": c.execute("SELECT COUNT(*) FROM films WHERE source = 'tmdb'").fetchone()[0],
+            "tmdb_notice": TMDB_NOTICE,
             "vocab": {
                 "shot_type": taxonomy.SHOT_TYPES, "framing": taxonomy.FRAMINGS, "angle": taxonomy.ANGLES,
                 "lighting": taxonomy.LIGHTING, "time_of_day": taxonomy.TIME_OF_DAY,
@@ -98,12 +110,13 @@ def create_app(library=None):
         c = conn()
         row = c.execute(
             """SELECT s.*, f.title, f.year, f.director, f.cinematographer, f.genres, f.slug,
-                      f.aspect_ratio, f.license, f.overview
+                      f.aspect_ratio, f.license, f.overview, f.source
                FROM shots s JOIN films f ON f.id = s.film_id WHERE s.id = ?""", (shot_id,)).fetchone()
         if not row:
             abort(404)
         d = db.shot_to_dict(row, full=True)
         d.update({"slug": row["slug"], "aspect_ratio": row["aspect_ratio"], "license": row["license"],
+                  "source": row["source"],
                   "timecode": timecode(row["frame_time"]), "duration": round(row["t_end"] - row["t_start"], 2)})
         neighbours = c.execute(
             "SELECT id FROM shots WHERE film_id = ? AND idx BETWEEN ? AND ? ORDER BY idx",
@@ -116,12 +129,11 @@ def create_app(library=None):
     @app.get("/api/shots/<int:shot_id>/download")
     def download(shot_id):
         row = conn().execute(
-            "SELECT s.image, s.frame_time, s.idx, f.title, f.year FROM shots s JOIN films f ON f.id = s.film_id "
-            "WHERE s.id = ?", (shot_id,)).fetchone()
+            "SELECT s.image, s.frame_time, s.idx, f.title, f.year, f.source FROM shots s "
+            "JOIN films f ON f.id = s.film_id WHERE s.id = ?", (shot_id,)).fetchone()
         if not row:
             abort(404)
-        name = safe_name(f"{row['title']} ({row['year']}) {timecode(row['frame_time']).replace(':', '.')} "
-                         f"shot {row['idx']}") + ".jpg"
+        name = safe_name(f"{row['title']} ({row['year']}) {position(row)}") + ".jpg"
         return send_file(lib.root / row["image"], as_attachment=True, download_name=name)
 
     @app.get("/api/films")
@@ -211,7 +223,7 @@ def create_app(library=None):
     def export_board(board_id):
         b = board_or_404(board_id)
         rows = conn().execute(
-            """SELECT s.*, f.title, f.year, f.director, f.cinematographer FROM board_shots bs
+            """SELECT s.*, f.title, f.year, f.director, f.cinematographer, f.source FROM board_shots bs
                JOIN shots s ON s.id = bs.shot_id JOIN films f ON f.id = s.film_id
                WHERE bs.board_id = ? ORDER BY bs.added_at""", (board_id,)).fetchall()
         buf = io.BytesIO()
@@ -221,10 +233,10 @@ def create_app(library=None):
                          "shot type", "lighting", "description"])
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as z:
             for n, r in enumerate(rows, 1):
-                name = safe_name(f"{n:03d} {r['title']} ({r['year']}) {timecode(r['frame_time']).replace(':', '.')}") + ".jpg"
+                name = safe_name(f"{n:03d} {r['title']} ({r['year']}) {position(r)}") + ".jpg"
                 z.write(lib.root / r["image"], name)
                 writer.writerow([name, r["title"], r["year"], r["director"], r["cinematographer"],
-                                 timecode(r["frame_time"]), r["idx"], r["shot_type"],
+                                 timecode(r["frame_time"]) if r["source"] != "tmdb" else "", r["idx"], r["shot_type"],
                                  ", ".join(taxonomy.unpack(r["lighting"])), r["description"]])
             z.writestr("shots.csv", sheet.getvalue())
         buf.seek(0)

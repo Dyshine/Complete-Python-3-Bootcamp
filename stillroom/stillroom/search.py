@@ -31,13 +31,14 @@ FILTER_COLUMNS = {
     "key": ("s.light_key", False),
     "tone": ("s.tone", False),
     "mood": ("s.mood", True),
+    "source": ("f.source", False),
 }
 
 FACETS = ["film", "director", "cinematographer", "genre", "decade", "aspect", "shot_type", "framing",
-          "angle", "lighting", "time_of_day", "int_ext", "color", "key", "tone"]
+          "angle", "lighting", "time_of_day", "int_ext", "color", "key", "tone", "source"]
 
 LIST_COLUMNS = """s.id, s.film_id, s.idx, s.frame_time, s.image, s.thumb, s.width, s.height,
-                  s.palette, s.shot_type, s.description, f.title, f.year, f.director"""
+                  s.palette, s.shot_type, s.description, f.title, f.year, f.director, f.source"""
 
 
 # ---------------------------------------------------------------- text query

@@ -6,13 +6,14 @@ const $ = (sel, el = document) => el.querySelector(sel);
 const FILTERS = ["film", "director", "cinematographer", "genre", "decade", "aspect", "shot_type", "framing",
   "angle", "lighting", "time_of_day", "int_ext", "color", "key", "tone", "mood"];
 const FACET_ORDER = ["color", "shot_type", "framing", "angle", "lighting", "time_of_day", "int_ext", "key",
-  "tone", "film", "director", "cinematographer", "genre", "decade", "aspect"];
+  "tone", "film", "director", "cinematographer", "genre", "decade", "aspect", "source"];
 const TITLES = {
   film: "Film", director: "Director", cinematographer: "Cinematographer", genre: "Genre", decade: "Decade",
   aspect: "Aspect ratio", shot_type: "Shot type", framing: "Framing", angle: "Camera angle",
   lighting: "Lighting", time_of_day: "Time of day", int_ext: "Interior / exterior", color: "Colour",
-  key: "Exposure", tone: "Colour temperature", mood: "Mood",
+  key: "Exposure", tone: "Colour temperature", mood: "Mood", source: "Source",
 };
+const SOURCE_LABELS = { video: "Film frames", tmdb: "TMDB stills" };
 const KEEP_CASE = new Set(["film", "director", "cinematographer"]);
 const FAMILY_HEX = {
   red: "#c8352b", orange: "#e5822f", brown: "#7b4a2b", yellow: "#e3c33c", green: "#3f8a4f", teal: "#23898b",
@@ -108,6 +109,7 @@ function setPage(name) {
   $("#filmsPage").hidden = name !== "films";
   $("#boardsPage").hidden = name !== "boards";
   $("#boardPage").hidden = name !== "board";
+  $("#aboutPage").hidden = name !== "about";
   document.querySelectorAll("[data-nav]").forEach((a) =>
     a.classList.toggle("active", a.dataset.nav === name || (name === "board" && a.dataset.nav === "boards")));
 }
@@ -115,6 +117,7 @@ function route() {
   const path = location.pathname;
   const m = path.match(/^\/boards\/(\d+)/);
   if (path === "/films") showFilms();
+  else if (path === "/about") showAbout();
   else if (path === "/boards") showBoards();
   else if (m) showBoard(Number(m[1]));
   else showSearch();
@@ -241,9 +244,10 @@ function tileEl(shot, index, list, opts) {
   const el = document.createElement("div");
   el.className = "tile";
   el.style.setProperty("--ar", (shot.width / shot.height || 1.78).toFixed(4));
-  const label = `${shot.title}${shot.year ? ` (${shot.year})` : ""}, ${tc(shot.frame_time)}`;
+  const where = shot.source === "tmdb" ? "TMDB still" : tc(shot.frame_time);
+  const label = `${shot.title}${shot.year ? ` (${shot.year})` : ""}, ${where}`;
   el.innerHTML = `<i></i><img loading="lazy" decoding="async" alt="" src="${esc(shot.thumb)}">
-    <span class="meta"><b>${esc(shot.title)}${shot.year ? ` (${shot.year})` : ""}</b>${tc(shot.frame_time)}${shot.shot_type ? " · " + esc(shot.shot_type) : ""}</span>`;
+    <span class="meta"><b>${esc(shot.title)}${shot.year ? ` (${shot.year})` : ""}</b>${where}${shot.shot_type ? " · " + esc(shot.shot_type) : ""}</span>`;
   const img = el.querySelector("img");
   img.addEventListener("load", () => img.classList.add("loaded"), { once: true });
   const open = document.createElement("a");
@@ -304,8 +308,9 @@ function renderFacets(facets) {
       const ul = document.createElement("ul");
       items.slice(0, limit).forEach((it) => {
         const li = document.createElement("li");
+        const text = name === "source" ? SOURCE_LABELS[it.value] || it.label : it.label;
         li.innerHTML = `<label><input type="checkbox" ${selected.includes(String(it.value)) ? "checked" : ""}>
-          <span class="label ${KEEP_CASE.has(name) ? "keep-case" : ""}">${esc(it.label)}</span><span class="count">${fmt(it.count)}</span></label>`;
+          <span class="label ${KEEP_CASE.has(name) ? "keep-case" : ""}">${esc(text)}</span><span class="count">${fmt(it.count)}</span></label>`;
         li.querySelector("input").addEventListener("change", () => toggleFilter(name, it.value));
         ul.appendChild(li);
       });
@@ -337,7 +342,7 @@ function renderChips() {
   const chips = [];
   for (const [name, vals] of Object.entries(state.filters)) {
     for (const v of vals) {
-      const label = name === "decade" ? `${v}s` : name === "aspect" ? `${v}:1` : v;
+      const label = name === "decade" ? `${v}s` : name === "aspect" ? `${v}:1` : name === "source" ? SOURCE_LABELS[v] || v : v;
       const dot = name === "color" ? `<span class="dot" style="background:${FAMILY_HEX[v] || "#888"}"></span>` : "";
       chips.push({ html: `${dot}<b>${esc(TITLES[name])}</b> ${esc(label)}`, remove: () => toggleFilter(name, v) });
     }
@@ -517,7 +522,7 @@ function renderPanel(s) {
     <h2 class="v-film"><button data-filter="film" data-value="${esc(s.slug)}">${esc(s.title)}</button>
       ${s.year ? `<span class="muted">(${s.year})</span>` : ""}</h2>
     <p class="v-credits">${credits.join("<br>")}${credits.length ? "<br>" : ""}
-      Shot ${s.idx} · ${s.timecode} · ${s.duration}s${s.aspect_ratio ? ` · ${s.aspect_ratio}:1` : ""}</p>
+      ${s.source === "tmdb" ? `Still ${s.idx} · from TMDB` : `Shot ${s.idx} · ${s.timecode} · ${s.duration}s`}${s.aspect_ratio ? ` · ${s.aspect_ratio}:1` : ""}</p>
     <div class="v-actions">
       <button class="btn primary" id="vSave" aria-expanded="false">Save <kbd>S</kbd></button>
       <a class="btn" href="/api/shots/${s.id}/download">Download <kbd>D</kbd></a>
@@ -543,9 +548,10 @@ function renderPanel(s) {
       ${attr("Genre", "genre", s.genres)}
     </dl>
     ${s.tags.length ? `<div class="v-section"><h4>Tags</h4>${s.tags.map((t) => `<button class="pill" data-tag="${esc(t)}">${esc(t)}</button>`).join("")}</div>` : ""}
-    ${s.sequence.length > 1 ? `<div class="v-section"><h4>In sequence</h4><div class="strip" data-list="sequence">${strip(s.sequence, s.id)}</div></div>` : ""}
+    ${s.sequence.length > 1 ? `<div class="v-section"><h4>${s.source === "tmdb" ? "More from this film" : "In sequence"}</h4><div class="strip" data-list="sequence">${strip(s.sequence, s.id)}</div></div>` : ""}
     ${s.similar.length ? `<div class="v-section"><h4>Looks similar <button class="link-btn" id="vAllSimilar">See all</button></h4><div class="strip" data-list="similar">${strip(s.similar)}</div></div>` : ""}
     ${s.license ? `<p class="license">Source: ${esc(s.license)}</p>` : ""}
+    ${s.source === "tmdb" && stats ? `<p class="license">${esc(stats.tmdb_notice)}</p>` : ""}
     <p class="license">Described by ${esc(s.describer || "—")}</p>`;
   if (viewer.menuOpen) renderBoardsMenu();
 }
@@ -723,6 +729,15 @@ async function showFilms() {
         <p>${fmt(f.shot_count)} stills · ${f.aspect_ratio ? `${f.aspect_ratio}:1` : ""}${f.genres.length ? " · " + esc(f.genres.join(", ")) : ""}</p>
       </div>
     </a>`).join("") || '<p class="muted">No films yet.</p>';
+}
+
+/* ------------------------------------------------------------ about */
+
+function showAbout() {
+  setPage("about");
+  const show = Boolean(stats && stats.tmdb_films);
+  $("#tmdbCredit").hidden = !show;
+  if (show) $("#tmdbNotice").textContent = stats.tmdb_notice;
 }
 
 /* ------------------------------------------------------------ keyboard */

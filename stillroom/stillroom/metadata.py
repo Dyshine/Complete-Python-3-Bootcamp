@@ -3,7 +3,9 @@
 import json
 import os
 import re
+import time
 import unicodedata
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -64,9 +66,15 @@ def _tmdb_get(endpoint, params):
     else:
         params["api_key"] = os.environ["TMDB_API_KEY"]
     url = f"{TMDB_API}{endpoint}?{urllib.parse.urlencode(params)}"
-    req = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(req, timeout=20) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+    req = urllib.request.Request(url, headers={**headers, "User-Agent": "stillroom/0.1"})
+    for attempt in range(6):
+        try:
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            if e.code != 429 or attempt == 5:
+                raise
+            time.sleep(float(e.headers.get("Retry-After") or 2 ** attempt))
 
 
 def tmdb_available():

@@ -86,7 +86,8 @@ def download(film, dest_dir, log=print):
     dest = dest_dir / f"{film['title']} ({film['year']}).{ext}"
     if dest.exists() and dest.stat().st_size > 1_000_000:
         return dest
-    log(f"Downloading {film['title']} (~{film['size_mb']} MB)...")
+    size = f" (~{film['size_mb']} MB)" if film.get("size_mb") else ""
+    log(f"Downloading {film['title']}{size}...")
     tmp = dest.with_suffix(dest.suffix + ".part")
     req = urllib.request.Request(film["url"], headers={"User-Agent": "stillroom/0.1"})
     with urllib.request.urlopen(req, timeout=60) as resp, open(tmp, "wb") as out:
