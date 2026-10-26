@@ -31,7 +31,7 @@ const EXAMPLES = [
 ];
 
 const state = { q: "", filters: {}, color: "", similar: null, sort: "", seed: 0, page: 1, total: 0,
-  results: [], mode: "", loading: false, done: false, token: 0, expanded: new Set() };
+  results: [], mode: "", semantic: null, retries: 0, loading: false, done: false, token: 0, expanded: new Set() };
 let stats = null;
 let boards = [];
 
@@ -167,23 +167,31 @@ function fetchPage(page, facets) {
   p.set("facets", facets ? 1 : 0);
   return api("/api/search?" + p.toString());
 }
-async function runSearch() {
+async function runSearch({ silent = false } = {}) {
   const token = ++state.token;
   state.page = 1;
   state.done = false;
   state.loading = true;
   const grid = $("#grid");
+  clearTimeout(retryTimer);
   if (!state.results.length) {
     grid.innerHTML = Array.from({ length: 18 }, () => '<div class="tile skeleton" style="--ar:1.85"><i></i></div>').join("");
   }
-  grid.setAttribute("aria-busy", "true");
+  if (!silent) {
+    grid.setAttribute("aria-busy", "true");
+    grid.classList.add("busy");
+    showSearching();
+  }
   let data;
   try {
     data = await fetchPage(1, true);
   } catch (err) {
     if (token === state.token) {
       grid.innerHTML = "";
-      showEmpty(`<h2>Search failed</h2><p>${esc(err.message)}</p>`);
+      grid.classList.remove("busy");
+      $("#resultHead").textContent = "";
+      showEmpty(`<h2>Search failed</h2><p>${esc(err.message)}</p>
+        <p>Is the Stillroom window (terminal) still running? Reload the page to try again.</p>`);
     }
     return;
   } finally {
@@ -192,10 +200,23 @@ async function runSearch() {
   if (token !== state.token) return;
   state.total = data.total;
   state.mode = data.mode;
+  state.semantic = data.semantic;
   state.results = data.results;
   state.done = state.results.length >= state.total;
   grid.innerHTML = "";
   grid.removeAttribute("aria-busy");
+  grid.classList.remove("busy");
+  // Picture search still loading: show keyword matches now, refresh when it's ready.
+  if (data.semantic === "loading" && state.retries < 40) {
+    state.retries += 1;
+    retryTimer = setTimeout(function retry() {
+      // Don't swap the grid under someone who is looking at a still.
+      if (!$("#viewer").hidden || $("#layout").hidden) retryTimer = setTimeout(retry, 1500);
+      else runSearch({ silent: true });
+    }, 1500);
+  } else if (data.semantic !== "loading") {
+    state.retries = 0;
+  }
   appendTiles(grid, data.results, 0, state.results);
   renderFacets(data.facets);
   renderChips();
@@ -249,7 +270,9 @@ function tileEl(shot, index, list, opts) {
   el.innerHTML = `<i></i><img loading="lazy" decoding="async" alt="" src="${esc(shot.thumb)}">
     <span class="meta"><b>${esc(shot.title)}${shot.year ? ` (${shot.year})` : ""}</b>${where}${shot.shot_type ? " · " + esc(shot.shot_type) : ""}</span>`;
   const img = el.querySelector("img");
-  img.addEventListener("load", () => img.classList.add("loaded"), { once: true });
+  if (img.complete && img.naturalWidth) img.classList.add("loaded");
+  else img.addEventListener("load", () => img.classList.add("loaded"), { once: true });
+  img.addEventListener("error", () => { img.classList.add("loaded"); el.classList.add("broken"); }, { once: true });
   const open = document.createElement("a");
   open.href = `?shot=${shot.id}`;
   open.className = "open";
@@ -369,10 +392,21 @@ function renderChips() {
     box.appendChild(clear);
   }
 }
+let retryTimer;
+const SEMANTIC_NOTES = {
+  loading: "Picture search is starting up (first search after launch). Showing word matches for now; results update by themselves in a few seconds.",
+  off: "Picture search is off, so only words in the descriptions are matched. Install the AI extras (see README: requirements-ai.txt) to search by what is in the frame.",
+  unindexed: "These stills aren't indexed for picture search yet. In the stillroom folder run: python -m stillroom embed",
+};
+function showSearching() {
+  $("#resultHead").innerHTML = '<span class="searching" role="status">Searching…</span>';
+}
 function renderHead() {
   const modes = { hybrid: "semantic + keyword", text: "keyword", color: "colour match", similar: "visual similarity" };
   const tag = modes[state.mode] ? `<span class="mode-tag">${modes[state.mode]}</span>` : "";
-  $("#resultHead").innerHTML = `<span><strong>${fmt(state.total)}</strong> still${state.total === 1 ? "" : "s"}${state.q ? ` for “${esc(state.q)}”` : ""}</span>${tag}`;
+  const note = state.q && SEMANTIC_NOTES[state.semantic]
+    ? `<p class="search-note">${esc(SEMANTIC_NOTES[state.semantic])}</p>` : "";
+  $("#resultHead").innerHTML = `<span><strong>${fmt(state.total)}</strong> still${state.total === 1 ? "" : "s"}${state.q ? ` for “${esc(state.q)}”` : ""}</span>${tag}${note}`;
 }
 function showEmpty(html) {
   const el = $("#empty");
@@ -380,7 +414,10 @@ function showEmpty(html) {
   el.hidden = false;
 }
 function renderNoResults() {
-  if (stats && stats.shots === 0) {
+  if (state.semantic === "loading") {
+    showEmpty(`<h2>Starting picture search…</h2><p>The first search after launch loads the AI model.
+      Your results will appear here by themselves in a few seconds.</p>`);
+  } else if (stats && stats.shots === 0) {
     showEmpty(`<h2>Your library is empty</h2>
       <p>Add films you own, or start with free public-domain classics:</p>
       <pre>python -m stillroom demo            # downloads 3 free films and indexes them
@@ -399,10 +436,17 @@ $("#q").addEventListener("input", () => {
   clearTimeout(typingTimer);
   typingTimer = setTimeout(() => {
     state.q = $("#q").value.trim();
-    state.results = [];
+    state.retries = 0;
     writeUrl(false);
     runSearch();
   }, 380);
+});
+// The search field's built-in clear (x) button fires "search" with an empty value.
+$("#q").addEventListener("search", () => {
+  if (!$("#q").value && state.q) {
+    clearTimeout(typingTimer);
+    newSearch({ q: "", similar: null });
+  }
 });
 $("#queryForm").addEventListener("submit", (e) => {
   e.preventDefault();
@@ -778,12 +822,16 @@ $("#themeToggle").addEventListener("click", () => {
   store("theme", next);
 });
 
-async function boot() {
+async function loadStats() {
   try {
     stats = await api("/api/stats");
-    $("#stats").textContent = `${fmt(stats.shots)} stills · ${fmt(stats.films)} films` +
-      (stats.embedded ? " · semantic search on" : "");
+    const sem = { on: " · picture search on", loading: " · picture search starting…" }[stats.semantic] || "";
+    $("#stats").textContent = `${fmt(stats.shots)} stills · ${fmt(stats.films)} films${sem}`;
+    if (stats.semantic === "loading") setTimeout(loadStats, 3000);
   } catch { /* the search call will surface errors */ }
+}
+async function boot() {
+  await Promise.race([loadStats(), new Promise((r) => setTimeout(r, 800))]);
   route();
 }
 boot();

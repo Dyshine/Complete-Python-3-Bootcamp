@@ -14,27 +14,17 @@ DEFAULT_MODEL = "ViT-B-32"
 DEFAULT_PRETRAINED = "laion2b_s34b_b79k"
 
 _lock = threading.Lock()
-_cache = {}
-
-
-_available = None
+_cache = {}      # model key -> loaded Clip
+_loading = set()  # model keys being loaded in the background
+_failed = {}     # model key -> error message
 
 
 def available():
-    """True when PyTorch + OpenCLIP import cleanly. A broken install (for
-    example torch and torchvision from different builds) counts as missing,
-    so the site still runs with keyword and colour search."""
-    global _available
-    if _available is None:
-        try:
-            import open_clip  # noqa: F401
-            import torch  # noqa: F401
-            _available = True
-        except Exception as e:
-            if not isinstance(e, ImportError):
-                print(f"Semantic search disabled, PyTorch/OpenCLIP failed to load: {e}")
-            _available = False
-    return _available
+    """True when PyTorch and OpenCLIP are installed. Cheap: it only checks the
+    packages exist; importing them (several seconds) happens when a model loads."""
+    from importlib.util import find_spec
+
+    return find_spec("torch") is not None and find_spec("open_clip") is not None
 
 
 def model_key(name=DEFAULT_MODEL, pretrained=DEFAULT_PRETRAINED):
@@ -144,12 +134,57 @@ ZERO_SHOT = {
 
 
 def get_clip(name=DEFAULT_MODEL, pretrained=DEFAULT_PRETRAINED):
-    """Process-wide cached model (loading takes a few seconds)."""
+    """Process-wide cached model, loaded on first use (blocks for a few seconds)."""
     key = model_key(name, pretrained)
     with _lock:
         if key not in _cache:
             _cache[key] = Clip(name, pretrained)
         return _cache[key]
+
+
+def get_clip_nowait(name=DEFAULT_MODEL, pretrained=DEFAULT_PRETRAINED):
+    """The model if it is ready, else None while it loads in a background thread.
+
+    The web server uses this so the first search after start-up answers with
+    keyword results straight away instead of hanging while PyTorch and the
+    model weights load (10-30 seconds on a laptop).
+    """
+    key = model_key(name, pretrained)
+    with _lock:
+        if key in _cache:
+            return _cache[key]
+        if key in _loading or key in _failed:
+            return None
+        _loading.add(key)
+
+    def load():
+        try:
+            model = Clip(name, pretrained)
+        except Exception as e:  # broken torch install, no network for the weights, ...
+            print(f"Semantic search is off: could not load CLIP {key}: {e}")
+            with _lock:
+                _failed[key] = str(e)
+                _loading.discard(key)
+            return
+        with _lock:
+            _cache[key] = model
+            _loading.discard(key)
+
+    threading.Thread(target=load, name=f"load-clip-{key}", daemon=True).start()
+    return None
+
+
+def load_state(name=DEFAULT_MODEL, pretrained=DEFAULT_PRETRAINED):
+    """'ready', 'loading', 'failed' or 'idle' for a model."""
+    key = model_key(name, pretrained)
+    with _lock:
+        if key in _cache:
+            return "ready"
+        if key in _loading:
+            return "loading"
+        if key in _failed:
+            return "failed"
+        return "idle"
 
 
 def label_sentence(labels):

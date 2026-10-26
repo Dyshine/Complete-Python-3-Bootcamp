@@ -55,7 +55,7 @@ def parse_query(q):
         if tok.startswith("-") and len(tok) > 1:
             exclude.append(tok[1:])
         else:
-            tok = tok.strip("-'")
+            tok = re.sub(r"'s$", "", tok.strip("-'")).replace("'", "")  # "woman's" -> "woman"
             if tok and tok not in STOPWORDS:
                 words.append(tok)
     return phrases, words, exclude
@@ -138,8 +138,14 @@ class VectorIndex:
         n = self.pos.get(int(shot_id))
         return None if n is None else self.mat[n]
 
-    def rank(self, query_vec, candidate_ids=None, keep_delta=0.075, min_keep=24, max_keep=1500):
-        """Shot ids ranked by cosine similarity, cut off where relevance fades."""
+    def rank(self, query_vec, candidate_ids=None, keep_delta=0.075, min_z=2.0, min_keep=24, max_keep=1500):
+        """Shot ids ranked by cosine similarity, cut off where relevance fades.
+
+        A still counts as a match when it is close to the best score AND stands
+        out from the library as a whole (min_z standard deviations above the
+        mean). The second test stops vague queries ("rain" in a library with no
+        rain) from matching half the library; min_keep always shows the best few.
+        """
         if not self.ready():
             return [], {}
         if candidate_ids is not None:
@@ -151,7 +157,8 @@ class VectorIndex:
         sims = self.mat[idx] @ query_vec
         order = np.argsort(-sims)
         top = sims[order[0]]
-        keep = [o for n, o in enumerate(order[:max_keep]) if n < min_keep or sims[o] >= top - keep_delta]
+        floor = max(top - keep_delta, float(sims.mean() + min_z * sims.std()))
+        keep = [o for n, o in enumerate(order[:max_keep]) if n < min_keep or sims[o] >= floor]
         ranked = [int(self.ids[idx[o]]) for o in keep]
         scores = {int(self.ids[idx[o]]): float(sims[o]) for o in keep}
         return ranked, scores
@@ -160,15 +167,38 @@ class VectorIndex:
 VECTORS = VectorIndex()
 
 
-def semantic_ranked(conn, q, candidate_ids=None):
+def semantic_status(conn):
+    """Whether picture-content search can run: 'on', 'loading', 'off'
+    (PyTorch/OpenCLIP not installed or failed to load) or 'unindexed'."""
     if not embeddings.available():
-        return [], {}
+        return "off"
     VECTORS.refresh(conn)
     if not VECTORS.ready():
-        return [], {}
+        return "unindexed"
     name, pretrained = VECTORS.model.split("/", 1)
-    clip = embeddings.get_clip(name, pretrained)
-    return VECTORS.rank(clip.encode_query(q), candidate_ids)
+    state = embeddings.load_state(name, pretrained)
+    return {"ready": "on", "failed": "off"}.get(state, "loading")
+
+
+def warm_up(conn):
+    """Start loading the CLIP model in the background so the first search is fast."""
+    if embeddings.available():
+        VECTORS.refresh(conn)
+        if VECTORS.ready():
+            embeddings.get_clip_nowait(*VECTORS.model.split("/", 1))
+
+
+def semantic_ranked(conn, q, candidate_ids=None, wait=False):
+    """(ranked ids, scores, status). Never blocks on model loading unless wait=True."""
+    status = semantic_status(conn)
+    if status in ("off", "unindexed"):
+        return [], {}, status
+    name, pretrained = VECTORS.model.split("/", 1)
+    clip = embeddings.get_clip(name, pretrained) if wait else embeddings.get_clip_nowait(name, pretrained)
+    if clip is None:
+        return [], {}, semantic_status(conn)
+    ids, scores = VECTORS.rank(clip.encode_query(q), candidate_ids)
+    return ids, scores, "on"
 
 
 def rrf(*rankings, k=60, weights=None):
@@ -272,11 +302,12 @@ def normalize_filters(raw):
 # ---------------------------------------------------------------- main entry
 
 def search(conn, q="", filters=None, color=None, similar_to=None, sort=None, page=1, per_page=60,
-           seed=0, with_facets=True):
+           seed=0, with_facets=True, wait_for_model=False):
     filters = normalize_filters(filters or {})
     q = (q or "").strip()
     ranked = None          # ordered candidate ids (None = no text/colour constraint)
     mode = "browse"
+    semantic = None        # status of picture-content search, reported for text queries
 
     if similar_to:
         mode = "similar"
@@ -284,7 +315,7 @@ def search(conn, q="", filters=None, color=None, similar_to=None, sort=None, pag
     elif q:
         mode = "text"
         text_ids, matched = fts_ranked(conn, q)
-        sem_ids, _ = semantic_ranked(conn, q)
+        sem_ids, _, semantic = semantic_ranked(conn, q, wait=wait_for_model)
         if sem_ids:
             mode = "hybrid"
             if matched == "or":
@@ -342,6 +373,7 @@ def search(conn, q="", filters=None, color=None, similar_to=None, sort=None, pag
         "page": page,
         "per_page": per_page,
         "mode": mode,
+        "semantic": semantic,
         "results": [db.shot_to_dict(r) for r in rows],
     }
     if with_facets:

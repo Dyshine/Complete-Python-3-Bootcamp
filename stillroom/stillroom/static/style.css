@@ -167,6 +167,12 @@ kbd {
 
 .result-head { display: flex; align-items: baseline; gap: 12px; margin: 4px 0 12px; min-height: 22px; color: var(--muted); font-size: 14px; }
 .result-head strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.searching { color: var(--muted); animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .45; } }
+.grid.busy { opacity: .45; pointer-events: none; transition: opacity .2s; }
+.result-head { flex-wrap: wrap; }
+.search-note { flex-basis: 100%; margin: 6px 0 0; padding: 8px 12px; border-radius: 8px; background: var(--accent-soft); color: var(--text); font-size: 13px; }
+.tile.broken { display: none; }
 .mode-tag { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; }
 
 /* ------------------------------------------------------------ justified grid */

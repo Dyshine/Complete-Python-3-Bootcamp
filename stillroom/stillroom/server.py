@@ -8,7 +8,7 @@ from pathlib import Path
 
 from flask import Flask, abort, g, jsonify, request, send_file, send_from_directory
 
-from . import db, embeddings, search, taxonomy
+from . import db, search, taxonomy
 from .config import Library
 
 STATIC = Path(__file__).parent / "static"
@@ -37,6 +37,11 @@ def create_app(library=None):
     app = Flask(__name__, static_folder=str(STATIC), static_url_path="/static")
     app.config["LIBRARY"] = lib
     app.json.sort_keys = False
+
+    try:  # load the CLIP model now, not on the first search
+        search.warm_up(db.connect(lib.db_path))
+    except Exception as e:
+        print(f"Could not start loading semantic search: {e}")
 
     def conn():
         if "conn" not in g:
@@ -78,7 +83,7 @@ def create_app(library=None):
             "described": row["described"] or 0,
             "films": c.execute("SELECT COUNT(*) FROM films").fetchone()[0],
             "embedded": c.execute("SELECT COUNT(*) FROM embeddings").fetchone()[0],
-            "semantic": embeddings.available(),
+            "semantic": search.semantic_status(c),
             "tmdb_films": c.execute("SELECT COUNT(*) FROM films WHERE source = 'tmdb'").fetchone()[0],
             "tmdb_notice": TMDB_NOTICE,
             "vocab": {
