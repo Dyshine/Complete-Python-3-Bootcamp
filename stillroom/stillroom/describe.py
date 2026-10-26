@@ -269,8 +269,12 @@ def rows_to_describe(conn, film=None, redo=False, limit=None):
     return conn.execute(sql, args).fetchall()
 
 
+def describer_label(describer):
+    return describer.name + (f":{describer.model}" if getattr(describer, "model", None) else "")
+
+
 def describe_rows(conn, lib, describer, rows, workers=4, log=print):
-    label = describer.name + (f":{describer.model}" if getattr(describer, "model", None) else "")
+    label = describer_label(describer)
     done = failed = 0
     started = time.monotonic()
     with ThreadPoolExecutor(max_workers=workers) as pool:

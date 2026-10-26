@@ -101,6 +101,8 @@ def test_snap_ratio():
     ("2001 A Space Odyssey (1968) 1080p BluRay.mkv", "2001 A Space Odyssey", 1968),
     ("The.Third.Man.1949.1080p.x264.mkv", "The Third Man", 1949),
     ("home_movie.mp4", "home movie", None),
+    ("Sherlock Jr. (1924).mp4", "Sherlock Jr.", 1924),
+    ("Mr. Smith Goes to Washington (1939).mkv", "Mr. Smith Goes to Washington", 1939),
 ])
 def test_parse_filename(name, title, year):
     meta = metadata.parse_filename(name)

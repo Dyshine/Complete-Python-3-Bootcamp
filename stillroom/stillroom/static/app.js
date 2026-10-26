@@ -224,7 +224,6 @@ function newSearch(changes = {}, { keepFilters = true } = {}) {
   Object.assign(state, changes);
   state.results = [];
   writeUrl(true);
-  if (location.pathname !== "/") history.replaceState({}, "", "/" + location.search);
   setPage("search");
   syncControls();
   window.scrollTo({ top: 0 });
@@ -249,9 +248,8 @@ function tileEl(shot, index, list, opts) {
   img.addEventListener("load", () => img.classList.add("loaded"), { once: true });
   const open = document.createElement("a");
   open.href = `?shot=${shot.id}`;
-  open.className = "sr-link";
+  open.className = "open";
   open.setAttribute("aria-label", `Open still: ${label}. ${shot.description || ""}`);
-  open.style.cssText = "position:absolute;inset:0";
   open.addEventListener("click", (e) => {
     if (e.metaKey || e.ctrlKey) return;
     e.preventDefault();

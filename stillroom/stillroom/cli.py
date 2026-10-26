@@ -77,9 +77,20 @@ def cmd_describe(args):
     print(f"Describing {len(rows)} stills with {args.backend} ({d.model})...")
     if args.batch and args.backend == "claude":
         print(f"Stored {d.describe_batch(conn, lib, rows)} descriptions")
-    else:
-        done, failed = describe.describe_rows(conn, lib, d, rows, workers=args.workers)
-        print(f"Described {done} stills" + (f", {failed} failed" if failed else ""))
+        return
+    # Try one still first so a missing key or a stopped Ollama fails once, clearly.
+    try:
+        fields = d.describe(rows[0], lib.root / rows[0]["image"])
+    except Exception as e:
+        hint = ("Set ANTHROPIC_API_KEY (or run `ant auth login`) and check --model."
+                if args.backend == "claude" else
+                f"Is Ollama running at {args.ollama_host}? Start it and run `ollama pull {d.model}`.")
+        sys.exit(f"Could not describe the first still: {type(e).__name__}: {e}\n{hint}")
+    if fields:
+        db.update_description(conn, rows[0]["id"], fields, describe.describer_label(d))
+        conn.commit()
+    done, failed = describe.describe_rows(conn, lib, d, rows[1:], workers=args.workers)
+    print(f"Described {done + 1} stills" + (f", {failed} failed" if failed else ""))
 
 
 def cmd_serve(args):

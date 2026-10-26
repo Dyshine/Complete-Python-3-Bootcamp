@@ -189,7 +189,8 @@ kbd {
 }
 .tile .meta b { display: block; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tile:hover .meta, .tile:focus-within .meta { opacity: 1; }
-.tile > a:focus-visible { outline-offset: -3px; }
+.tile > a.open { position: absolute; inset: 0; }
+.tile > a.open:focus-visible { outline-offset: -3px; }
 .tile .quick {
   position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; border-radius: 50%;
   display: grid; place-items: center; background: rgba(0,0,0,.6); color: #fff; border: 0; cursor: pointer; opacity: 0;

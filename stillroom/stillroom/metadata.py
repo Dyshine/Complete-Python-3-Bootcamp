@@ -33,7 +33,9 @@ def parse_filename(path):
         title = (" " + stem + " ")[: m.start()].strip()
     else:
         title = _JUNK_RE.sub("", stem)
-    title = re.sub(r"[._]+", " ", title)
+    # "The.Third.Man.1949" style names use dots as spaces; real titles keep
+    # their full stops ("Sherlock Jr.", "Mr. Smith Goes to Washington").
+    title = re.sub(r"[._]+" if " " not in title.strip() else r"_+", " ", title)
     title = re.sub(r"\s+", " ", title).strip(" -[(")
     return {"title": title or stem, "year": year}
 
