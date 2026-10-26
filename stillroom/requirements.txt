@@ -1,0 +1,5 @@
+# Core: ingest, colour analysis, keyword + colour search, web UI.
+# Also needs the FFmpeg command-line tools (ffmpeg + ffprobe) on your PATH.
+flask>=3.0
+numpy>=1.24
+pillow>=10.0

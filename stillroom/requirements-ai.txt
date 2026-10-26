@@ -1,0 +1,18 @@
+# Optional extras. Install what you need:
+#   pip install -r requirements-ai.txt
+-r requirements.txt
+
+# Semantic search ("describe the frame") with CLIP - local, no API key.
+# On a machine without an NVIDIA GPU the CPU build of PyTorch is much smaller:
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+torch>=2.2
+open_clip_torch>=2.24
+
+# Rich written descriptions with Claude (`python -m stillroom describe`).
+anthropic>=2.3
+
+# Alternative shot detector (`ingest --detector pyscenedetect`).
+# scenedetect[opencv]>=0.6
+
+# Tests
+pytest>=8
